@@ -2487,6 +2487,8 @@ const english = {
   "Catch-up": "Catch-up",
   "Run log": "Run log",
   "Stream": "Stream",
+  "Lines shown": "Lines shown",
+  "Log display": "Log display",
 } as const;
 
 export type StaticMessage = keyof typeof english;
@@ -4920,6 +4922,8 @@ const chinese = {
   "Catch-up": "补跑",
   "Run log": "运行日志",
   "Stream": "输出流",
+  "Lines shown": "显示的行",
+  "Log display": "日志显示",
 } as const satisfies Record<StaticMessage, string>;
 
 const japanese = {
@@ -7429,6 +7433,8 @@ const japanese = {
   "Catch-up": "キャッチアップ",
   "Run log": "実行ログ",
   "Stream": "出力ストリーム",
+  "Lines shown": "表示する行",
+  "Log display": "ログ表示",
 } as const satisfies Record<StaticMessage, string>;
 
 export const staticMessages = {
