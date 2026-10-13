@@ -871,7 +871,6 @@ const english = {
   'Last triggered:': 'Last triggered:',
   'Last updated:': 'Last updated:',
   'Last Used': 'Last Used',
-  'Latest Run': 'Latest Run',
   License: 'License',
   'License key': 'License key',
   'license or trial': 'license or trial',
@@ -2479,6 +2478,9 @@ const english = {
   "Some routine runs are not marked one by one; the bars still count every run.": "Some routine runs are not marked one by one; the bars still count every run.",
   "Drag across a lane to zoom in. Click a bar for its runs or a mark for one run.": "Drag across a lane to zoom in. Click a bar for its runs or a mark for one run.",
   "Live, last 24 hours": "Live, last 24 hours",
+  "Action required": "Action required",
+  "An agent is waiting for an answer.": "An agent is waiting for an answer.",
+  "Timeline, outputs, and artifacts are on the run page.": "Timeline, outputs, and artifacts are on the run page.",
 } as const;
 
 export type StaticMessage = keyof typeof english;
@@ -3337,7 +3339,6 @@ const chinese = {
   'Last triggered:': '最后触发:',
   'Last updated:': '最后更新：',
   'Last Used': '上次使用',
-  'Latest Run': '最新运行',
   License: '许可证',
   'License key': '许可证密钥',
   'license or trial': '许可证或试用',
@@ -4904,6 +4905,9 @@ const chinese = {
   "Some routine runs are not marked one by one; the bars still count every run.": "部分常规运行未逐一标记；条形图仍统计所有运行。",
   "Drag across a lane to zoom in. Click a bar for its runs or a mark for one run.": "在泳道上拖动以放大。点击条形查看其运行，点击标记打开单次运行。",
   "Live, last 24 hours": "实时，过去 24 小时",
+  "Action required": "需要处理",
+  "An agent is waiting for an answer.": "有代理正在等待回答。",
+  "Timeline, outputs, and artifacts are on the run page.": "时间线、输出和产物在运行页面上。",
 } as const satisfies Record<StaticMessage, string>;
 
 const japanese = {
@@ -5780,7 +5784,6 @@ const japanese = {
   'Last triggered:': '最終トリガー:',
   'Last updated:': '最終更新日:',
   'Last Used': '最終使用',
-  'Latest Run': '最新の Run',
   License: 'ライセンス',
   'License key': 'ライセンスキー',
   'license or trial': 'ライセンスまたはトライアル',
@@ -7405,6 +7408,9 @@ const japanese = {
   "Some routine runs are not marked one by one; the bars still count every run.": "一部の通常の実行は個別に表示していません。バーにはすべての実行が含まれます。",
   "Drag across a lane to zoom in. Click a bar for its runs or a mark for one run.": "レーン上をドラッグすると拡大します。バーをクリックするとその実行一覧、マークをクリックすると個別の実行を開きます。",
   "Live, last 24 hours": "ライブ・過去 24 時間",
+  "Action required": "対応が必要",
+  "An agent is waiting for an answer.": "エージェントが回答を待っています。",
+  "Timeline, outputs, and artifacts are on the run page.": "タイムライン、出力、成果物は実行ページにあります。",
 } as const satisfies Record<StaticMessage, string>;
 
 export const staticMessages = {
