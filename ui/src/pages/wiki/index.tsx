@@ -25,7 +25,6 @@ import {
 import { UnsavedChangesProvider } from '@/contexts/UnsavedChangesContext';
 import { useUserPreferences } from '@/contexts/UserPreference';
 import { CockpitToolbar } from '@/features/cockpit/components/CockpitToolbar';
-import { useCockpitState } from '@/features/cockpit/hooks/useCockpitState';
 import { useClient, useQuery } from '@/hooks/api';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useWikiTreeSSE } from '@/hooks/useWikiTreeSSE';
@@ -92,7 +91,6 @@ function WikiContent() {
   const { showToast } = useSimpleToast();
   const isMobile = useIsMobile();
 
-  const { selectedTemplate, selectTemplate } = useCockpitState();
   const workspaceSelection = appBarContext.workspaceSelection;
   const normalizedWorkspaceSelection =
     sanitizeWorkspaceSelection(workspaceSelection);
@@ -566,11 +564,7 @@ function WikiContent() {
 
   const cockpitToolbar = (
     <div className="[&>div]:mb-0">
-      <CockpitToolbar
-        selectedWorkspace={selectedWorkspace}
-        selectedTemplate={selectedTemplate}
-        onSelectTemplate={selectTemplate}
-      />
+      <CockpitToolbar selectedWorkspace={selectedWorkspace} />
     </div>
   );
 
