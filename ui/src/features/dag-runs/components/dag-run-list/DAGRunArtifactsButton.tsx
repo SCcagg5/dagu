@@ -15,7 +15,7 @@ type DAGRunSummary = components['schemas']['DAGRunSummary'];
 
 type Props = {
   dagRun: DAGRunSummary;
-  onClick: () => void;
+  onClick: (event: React.MouseEvent) => void;
 };
 
 export function DAGRunArtifactsButton({
@@ -40,7 +40,7 @@ export function DAGRunArtifactsButton({
           className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background/80 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
           onClick={(event) => {
             event.stopPropagation();
-            onClick();
+            onClick(event);
           }}
         >
           <Archive className="h-4 w-4" />
