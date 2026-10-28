@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useSyncExternalStore } from 'react';
 
+import { useClock } from '@/hooks/useClock';
 import { cn } from '@/lib/utils';
 
 type MatrixTextProps = {
@@ -8,38 +9,34 @@ type MatrixTextProps = {
   glowSpeed?: number;
 };
 
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+
+function subscribeReducedMotion(onChange: () => void): () => void {
+  const query = window.matchMedia(REDUCED_MOTION);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia(REDUCED_MOTION).matches;
+}
+
 function MatrixText({ text, className, glowSpeed = 175 }: MatrixTextProps) {
-  const [glowPosition, setGlowPosition] = useState(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const prefersReducedMotion = useRef(false);
+  const reducedMotion = useSyncExternalStore(
+    subscribeReducedMotion,
+    prefersReducedMotion,
+    () => false
+  );
   const textChars = text.split('');
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    prefersReducedMotion.current = mediaQuery.matches;
-
-    const handler = (event: MediaQueryListEvent) => {
-      prefersReducedMotion.current = event.matches;
-    };
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, []);
-
-  useEffect(() => {
-    if (prefersReducedMotion.current || textChars.length === 0) {
-      return;
-    }
-
-    intervalRef.current = setInterval(() => {
-      setGlowPosition((prev) => (prev + 1) % textChars.length);
-    }, glowSpeed);
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [glowSpeed, textChars.length]);
+  // The glow reads the shared clock: all chips glow in step, on one timer,
+  // and none runs while the tab is hidden.
+  const glowPosition = useClock(
+    reducedMotion || textChars.length === 0 ? null : glowSpeed,
+    (now) =>
+      reducedMotion || textChars.length === 0
+        ? 0
+        : Math.floor(now / glowSpeed) % textChars.length
+  );
 
   return (
     <span
