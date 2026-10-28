@@ -138,6 +138,9 @@ type DAGRunRepositoryOptions struct {
 	Location          *time.Location
 	Now               func() time.Time
 	RemovalEnqueuer   DAGRunRemovalEnqueuer
+	// EphemeralStore holds ephemeral runs apart from the history. Without it
+	// the repository cannot create an ephemeral run.
+	EphemeralStore DAGRunStore
 }
 
 // DAGRunRemovalEnqueuer durably records resources before their DAG-run history is removed.
@@ -153,6 +156,9 @@ type DAGRunCreateAttemptOptions struct {
 	Retry bool
 	// AttemptID uses a caller-assigned attempt identifier when non-empty.
 	AttemptID string
+	// Ephemeral creates the run in the ephemeral store, where no listing,
+	// retention pass or event reaches it. It applies only to a new root run.
+	Ephemeral bool
 }
 
 // DAGRunLatestAttemptOptions configures a latest-attempt lookup.
