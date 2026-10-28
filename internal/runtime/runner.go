@@ -28,6 +28,7 @@ import (
 	"github.com/dagucloud/dagu/v2/internal/cmn/logger/tag"
 	cmnvalue "github.com/dagucloud/dagu/v2/internal/cmn/value"
 	"github.com/dagucloud/dagu/v2/internal/ir"
+	"github.com/dagucloud/dagu/v2/internal/samples"
 	"github.com/dagucloud/dagu/v2/internal/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -52,6 +53,7 @@ type ChatMessagesHandler interface {
 // Runner runs a plan of steps.
 type Runner struct {
 	logDir           string
+	attemptDir       string
 	maxActiveRuns    int
 	timeout          time.Duration
 	delay            time.Duration
@@ -69,6 +71,11 @@ type Runner struct {
 	forcedStatus     *ir.Status
 	materializations build.MaterializationStore
 	noReuse          bool
+	skipHandlers     bool
+
+	// now and openRecorder are set by tests; nil uses the real ones.
+	now          func() time.Time
+	openRecorder sampleRecorderOpener
 
 	dagRunAutoRetryCount int
 	dagRunAutoRetryLimit int
@@ -99,9 +106,18 @@ type Runner struct {
 	}
 }
 
+// clock returns the current time.
+func (r *Runner) clock() time.Time {
+	if r.now != nil {
+		return r.now()
+	}
+	return time.Now()
+}
+
 func New(cfg *Config) *Runner {
 	return &Runner{
 		logDir:               cfg.LogDir,
+		attemptDir:           cfg.AttemptDir,
 		maxActiveRuns:        cfg.MaxActiveSteps,
 		timeout:              cfg.Timeout,
 		delay:                cfg.Delay,
@@ -118,6 +134,8 @@ func New(cfg *Config) *Runner {
 		forcedStatus:         cfg.ForcedStatus,
 		materializations:     cfg.MaterializationStore,
 		noReuse:              cfg.NoReuse,
+		skipHandlers:         cfg.SkipHandlers,
+		openRecorder:         samples.OpenRecorder,
 		dagRunAutoRetryCount: cfg.DAGRunAutoRetryCount,
 		dagRunAutoRetryLimit: cfg.DAGRunAutoRetryLimit,
 		dagRunIsRoot:         cfg.DAGRunIsRoot,
@@ -125,7 +143,10 @@ func New(cfg *Config) *Runner {
 }
 
 type Config struct {
-	LogDir               string
+	LogDir string
+	// AttemptDir is the directory of the attempt that the run writes to. A
+	// continuous step stores its samples under it. Empty records no samples.
+	AttemptDir           string
 	MaxActiveSteps       int
 	Timeout              time.Duration
 	Delay                time.Duration
@@ -141,6 +162,10 @@ type Config struct {
 	ForcedStatus         *ir.Status
 	MaterializationStore build.MaterializationStore
 	NoReuse              bool
+	// SkipHandlers stops the runner from calling the handlers that run after
+	// the steps: on wait, on success, on failure, on abort, and on exit. The
+	// init handler runs before the steps and is not affected.
+	SkipHandlers bool
 
 	DAGRunAutoRetryCount int
 	DAGRunAutoRetryLimit int
@@ -427,7 +452,10 @@ func (r *Runner) runGraphLoop(ctx context.Context, plan *Plan, nodes []*Node, pr
 				ctx := logger.WithValues(ctx, tag.Step(n.Name()))
 
 				// Ensure node is finished and wg is decremented
-				defer r.finishNode(n, &wg)
+				defer func() {
+					r.finishNode(n, &wg)
+					r.clampDependentStarts(plan, n)
+				}()
 				// Recover from panics and signal progress for status updates
 				defer r.recoverNodePanic(ctx, n, progressCh)
 				// Signal completion to runner loop
@@ -446,6 +474,7 @@ func (r *Runner) runGraphLoop(ctx context.Context, plan *Plan, nodes []*Node, pr
 				}
 				if n.Step().HumanTask != nil {
 					r.runHumanTask(ctx, plan, n, progressCh)
+					r.clampStartToDependencies(plan, n)
 					return
 				}
 				if !r.dry {
@@ -463,6 +492,8 @@ func (r *Runner) runGraphLoop(ctx context.Context, plan *Plan, nodes []*Node, pr
 					n.SetStatus(ir.NodeFailed)
 					return
 				}
+
+				r.clampStartToDependencies(plan, n)
 
 				// Status already set to Running before goroutine spawn
 				// Send progress notification after successful preparation
@@ -573,6 +604,8 @@ func (r *Runner) runNodeExecution(ctx context.Context, plan *Plan, node *Node, p
 	ctx = spanCtx
 	ctx = withStepTraceContext(ctx)
 	ctx = r.setupNodeExecutionEnv(ctx, node)
+	cont := r.newContinuousStep(ctx, node)
+	defer cont.close(ctx)
 	preparedNodeTornDown := false
 	teardownPreparedNode := func() {
 		if preparedNodeTornDown {
@@ -644,6 +677,7 @@ ExecRepeat: // repeat execution
 			node.SetStatus(ir.NodeFailed)
 			return
 		}
+		cont.beforeExecution(node)
 		execErr := r.execNode(attemptCtx, node, progressCh)
 		stoppedDuringAttempt = r.isCanceled()
 		if execErr == nil {
@@ -654,10 +688,17 @@ ExecRepeat: // repeat execution
 			execErr = commitErr
 		}
 		isRetriable := r.handleNodeExecutionError(ctx, plan, node, execErr)
+		cont.afterExecution(ctx, node, execErr)
 		if isRetriable {
 			if stagingPath != "" {
 				_ = os.Remove(stagingPath)
 				stagingPath = ""
+			}
+			if cont != nil {
+				cont.retried()
+				if cont.reportDue() {
+					r.report(ctx, progressCh, node)
+				}
 			}
 			continue ExecRepeat
 		}
@@ -676,7 +717,7 @@ ExecRepeat: // repeat execution
 				_ = os.Remove(stagingPath)
 				stagingPath = ""
 			}
-			r.prepareNodeForRepeat(ctx, node, progressCh)
+			r.prepareNodeForRepeat(ctx, node, progressCh, cont)
 			continue
 		}
 
@@ -899,6 +940,33 @@ func (r *Runner) runHumanTask(ctx context.Context, plan *Plan, node *Node, progr
 		node.OpenHumanTask(prompt, artifacts, time.Now())
 	}
 	r.report(ctx, progressCh, node)
+}
+
+// clampDependentStarts keeps the start of each dependent of a node that just
+// finished from being earlier than the finish of that node. A dependent can
+// start while the finish is being recorded, because its status is final before
+// its finish time is set.
+func (r *Runner) clampDependentStarts(plan *Plan, node *Node) {
+	finished := node.State().FinishedAt
+	if finished.IsZero() {
+		return
+	}
+	for _, depID := range plan.Dependents(node.id) {
+		plan.GetNode(depID).ClampStartedAt(finished)
+	}
+}
+
+// clampStartToDependencies keeps the start of a node from being earlier than
+// the finish of any dependency. The clock can give an earlier value because of
+// its resolution or an adjustment. A real later start is kept as it is.
+func (r *Runner) clampStartToDependencies(plan *Plan, node *Node) {
+	var latest time.Time
+	for _, depID := range plan.Dependencies(node.id) {
+		if finished := plan.GetNode(depID).State().FinishedAt; finished.After(latest) {
+			latest = finished
+		}
+	}
+	node.ClampStartedAt(latest)
 }
 
 func (r *Runner) teardownNode(node *Node) error {
@@ -1544,6 +1612,11 @@ func (r *Runner) setup(ctx context.Context) (err error) {
 		ir.HandlerOnWait:    r.onWait,
 	}
 	for handlerType, step := range handlerSteps {
+		// A selected-steps run without a graph end step calls no handler that
+		// runs after the steps, so these handlers get no node and no status.
+		if r.skipHandlers && handlerType != ir.HandlerOnInit {
+			continue
+		}
 		if step != nil {
 			r.handlers[handlerType] = &Node{Data: newSafeData(NodeData{Step: *step})}
 		}
@@ -1870,7 +1943,11 @@ func (r *Runner) handleNodeExecutionError(ctx context.Context, plan *Plan, node 
 		if step.Timeout > 0 {
 			// Step-level timeout: Node.Execute already set status to failed and exitCode=124.
 			// Keep failed status and ensure we don't retry.
-			logger.Info(ctx, "Step timed out (step-level timeout)",
+			logTimeout := logger.Info
+			if isContinuousStep(step) {
+				logTimeout = logger.Debug // the failed event gives the info line
+			}
+			logTimeout(ctx, "Step timed out (step-level timeout)",
 				tag.Timeout(step.Timeout),
 				tag.Error(execErr),
 			)
@@ -2030,14 +2107,19 @@ func (r *Runner) evalUntilCondition(ctx context.Context, shell []string, node *N
 }
 
 // prepareNodeForRepeat sets up a node for repetition
-func (r *Runner) prepareNodeForRepeat(ctx context.Context, node *Node, progressCh chan ProgressUpdate) {
+func (r *Runner) prepareNodeForRepeat(ctx context.Context, node *Node, progressCh chan ProgressUpdate, cont *continuousStep) {
 	step := node.Step()
+	// A continuous step repeats for years: each execution logs at debug level.
+	logRepeat := logger.Info
+	if cont != nil {
+		logRepeat = logger.Debug
+	}
 
 	node.SetStatus(ir.NodeRunning) // reset status to running for the repeat
 	if r.lastError == node.Error() {
 		r.setLastError(nil) // clear last error if we are repeating
 	}
-	logger.Info(ctx, "Step will be repeated",
+	logRepeat(ctx, "Step will be repeated",
 		slog.Duration("interval", step.RepeatPolicy.Interval),
 	)
 	interval := ir.CalculateBackoffInterval(
@@ -2051,9 +2133,13 @@ func (r *Runner) prepareNodeForRepeat(ctx context.Context, node *Node, progressC
 		return
 	}
 	node.SetRepeated(true) // mark as repeated
-	logger.Info(ctx, "Repeating step")
+	logRepeat(ctx, "Repeating step")
 
-	r.report(ctx, progressCh, node)
+	// A continuous step writes the status once a minute and at a change of
+	// state, not after each execution.
+	if cont.reportDue() {
+		r.report(ctx, progressCh, node)
+	}
 }
 
 func waitForExecution(ctx context.Context, duration time.Duration) bool {
