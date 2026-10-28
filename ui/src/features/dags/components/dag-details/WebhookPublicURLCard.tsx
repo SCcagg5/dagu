@@ -36,6 +36,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useRemoteNode } from '@/contexts/RemoteNodeContext';
+import { buildDAGPageURL } from '@/features/dag-runs/lib/dagRunUrls';
 import { useClient, useQuery } from '@/hooks/api';
 import { whenEnabled } from '@/hooks/queryUtils';
 import dayjs from '@/lib/dayjs';
@@ -77,6 +79,8 @@ interface WebhookPublicURLCardProps {
   webhook: WebhookDetails;
   onWebhookChange: (webhook: WebhookDetails) => void;
   onSecretCreated: (secret: string) => void;
+  /** Called with true when the card hands over a sender secret to show once. */
+  onSecretVisibleChange?: (visible: boolean) => void;
 }
 
 // formatSize shows whole bytes below a kilobyte.
@@ -99,6 +103,7 @@ function WebhookPublicURLCard({
   webhook,
   onWebhookChange,
   onSecretCreated,
+  onSecretVisibleChange,
 }: WebhookPublicURLCardProps) {
   const { ts } = useI18n();
   const client = useClient();
@@ -210,6 +215,7 @@ function WebhookPublicURLCard({
       setSecret('');
       onWebhookChange(data.webhook);
       if (data.secret) {
+        onSecretVisibleChange?.(true);
         onSecretCreated(data.secret);
       }
     }, 'Failed to save the sender');
@@ -586,6 +592,7 @@ function Deliveries({
   dagName: string;
   deliveries: WebhookPublicDelivery[];
 }) {
+  const remoteNode = useRemoteNode();
   return (
     <div className="space-y-1">
       <span className="text-xs text-muted-foreground">
@@ -638,7 +645,11 @@ function Deliveries({
                         {' · '}
                         <Link
                           className="font-mono text-primary hover:underline"
-                          to={`/dag-runs/${encodeURIComponent(dagName)}/${encodeURIComponent(delivery.dagRunId)}`}
+                          to={buildDAGPageURL({
+                            fileName: dagName,
+                            remoteNode,
+                            run: delivery.dagRunId,
+                          })}
                         >
                           {delivery.dagRunId.slice(0, 8)}
                         </Link>
