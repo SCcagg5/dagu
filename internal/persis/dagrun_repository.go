@@ -24,6 +24,7 @@ type DAGRunRepository struct {
 	location          *time.Location
 	now               func() time.Time
 	removalEnqueuer   DAGRunRemovalEnqueuer
+	ephemeral         DAGRunStore
 }
 
 // NewDAGRunRepository creates a repository backed by store.
@@ -46,6 +47,7 @@ func NewDAGRunRepository(store DAGRunStore, workDirs dagrun.WorkDirStore, option
 		location:          location,
 		now:               now,
 		removalEnqueuer:   options.RemovalEnqueuer,
+		ephemeral:         options.EphemeralStore,
 	}
 }
 
@@ -63,7 +65,11 @@ func (r *DAGRunRepository) CreateAttempt(
 	if !options.RootDAGRun.Zero() && options.RootDAGRun.ID == "" {
 		return nil, dagrun.ErrDAGRunIDEmpty
 	}
-	attempt, err := r.store.CreateAttempt(ctx, DAGRunCreateAttemptRequest{
+	store, ephemeral, err := r.createStore(ctx, dag, dagRunID, options)
+	if err != nil {
+		return nil, err
+	}
+	attempt, err := store.CreateAttempt(ctx, DAGRunCreateAttemptRequest{
 		DAG:        dag,
 		RootDAGRun: options.RootDAGRun,
 		Timestamp:  timestamp,
@@ -74,7 +80,7 @@ func (r *DAGRunRepository) CreateAttempt(
 	if err != nil {
 		return nil, err
 	}
-	return newEventingAttempt(attempt, dag), nil
+	return newEventingAttempt(attempt, dag, ephemeral), nil
 }
 
 // RecentStatuses returns the newest readable status for recent DAG runs.
@@ -100,7 +106,7 @@ func (r *DAGRunRepository) LatestAttempt(
 	if err != nil {
 		return nil, err
 	}
-	return newEventingAttempt(attempt, nil), nil
+	return newEventingAttempt(attempt, nil, false), nil
 }
 
 // LatestStatuses returns the status of each DAG's newest run when that run
@@ -179,7 +185,8 @@ func (r *DAGRunRepository) CompareAndSwapLatestAttemptStatus(
 		return nil, false, dagrun.ErrDAGRunIDEmpty
 	}
 
-	status, swapped, err := r.store.CompareAndSwapLatestAttemptStatus(ctx, DAGRunCompareAndSwapStatusRequest{
+	store, ephemeral := r.storeHolding(ctx, root)
+	status, swapped, err := store.CompareAndSwapLatestAttemptStatus(ctx, DAGRunCompareAndSwapStatusRequest{
 		DAGRun:             dagRun,
 		RootDAGRun:         root,
 		ExpectedAttemptID:  expectedAttemptID,
@@ -196,7 +203,9 @@ func (r *DAGRunRepository) CompareAndSwapLatestAttemptStatus(
 	if err != nil || !swapped {
 		return status, swapped, err
 	}
-	r.emitStatusEventAfterSwap(ctx, root, dagRun, expectedStatus, status)
+	if !ephemeral && !status.Ephemeral {
+		r.emitStatusEventAfterSwap(ctx, root, dagRun, expectedStatus, status)
+	}
 	return status, true, nil
 }
 
@@ -205,11 +214,16 @@ func (r *DAGRunRepository) FindAttempt(ctx context.Context, ref ir.DAGRunRef) (d
 	if ref.ID == "" {
 		return nil, dagrun.ErrDAGRunIDEmpty
 	}
+	if r.ephemeral != nil {
+		if attempt, err := r.ephemeral.FindAttempt(ctx, ref); err == nil {
+			return newEventingAttempt(attempt, nil, true), nil
+		}
+	}
 	attempt, err := r.store.FindAttempt(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
-	return newEventingAttempt(attempt, nil), nil
+	return newEventingAttempt(attempt, nil, false), nil
 }
 
 // FindSubAttempt finds the latest visible attempt for a child DAG run.
@@ -217,11 +231,16 @@ func (r *DAGRunRepository) FindSubAttempt(ctx context.Context, root ir.DAGRunRef
 	if root.ID == "" {
 		return nil, dagrun.ErrDAGRunIDEmpty
 	}
+	if r.ephemeral != nil {
+		if attempt, err := r.ephemeral.FindSubAttempt(ctx, root, childRunID); err == nil {
+			return newEventingAttempt(attempt, nil, true), nil
+		}
+	}
 	attempt, err := r.store.FindSubAttempt(ctx, root, childRunID)
 	if err != nil {
 		return nil, err
 	}
-	return newEventingAttempt(attempt, nil), nil
+	return newEventingAttempt(attempt, nil, false), nil
 }
 
 // RemoveOldDAGRuns removes final DAG runs outside the configured retention policy.
@@ -319,7 +338,8 @@ func (r *DAGRunRepository) RemoveDAGRun(ctx context.Context, ref ir.DAGRunRef, o
 			return err
 		}
 	}
-	err := r.store.RemoveDAGRun(ctx, DAGRunRemoveRequest{
+	store, _ := r.storeHolding(ctx, ref)
+	err := store.RemoveDAGRun(ctx, DAGRunRemoveRequest{
 		DAGRun:       ref,
 		RejectActive: options.RejectActive,
 	})
@@ -360,7 +380,7 @@ func (r *DAGRunRepository) enqueueDAGRunRemovals(ctx context.Context, refs []ir.
 }
 
 func (r *DAGRunRepository) agentSessionResources(ctx context.Context, root ir.DAGRunRef) ([]ir.AgentSessionResource, error) {
-	attempt, err := r.store.FindAttempt(ctx, root)
+	attempt, err := r.FindAttempt(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +398,7 @@ func (r *DAGRunRepository) agentSessionResources(ctx context.Context, root ir.DA
 			continue
 		}
 		seen[childID] = true
-		childAttempt, err := r.store.FindSubAttempt(ctx, root, childID)
+		childAttempt, err := r.FindSubAttempt(ctx, root, childID)
 		if err != nil {
 			if errors.Is(err, dagrun.ErrDAGRunIDNotFound) || errors.Is(err, dagrun.ErrNoStatusData) {
 				continue
