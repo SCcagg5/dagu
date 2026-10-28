@@ -89,6 +89,7 @@ function renderCard(
 ) {
   const onWebhookChange = vi.fn();
   const onSecretCreated = vi.fn();
+  const onSecretVisibleChange = vi.fn();
   render(
     <MemoryRouter>
       <WebhookPublicURLCard
@@ -99,10 +100,11 @@ function renderCard(
         webhook={current}
         onWebhookChange={onWebhookChange}
         onSecretCreated={onSecretCreated}
+        onSecretVisibleChange={onSecretVisibleChange}
       />
     </MemoryRouter>
   );
-  return { onWebhookChange, onSecretCreated };
+  return { onWebhookChange, onSecretCreated, onSecretVisibleChange };
 }
 
 const params = {
@@ -110,6 +112,7 @@ const params = {
   query: { remoteNode: 'local' },
 };
 
+// parity:test-webhook-public-url
 describe('WebhookPublicURLCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -121,6 +124,7 @@ describe('WebhookPublicURLCard', () => {
     returnsDetails(undefined);
   });
 
+  // parity:webhook-public-toggle
   it('turns on a public URL', async () => {
     postMock.mockResolvedValue({ data: publicWebhook });
     const user = userEvent.setup();
@@ -136,6 +140,8 @@ describe('WebhookPublicURLCard', () => {
     });
   });
 
+  // parity:webhook-public-url-copy parity:webhook-public-deliveries
+  // parity:webhook-public-missed
   it('shows the URL, its deliveries, and missed deliveries', async () => {
     returnsDetails(activeDetails);
     deleteMock.mockResolvedValue({});
@@ -145,10 +151,16 @@ describe('WebhookPublicURLCard', () => {
     expect(
       screen.getByText('https://hooks.dagu.sh/server/token')
     ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    await waitFor(async () =>
+      expect(await navigator.clipboard.readText()).toBe(
+        'https://hooks.dagu.sh/server/token'
+      )
+    );
     expect(screen.getAllByText('push')).not.toHaveLength(0);
     expect(screen.getByRole('link', { name: '3f0c2d4e' })).toHaveAttribute(
       'href',
-      '/dag-runs/deploy/3f0c2d4e-run'
+      '/dags/deploy?remoteNode=local&run=3f0c2d4e-run'
     );
     expect(
       screen.getByText('the signature does not match the signing secret')
@@ -165,6 +177,7 @@ describe('WebhookPublicURLCard', () => {
     );
   });
 
+  // parity:webhook-public-sender
   it('reveals the GitHub secret Dagu makes', async () => {
     const saved = {
       ...publicWebhook,
@@ -179,7 +192,9 @@ describe('WebhookPublicURLCard', () => {
       data: { webhook: saved, secret: 'a'.repeat(64) },
     });
     const user = userEvent.setup();
-    const { onWebhookChange, onSecretCreated } = renderCard(publicWebhook);
+    const { onWebhookChange, onSecretCreated, onSecretVisibleChange } =
+      renderCard(publicWebhook);
+    expect(onSecretVisibleChange).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('combobox', { name: 'Sender' }));
     await user.click(await screen.findByRole('option', { name: 'GitHub' }));
@@ -208,8 +223,11 @@ describe('WebhookPublicURLCard', () => {
       }
     );
     expect(onWebhookChange).toHaveBeenCalledWith(saved);
+    expect(onSecretVisibleChange).toHaveBeenCalledTimes(1);
+    expect(onSecretVisibleChange).toHaveBeenCalledWith(true);
   });
 
+  // parity:webhook-public-new-url
   it('confirms before replacing the URL', async () => {
     postMock.mockResolvedValue({ data: publicWebhook });
     const user = userEvent.setup();
