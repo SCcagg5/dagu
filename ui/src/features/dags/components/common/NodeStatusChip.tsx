@@ -9,23 +9,23 @@ import {
   isActiveNodeStatus,
   statusLabelText,
 } from '@/lib/status-utils';
+import { useClock } from '@/hooks/useClock';
 import { useI18n } from '@/i18n/I18nProvider';
 import MatrixText from '@/components/ui/matrix-text';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { NodeStatus } from '../../../../api/v1/schema';
 
 const BRAILLE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+const BRAILLE_FRAME_MS = 80;
+
+// The frame is read from the shared clock, so that all spinners show the same
+// frame, on one timer, and none runs while the tab is hidden.
 function BrailleSpinner() {
-  const [frame, setFrame] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFrame((prev) => (prev + 1) % BRAILLE_FRAMES.length);
-    }, 80);
-    return () => clearInterval(interval);
-  }, []);
-
+  const frame = useClock(
+    BRAILLE_FRAME_MS,
+    (now) => Math.floor(now / BRAILLE_FRAME_MS) % BRAILLE_FRAMES.length
+  );
   return <>{BRAILLE_FRAMES[frame]}</>;
 }
 
