@@ -622,23 +622,9 @@ func TestCmdStart_Only(t *testing.T) {
 		require.Equal(t, "RESULT=got-from-source", outputVariable(t, status.Nodes[1], "RESULT"))
 	})
 
-	// A supplied output stands in for the skipped producer without any
-	// earlier run.
-	t.Run("SetsOutput", func(t *testing.T) {
-		t.Parallel()
-		th := test.SetupCommand(t)
-		dag := th.DAG(t, outputsDAG)
-
-		th.RunCommand(t, cmd.Start(), test.CmdTest{
-			Args: []string{"start", "--run-id=only", "--only=consume", "--output=produce.VALUE=given", dag.Location},
-		})
-
-		status := readRunStatus(t, th, dag.Name, "only")
-		require.Equal(t, []ir.NodeStatus{ir.NodeSkipped, ir.NodeSucceeded}, nodeStatuses(status))
-		require.Equal(t, "RESULT=got-given", outputVariable(t, status.Nodes[1], "RESULT"))
-	})
-
-	t.Run("OutputOverridesSource", func(t *testing.T) {
+	// --output-from names the run that gives the outputs of one skipped step,
+	// and the run records that run with the times of the source step.
+	t.Run("OutputFrom", func(t *testing.T) {
 		t.Parallel()
 		th := test.SetupCommand(t)
 		dag := th.DAG(t, outputsDAG)
@@ -647,11 +633,115 @@ func TestCmdStart_Only(t *testing.T) {
 		})
 
 		th.RunCommand(t, cmd.Start(), test.CmdTest{
-			Args: []string{"start", "--run-id=only", "--only=consume", "--outputs-from=source", "--output=produce.VALUE=given", dag.Location},
+			Args: []string{"start", "--run-id=only", "--only=consume", "--output-from=produce=source", dag.Location},
 		})
 
 		status := readRunStatus(t, th, dag.Name, "only")
-		require.Equal(t, "RESULT=got-given", outputVariable(t, status.Nodes[1], "RESULT"))
+		require.Equal(t, []ir.NodeStatus{ir.NodeSkipped, ir.NodeSucceeded}, nodeStatuses(status))
+		require.Equal(t, "RESULT=got-from-source", outputVariable(t, status.Nodes[1], "RESULT"))
+		source := readRunStatus(t, th, dag.Name, "source")
+		require.Len(t, status.ReusedInputs, 1)
+		reused := status.ReusedInputs[0]
+		require.Equal(t, "produce", reused.Step)
+		require.Equal(t, "source", reused.RunID)
+		require.Equal(t, ir.ReusedInputViaRun, reused.Via)
+		require.NotEmpty(t, reused.StartedAt)
+		require.Equal(t, source.Nodes[0].StartedAt, reused.StartedAt)
+		require.Equal(t, source.Nodes[0].FinishedAt, reused.FinishedAt)
+	})
+
+	// The run of --output-from wins over --outputs-from for its step.
+	t.Run("OutputFromWinsOverOutputsFrom", func(t *testing.T) {
+		t.Parallel()
+		th := test.SetupCommand(t)
+		dag := th.DAG(t, `steps:
+  - id: produce
+    run: echo from-${DAG_RUN_ID}
+    output: VALUE
+  - id: consume
+    depends: produce
+    run: echo got-${VALUE}
+    output: RESULT
+`)
+		for _, id := range []string{"first", "second"} {
+			th.RunCommand(t, cmd.Start(), test.CmdTest{
+				Args: []string{"start", "--run-id=" + id, dag.Location},
+			})
+		}
+
+		th.RunCommand(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=only", "--only=consume", "--outputs-from=first", "--output-from=produce=second", dag.Location},
+		})
+
+		status := readRunStatus(t, th, dag.Name, "only")
+		require.Equal(t, "RESULT=got-from-second", outputVariable(t, status.Nodes[1], "RESULT"))
+		require.Len(t, status.ReusedInputs, 1)
+		require.Equal(t, "second", status.ReusedInputs[0].RunID)
+	})
+
+	t.Run("OutputFromRunOfAnotherDAG", func(t *testing.T) {
+		t.Parallel()
+		th := test.SetupCommand(t)
+		dag := th.DAG(t, outputsDAG)
+		other := th.DAG(t, "steps:\n  - id: other\n    run: echo other\n")
+		th.RunCommand(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=elsewhere", other.Location},
+		})
+
+		err := th.RunCommandWithError(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=only", "--only=consume", "--output-from=produce=elsewhere", dag.Location},
+		})
+		require.ErrorContains(t, err, "step produce cannot be reused from run elsewhere: the run does not exist for DAG "+dag.Name)
+		requireNoRun(t, th, dag.Name, "only")
+	})
+
+	t.Run("OutputFromMissingRun", func(t *testing.T) {
+		t.Parallel()
+		th := test.SetupCommand(t)
+		dag := th.DAG(t, outputsDAG)
+
+		err := th.RunCommandWithError(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=only", "--only=consume", "--output-from=produce=missing", dag.Location},
+		})
+		require.ErrorContains(t, err, "step produce cannot be reused from run missing: the run does not exist for DAG "+dag.Name)
+		requireNoRun(t, th, dag.Name, "only")
+	})
+
+	t.Run("OutputFromFailedStep", func(t *testing.T) {
+		t.Parallel()
+		th := test.SetupCommand(t)
+		dag := th.DAG(t, `steps:
+  - id: produce
+    run: exit 1
+    output: VALUE
+  - id: consume
+    depends: produce
+    run: echo got-${VALUE}
+`)
+		_ = th.RunCommandWithError(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=source", dag.Location},
+		})
+
+		err := th.RunCommandWithError(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=only", "--only=consume", "--output-from=produce=source", dag.Location},
+		})
+		require.ErrorContains(t, err, "step produce cannot be reused from run source: the step did not succeed there")
+		requireNoRun(t, th, dag.Name, "only")
+	})
+
+	t.Run("OutputFromSelectedStep", func(t *testing.T) {
+		t.Parallel()
+		th := test.SetupCommand(t)
+		dag := th.DAG(t, outputsDAG)
+		th.RunCommand(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=source", dag.Location},
+		})
+
+		err := th.RunCommandWithError(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=only", "--only=consume", "--output-from=consume=source", dag.Location},
+		})
+		require.ErrorContains(t, err, `names step "consume", which is selected to run`)
+		requireNoRun(t, th, dag.Name, "only")
 	})
 
 	// A failed producer publishes no outputs, so none are carried into the
@@ -692,11 +782,12 @@ func TestCmdStart_Only(t *testing.T) {
 		{name: "NeedsOnly", args: []string{"--outputs-from=source"}, wantErr: "--outputs-from requires --only"},
 		{name: "FromRunID", args: []string{"--only=first", "--from-run-id=source"}, wantErr: "--only cannot be combined with --from-run-id"},
 		{name: "SubDAGRun", args: []string{"--only=first", "--run-id=child", "--parent=parent:run", "--root=parent:run"}, wantErr: "--only cannot be combined with --parent"},
-		{name: "OutputNeedsOnly", args: []string{"--output=first.value=x"}, wantErr: "--output requires --only"},
-		{name: "OutputWithoutValue", args: []string{"--only=third", "--output=first.value"}, wantErr: `invalid --output "first.value": expected <step>.<name>=<value>`},
-		{name: "OutputWithoutName", args: []string{"--only=third", "--output=first=x"}, wantErr: `invalid --output "first": expected <step>.<name>=<value>`},
-		{name: "OutputTwice", args: []string{"--only=third", "--output=first.value=a", "--output=first.value=b"}, wantErr: `--output sets "first.value" more than once`},
-		{name: "OutputOfSelectedStep", args: []string{"--only=third", "--output=third.value=x"}, wantErr: `cannot set outputs of step "third": it is selected to run`},
+		{name: "OutputFromNeedsOnly", args: []string{"--output-from=first=source"}, wantErr: "--output-from requires --only"},
+		{name: "OutputFromWithoutRun", args: []string{"--only=third", "--output-from=first"}, wantErr: `invalid --output-from "first": expected <step>=<run-id>`},
+		{name: "OutputFromWithoutStep", args: []string{"--only=third", "--output-from==source"}, wantErr: `invalid --output-from "=source": expected <step>=<run-id>`},
+		{name: "OutputFromTwice", args: []string{"--only=third", "--output-from=first=a", "--output-from=first=b"}, wantErr: `--output-from names step "first" more than once`},
+		{name: "OutputRemoved", args: []string{"--only=third", "--output=first.value=x"}, wantErr: "the --output flag was removed: use --output-from <step>=<run-id>"},
+		{name: "OutputRemovedWithoutOnly", args: []string{"--output=first.value=x"}, wantErr: "the --output flag was removed: use --output-from <step>=<run-id>"},
 	}
 	for _, tt := range rejects {
 		t.Run(tt.name, func(t *testing.T) {
@@ -737,6 +828,13 @@ func readRunStatus(t *testing.T, th test.Command, dagName, dagRunID string) *ir.
 	status, err := attempt.ReadStatus(th.Context)
 	require.NoError(t, err)
 	return status
+}
+
+// requireNoRun makes sure that a rejected start left no run behind.
+func requireNoRun(t *testing.T, th test.Command, dagName, dagRunID string) {
+	t.Helper()
+	_, err := th.DAGRunRepository.FindAttempt(th.Context, ir.NewDAGRunRef(dagName, dagRunID))
+	require.ErrorIs(t, err, dagrun.ErrDAGRunIDNotFound)
 }
 
 func nodeStatuses(status *ir.DAGRunStatus) []ir.NodeStatus {
