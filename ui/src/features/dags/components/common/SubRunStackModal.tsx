@@ -3,6 +3,7 @@
 
 import { components } from '@/api/v1/schema';
 import { Button } from '@/components/ui/button';
+import { useIsRaisedLayer } from '@/components/ui/dialog';
 import LoadingIndicator from '@/components/ui/loading-indicator';
 import { useRemoteNode } from '@/contexts/RemoteNodeContext';
 import { useBoundedDAGRunDetails } from '@/features/dag-runs/hooks/useBoundedDAGRunDetails';
@@ -110,6 +111,7 @@ export function SubRunStackModal({
   // blanks the panel.
   const shown = fresh ?? previousRef.current;
 
+  const raised = useIsRaisedLayer();
   const [isVisible, setIsVisible] = React.useState(false);
   React.useEffect(() => {
     const frame = requestAnimationFrame(() => setIsVisible(true));
@@ -154,6 +156,9 @@ export function SubRunStackModal({
 
   if (!top) return null;
 
+  // In the workspace the drawer sits above the node view (z-[60]) and below dialogs (z-[80]).
+  const backdropZ = raised ? 'z-[66]' : 'z-40';
+  const panelZ = raised ? 'z-[68]' : 'z-50';
   const depth = stack.length;
   const edges = Math.min(depth - 1, MAX_VISIBLE_EDGES);
   const hiddenLevels = depth - 1 - edges;
@@ -162,7 +167,7 @@ export function SubRunStackModal({
     <>
       {/* Click-away target only: the run underneath stays fully legible. */}
       <div
-        className="fixed inset-0 z-40 h-screen w-screen"
+        className={cn('fixed inset-0 h-screen w-screen', backdropZ)}
         onClick={() => popTo(0)}
       />
 
@@ -178,7 +183,8 @@ export function SubRunStackModal({
             })}
             onClick={() => popTo(level)}
             className={cn(
-              'bg-card hover:bg-muted border-border fixed top-0 bottom-0 z-40 h-screen border-l transition-all ease-out',
+              'bg-card hover:bg-muted border-border fixed top-0 bottom-0 h-screen border-l transition-[translate,opacity,background-color] ease-out',
+              backdropZ,
               !isVisible && 'translate-x-full opacity-0'
             )}
             style={{
@@ -197,7 +203,8 @@ export function SubRunStackModal({
 
       <div
         className={cn(
-          'bg-background fixed top-0 right-0 bottom-0 z-50 flex h-screen w-full flex-col border-l border-indigo-500/30 transition-transform ease-out md:w-3/4',
+          'bg-background fixed top-0 right-0 bottom-0 flex h-screen w-full flex-col border-l border-indigo-500/30 transition-transform ease-out md:w-3/4',
+          panelZ,
           !isVisible && 'translate-x-full'
         )}
         style={{ transitionDuration: `${SLIDE_MS}ms` }}

@@ -1,18 +1,24 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { components, Stream } from '../../../api/v1/schema';
+import { useCallback, useContext, useEffect, useMemo } from 'react';
+import { cn } from '@/lib/utils';
+import { WorkspaceLoading } from '../../../features/workflow-workspace/WorkspaceLoading';
+import {
+  Link,
+  useLocation,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom';
+import { components } from '../../../api/v1/schema';
 import { AppBarContext } from '../../../contexts/AppBarContext';
+import {
+  useFullBleed,
+  useHideBreadcrumb,
+} from '../../../contexts/LayoutChromeContext';
 import { RemoteNodeProvider } from '../../../contexts/RemoteNodeContext';
 import { UnsavedChangesProvider } from '../../../contexts/UnsavedChangesContext';
-import {
-  DAGDetailsContent,
-  DAGHeader,
-} from '../../../features/dags/components/dag-details';
 import { DAGContext } from '../../../features/dags/contexts/DAGContext';
-import { RootDAGRunContext } from '../../../features/dags/contexts/RootDAGRunContext';
 import { useQuery } from '../../../hooks/api';
 import { useDAGRunSSE } from '../../../hooks/useDAGRunSSE';
 import { useDAGSSE } from '../../../hooks/useDAGSSE';
@@ -32,13 +38,11 @@ import {
 import { I18nText } from '@/i18n/I18nText';
 import { I18nTemplate } from '@/i18n/I18nTemplate';
 import { useI18n } from '@/i18n/I18nProvider';
-import {
-  LoadErrorState,
-  NotFoundState,
-  PageLoading,
-} from '@/components/PageStates';
-import { MonitoringOffer } from '@/components/MonitoringOffer';
+import { LoadErrorState, NotFoundState } from '@/components/PageStates';
 import { isNotFoundQueryError } from '@/lib/queryErrors';
+import { WorkflowWorkspace } from '@/features/workflow-workspace';
+import { LogPopoutPage } from '@/features/workflow-workspace/popout/LogPopoutPage';
+import { useLegacyRedirect } from '@/features/workflow-workspace/state/useLegacyRedirect';
 
 type Params = {
   fileName: string;
@@ -48,69 +52,15 @@ type Params = {
 
 type DAGRunDetails = components['schemas']['DAGRunDetails'];
 
-/** The run page tab for a dock tab of the workflow page. */
-const RUN_PAGE_TAB: Readonly<Record<string, string>> = {
-  timeline: 'timeline',
-  outputs: 'outputs',
-  artifacts: 'artifacts',
-  agent: 'agent',
-  chat: 'chat',
-  tasks: 'tasks',
-  actions: 'approval',
-};
-
-type RunPageURLInput = {
-  name: string;
-  dagRunId: string;
-  remoteNode: string;
-  subDAGRunId?: string;
-  step?: string;
-  dock?: string;
-};
-
-/**
- * The run page URL. Run links name a run on the workflow page (?run), which
- * does not show runs yet, so the page sends them here.
- */
-function runPageURL({
-  name,
-  dagRunId,
-  remoteNode,
-  subDAGRunId,
-  step,
-  dock,
-}: RunPageURLInput): string {
-  const params = new URLSearchParams();
-  params.set('remoteNode', remoteNode);
-  if (subDAGRunId) {
-    params.set('subDAGRunId', subDAGRunId);
-    params.set('dagRunId', dagRunId);
-    params.set('dagRunName', name);
-  }
-  if (step) {
-    params.set('step', step);
-  }
-  const tab = dock ? RUN_PAGE_TAB[dock] : undefined;
-  if (tab) {
-    params.set('tab', tab);
-  }
-  return `/dag-runs/${encodeURIComponent(name)}/${encodeURIComponent(dagRunId)}?${params}`;
-}
-
 function DAGDetails() {
   const params = useParams<Params>();
-  const navigate = useNavigate();
   const appBarContext = useContext(AppBarContext);
   const [searchParams] = useSearchParams();
   const { ts } = useI18n();
+  // The log tabs are full-page logs of one run.
+  const popout = params.tab === 'log' || params.tab === 'dagRun-log';
 
-  const dagRunId = searchParams.get('dagRunId') ?? searchParams.get('run');
-  const dock = searchParams.get('dock');
-  const stepName = searchParams.get('step');
-  const logStream =
-    searchParams.get('stream') === Stream.stderr
-      ? Stream.stderr
-      : Stream.stdout;
+  const dagRunId = searchParams.get('dagRunId');
   const subDAGRunId = searchParams.get('subDAGRunId');
   const queriedDAGRunName = searchParams.get('dagRunName');
   const queryRemoteNode = searchParams.get('remoteNode')?.trim();
@@ -135,12 +85,17 @@ function DAGDetails() {
     [remoteNode]
   );
   const fileName = params.fileName || '';
+  const location = useLocation();
+  // The same page without the workspace of the URL.
+  const allWorkspacesTo = useMemo(() => {
+    const query = new URLSearchParams(location.search);
+    query.delete('workspace');
+    const search = query.toString();
+    return `${location.pathname}${search ? `?${search}` : ''}`;
+  }, [location.pathname, location.search]);
 
   const dagSSE = useDAGSSE(fileName, !!fileName, remoteNode);
   const { setTitle } = appBarContext;
-
-  // Determine active tab
-  const tab = params.tab === 'docs' ? 'wiki' : params.tab || 'status';
 
   // Build URL with remote node parameter if needed
   const buildUrl = useCallback(
@@ -158,25 +113,6 @@ function DAGDetails() {
     },
     [preserveRemoteNode, queryWorkspace, remoteNode]
   );
-
-  // Handle tab changes - navigates to the appropriate URL for the given tab
-  const handleTabChange = useCallback(
-    (newTab: string) => {
-      if (!fileName) return;
-      const path =
-        newTab === 'status'
-          ? `/dags/${fileName}`
-          : `/dags/${fileName}/${newTab}`;
-      navigate(buildUrl(path));
-    },
-    [fileName, navigate, buildUrl]
-  );
-
-  useEffect(() => {
-    if (params.tab === 'docs' && fileName) {
-      navigate(buildUrl(`/dags/${fileName}/wiki`), { replace: true });
-    }
-  }, [buildUrl, fileName, navigate, params.tab]);
 
   // Fetch DAG details — SWR is the single source of truth, refreshed by live invalidations
   const {
@@ -199,46 +135,17 @@ function DAGDetails() {
     setTitle(dagTitle);
   }, [dagTitle, setTitle]);
 
-  // A run is selected on the run page. Links that name a run on the
-  // workflow's Overview, from older versions or bookmarks, redirect there.
-  // A run link names the workflow by its DAG name, which finds no file when
-  // the DAG name differs from the file name: the name is then the path.
-  const runRootName =
-    queriedDAGRunName ||
-    dagData?.dag?.name ||
-    (searchParams.has('run') && isNotFoundQueryError(dagError)
-      ? fileName
-      : undefined);
-  useEffect(() => {
-    if (tab !== 'status' || !dagRunId || !runRootName) return;
-    navigate(
-      runPageURL({
-        name: runRootName,
-        dagRunId,
-        subDAGRunId: subDAGRunId ?? undefined,
-        remoteNode,
-        step: stepName ?? undefined,
-        dock: dock ?? undefined,
-      }),
-      { replace: true }
-    );
-  }, [
-    dagRunId,
-    dock,
-    navigate,
-    remoteNode,
-    runRootName,
-    stepName,
-    subDAGRunId,
-    tab,
-  ]);
+  // Links from older versions and bookmarks redirect before a body mounts.
+  const legacy = useLegacyRedirect(
+    fileName,
+    params.tab,
+    dagData?.dag?.name ?? null
+  );
 
   const dagLabels = [
     ...(dagData?.dag?.labels ?? []),
     ...(dagData?.dag?.tags ?? []),
   ];
-  // Scheduled runs happen unattended, which is when alerts matter.
-  const runsOnSchedule = !!dagData?.dag?.schedule?.length && !dagData.suspended;
   const dagWorkspaceName = workspaceNameFromLabels(dagLabels);
   const dagHasWorkspaceLabel = hasWorkspaceLabel(dagLabels);
   const dagMatchesWorkspace =
@@ -251,8 +158,14 @@ function DAGDetails() {
   // Use dagRunName from URL if available, otherwise use the name from dagData
   const dagRunName = queriedDAGRunName || dagData?.dag?.name || '';
   const effectiveDAGRunId = dagRunId;
+  // The workspace selects its run itself; these reads serve the pop-out logs.
+  const runReads = popout;
   const dagRunQueryEnabled = Boolean(
-    dagRunName && effectiveDAGRunId && !subDAGRunId && dagMatchesWorkspace
+    runReads &&
+      dagRunName &&
+      effectiveDAGRunId &&
+      !subDAGRunId &&
+      dagMatchesWorkspace
   );
 
   // Fetch specific DAG-run data if dagRunId is provided
@@ -262,7 +175,11 @@ function DAGDetails() {
     dagRunQueryEnabled,
     remoteNode
   );
-  const { data: dagRunResponse, mutate: mutateDagRun } = useQuery(
+  const {
+    data: dagRunResponse,
+    error: dagRunError,
+    mutate: mutateDagRun,
+  } = useQuery(
     '/dag-runs/{name}/{dagRunId}',
     whenEnabled(dagRunQueryEnabled, {
       params: {
@@ -279,7 +196,7 @@ function DAGDetails() {
 
   // Fetch sub DAG-run data if needed
   const subDAGRunQueryEnabled = Boolean(
-    subDAGRunId && dagRunId && dagRunName && dagMatchesWorkspace
+    runReads && subDAGRunId && dagRunId && dagRunName && dagMatchesWorkspace
   );
   const subDAGRunSSE = useSubDAGRunSSE(
     dagRunName,
@@ -288,7 +205,11 @@ function DAGDetails() {
     subDAGRunQueryEnabled,
     remoteNode
   );
-  const { data: subDAGRunResponse, mutate: mutateSubDagRun } = useQuery(
+  const {
+    data: subDAGRunResponse,
+    error: subDAGRunError,
+    mutate: mutateSubDagRun,
+  } = useQuery(
     '/dag-runs/{name}/{dagRunId}/sub-dag-runs/{subDAGRunId}',
     whenEnabled(subDAGRunQueryEnabled, {
       params: {
@@ -316,11 +237,12 @@ function DAGDetails() {
     return dagData?.latestDAGRun;
   }
   const currentDAGRun = getCurrentDAGRun();
-
-  // Root DAG-run context state for header display
-  const [rootDAGRunData, setRootDAGRunData] = useState<
-    DAGRunDetails | undefined
-  >(undefined);
+  // A run that fails to load falls back to the latest run.
+  const popoutRunLoading =
+    !currentDAGRun &&
+    (subDAGRunId
+      ? subDAGRunQueryEnabled && !subDAGRunError
+      : dagRunQueryEnabled && !dagRunError);
 
   // Refresh all relevant data based on current view. The returned promise
   // settles when the reads finish, so a refresh button can show progress.
@@ -341,100 +263,111 @@ function DAGDetails() {
     subDAGRunId,
   ]);
 
-  const displayDAGRun = currentDAGRun || dagData?.latestDAGRun;
-  const displayDAGRunId =
-    currentDAGRun?.dagRunId || displayDAGRun?.dagRunId || 'latest';
+  // One value until one of its fields changes: the readers of the context do
+  // not render again for each render of the page.
+  const dagContext = useMemo(
+    () => ({ refresh: refreshData, fileName, name: dagRunName }),
+    [refreshData, fileName, dagRunName]
+  );
 
-  useEffect(() => {
-    setRootDAGRunData(displayDAGRun);
-  }, [displayDAGRun]);
+  const showBody =
+    !!dagData?.dag && dagMatchesWorkspace && legacy !== 'pending';
+  useFullBleed(showBody);
+  // The workspace bar is the first row of the page.
+  useHideBreadcrumb(showBody);
+  // The bar and the loader stand in the place of the workspace until it shows.
+  const loadingFrame =
+    (!dagData?.dag && !dagError) || (!!dagData?.dag && legacy === 'pending');
+  const legacyHistoryIdx =
+    typeof legacy === 'object' ? legacy.needsHistory : null;
 
   return (
     <UnsavedChangesProvider>
       <RemoteNodeProvider remoteNode={remoteNode}>
-        <DAGContext.Provider
-          value={{
-            refresh: refreshData,
-            fileName,
-            name: dagRunName,
-          }}
-        >
-          <RootDAGRunContext.Provider
-            value={{
-              data: rootDAGRunData,
-              setData: setRootDAGRunData,
-            }}
+        <DAGContext.Provider value={dagContext}>
+          <div
+            className={cn(
+              'flex h-full min-h-0 w-full min-w-0 flex-col',
+              // The frame is full bleed from the first paint: the messages
+              // keep the padding of a page, the loading frame has none.
+              !showBody && !loadingFrame && 'overflow-auto p-4 md:p-6'
+            )}
           >
-            <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
-              {!dagData?.dag &&
-                (dagError ? (
-                  isNotFoundQueryError(dagError) ? (
-                    <NotFoundState
-                      title={ts('Workflow not found')}
-                      description={
-                        <I18nTemplate
-                          text="No workflow named {name} exists. It may have been renamed or deleted."
-                          values={{ name: <code>{fileName}</code> }}
-                        />
-                      }
-                      action={{
-                        to: buildUrl('/dags'),
-                        label: ts('Back to Workflows'),
-                      }}
-                    />
-                  ) : (
-                    <LoadErrorState
-                      title={ts("Couldn't load this workflow")}
-                      error={dagError}
-                      onRetry={() => void mutateDag()}
-                    />
-                  )
-                ) : (
-                  <PageLoading />
-                ))}
-              {dagData?.dag && dagMatchesWorkspace && (
-                <>
-                  <DAGHeader
-                    dag={dagData.dag}
-                    currentDAGRun={displayDAGRun}
-                    fileName={fileName}
-                    refreshFn={refreshData}
-                    buildScopedUrl={buildUrl}
-                    pinned={dagData.pinned}
+            {!dagData?.dag &&
+              (dagError ? (
+                isNotFoundQueryError(dagError) ? (
+                  <NotFoundState
+                    title={ts('Workflow not found')}
+                    description={
+                      <I18nTemplate
+                        text="No workflow named {name} exists. It may have been renamed or deleted."
+                        values={{ name: <code>{fileName}</code> }}
+                      />
+                    }
+                    action={{
+                      to: buildUrl('/dags'),
+                      label: ts('Back to Workflows'),
+                    }}
                   />
-                  {tab === 'status' && runsOnSchedule && (
-                    <MonitoringOffer className="mt-3" />
-                  )}
-                  <div className="min-h-0 flex-1">
-                    <DAGDetailsContent
-                      fileName={fileName}
-                      dag={dagData.dag}
-                      currentDAGRun={displayDAGRun}
-                      refreshFn={refreshData}
-                      activeTab={tab}
-                      onTabChange={handleTabChange}
-                      dagRunId={displayDAGRunId}
-                      stepName={stepName}
-                      logStream={logStream}
-                      isModal={false}
-                      skipHeader={true}
-                      localDags={dagData?.localDags}
-                      editorHints={dagData?.editorHints}
-                      buildScopedUrl={buildUrl}
-                      fillHeight
-                    />
-                  </div>
-                </>
-              )}
-              {dagData?.dag && !dagMatchesWorkspace && (
-                <div className="p-6 text-sm text-muted-foreground">
+                ) : (
+                  <LoadErrorState
+                    title={ts("Couldn't load this workflow")}
+                    error={dagError}
+                    onRetry={() => void mutateDag()}
+                  />
+                )
+              ) : (
+                <WorkspaceLoading fileName={fileName} />
+              ))}
+            {dagData?.dag && legacy === 'pending' && (
+              <WorkspaceLoading fileName={fileName} />
+            )}
+            {showBody && popout && dagData && (
+              <LogPopoutPage
+                fileName={fileName}
+                dagData={dagData}
+                tab={params.tab}
+                dagRun={currentDAGRun}
+                runLoading={popoutRunLoading}
+                refresh={refreshData}
+              />
+            )}
+            {showBody && !popout && dagData && (
+              <WorkflowWorkspace
+                fileName={fileName}
+                tab={legacyHistoryIdx === null ? params.tab : 'executions'}
+                dagData={dagData}
+                refreshDag={mutateDag}
+                workspaceName={dagWorkspaceName || null}
+                legacyHistoryIdx={legacyHistoryIdx}
+              />
+            )}
+            {dagData?.dag && !dagMatchesWorkspace && legacy !== 'pending' && (
+              <div className="space-y-3 p-6 text-sm text-muted-foreground">
+                <p>
                   <I18nText
                     text={'This workflow is not in the selected workspace.'}
                   />
+                </p>
+                <div className="flex flex-wrap gap-4">
+                  <Link
+                    className="underline hover:text-foreground"
+                    to={buildUrl('/dags')}
+                  >
+                    {ts('Back to Workflows')}
+                  </Link>
+                  {queryWorkspace && (
+                    <Link
+                      className="underline hover:text-foreground"
+                      to={allWorkspacesTo}
+                    >
+                      {ts('Show in all workspaces')}
+                    </Link>
+                  )}
                 </div>
-              )}
-            </div>
-          </RootDAGRunContext.Provider>
+              </div>
+            )}
+          </div>
         </DAGContext.Provider>
       </RemoteNodeProvider>
     </UnsavedChangesProvider>
