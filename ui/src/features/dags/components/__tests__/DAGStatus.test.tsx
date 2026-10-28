@@ -867,17 +867,21 @@ describe('DAGStatus', () => {
       );
     }
 
-    it('shows the run status without run tabs and links to the run page', () => {
+    // The header links the run ID to the run page, so the summary adds no link
+    // and no sentence of its own unless an agent waits.
+    it('shows the run status without run tabs and without a run page bar', () => {
       renderSummary(dagRun);
 
       expect(
         screen.queryByRole('button', { name: 'Outputs' })
       ).not.toBeInTheDocument();
       expect(screen.getByText('Node status table')).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /Open run/ })).toHaveAttribute(
-        'href',
-        `/dags/${dagRun.name}?remoteNode=local&run=${dagRun.dagRunId}`
-      );
+      expect(
+        screen.queryByRole('link', { name: /Open run/ })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/are on the run page/)
+      ).not.toBeInTheDocument();
     });
 
     // Answering a human task must not require leaving the workflow page.
