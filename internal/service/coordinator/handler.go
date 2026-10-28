@@ -1051,7 +1051,7 @@ func (h *Handler) writeInitialStatus(ctx context.Context, attempt dagrun.Attempt
 		AttemptID:    attempt.ID(),
 		AttemptKey:   task.AttemptKey,
 		Status:       ir.NotStarted,
-		StartedAt:    time.Now().UTC().Format(time.RFC3339),
+		StartedAt:    stringutil.FormatTime(time.Now().UTC()),
 		Root:         root,
 		Labels:       labels,
 		TriggerActor: task.TriggerActor,
