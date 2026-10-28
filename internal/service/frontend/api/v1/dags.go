@@ -5,6 +5,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -101,9 +103,9 @@ func (a *API) ValidateDAGSpec(ctx context.Context, request api.ValidateDAGSpecRe
 }
 
 // ValidateDAGSpecData validates a DAG spec and returns its canonical form.
-func (a *API) ValidateDAGSpecData(ctx context.Context, name, spec string) (*api.ValidateDAGSpec200JSONResponse, *ir.DAG, error) {
+func (a *API) ValidateDAGSpecData(ctx context.Context, name, source string) (*api.ValidateDAGSpec200JSONResponse, *ir.DAG, error) {
 	dag, err := a.dagRepository.LoadSpec(ctx,
-		[]byte(spec),
+		[]byte(source),
 		name,
 		persis.DAGLoadOptions{AllowBuildErrors: true},
 	)
@@ -123,10 +125,15 @@ func (a *API) ValidateDAGSpecData(ctx context.Context, name, spec string) (*api.
 
 	details := toDAGDetails(dag)
 
+	notices := a.specValueReferenceNotices(ctx, name, source)
+
 	response := &api.ValidateDAGSpec200JSONResponse{
-		Valid:  len(errs) == 0,
-		Dag:    details,
-		Errors: errs,
+		Valid:                 len(errs) == 0,
+		Dag:                   details,
+		Errors:                errs,
+		Issues:                buildValidationIssues(err, dag, notices),
+		ValueReferenceNotices: toAPIValueReferenceNotices(notices),
+		ReferenceScope:        buildReferenceScope(dag),
 	}
 	if dag != nil {
 		response.Warnings = dag.BuildWarnings
@@ -300,6 +307,7 @@ func (a *API) GetDAGSpec(ctx context.Context, request api.GetDAGSpecRequestObjec
 	return &api.GetDAGSpec200JSONResponse{
 		Dag:                   details,
 		Spec:                  yamlSpec,
+		Sha256:                specSHA256(yamlSpec),
 		Errors:                errs,
 		Warnings:              dag.BuildWarnings,
 		ValueReferenceNotices: valueReferenceNotices,
@@ -340,6 +348,18 @@ func (a *API) UpdateDAGSpec(ctx context.Context, request api.UpdateDAGSpecReques
 	if err := a.requireDAGWriteForWorkspace(ctx, dagWorkspaceName(currentDAG)); err != nil {
 		return nil, err
 	}
+	if expected := request.Body.ExpectedSha256; expected != nil {
+		current, err := a.dagRepository.GetSpec(ctx, request.FileName)
+		if err != nil {
+			return nil, err
+		}
+		if actual := specSHA256(current); actual != *expected {
+			return api.UpdateDAGSpec409JSONResponse{
+				Code:    api.ErrorCodeConflict,
+				Message: fmt.Sprintf("DAG %s changed since it was read: expected sha256 %s, current sha256 %s", request.FileName, *expected, actual),
+			}, nil
+		}
+	}
 	nextDAG, err := a.dagRepository.LoadSpec(ctx,
 		[]byte(request.Body.Spec),
 		string(request.FileName),
@@ -369,9 +389,21 @@ func (a *API) UpdateDAGSpec(ctx context.Context, request api.UpdateDAGSpecReques
 	a.logAudit(ctx, audit.CategoryDAG, "dag_update", map[string]any{"dag_name": request.FileName})
 	a.notifyDAGMutation(request.FileName)
 
+	written := request.Body.Spec
+	if len(errs) > 0 {
+		// The repository rejected the spec, so the file still holds the old bytes.
+		written, _ = a.dagRepository.GetSpec(ctx, request.FileName)
+	}
 	return api.UpdateDAGSpec200JSONResponse{
 		Errors: errs,
+		Sha256: specSHA256(written),
 	}, nil
+}
+
+// specSHA256 returns the lowercase hex SHA-256 of the spec bytes.
+func specSHA256(spec string) string {
+	sum := sha256.Sum256([]byte(spec))
+	return hex.EncodeToString(sum[:])
 }
 
 func (a *API) RenameDAG(ctx context.Context, request api.RenameDAGRequestObject) (api.RenameDAGResponseObject, error) {
@@ -449,7 +481,7 @@ func (a *API) GetDAGDAGRunHistory(ctx context.Context, request api.GetDAGDAGRunH
 		return nil, err
 	}
 	dagName := a.resolveDAGName(ctx, request.FileName)
-	response, err := a.buildDAGRunHistoryResponse(ctx, dag, dagName)
+	response, err := a.buildDAGRunHistoryResponse(ctx, dag, dagName, valueOf(request.Params.IncludeEphemeral))
 	if err != nil {
 		return nil, &Error{
 			HTTPStatus: http.StatusInternalServerError,
@@ -464,8 +496,9 @@ func (a *API) buildDAGRunHistoryResponse(
 	ctx context.Context,
 	dag *ir.DAG,
 	dagName string,
+	includeEphemeral bool,
 ) (api.GetDAGDAGRunHistory200JSONResponse, error) {
-	recentHistory, err := a.dagRunRepository.RecentStatuses(ctx, dagName, defaultHistoryLimit)
+	recentHistory, err := a.dagRunRepository.RecentStatusesWithOptions(ctx, dagName, defaultHistoryLimit, persis.RecentStatusesOptions{IncludeEphemeral: includeEphemeral})
 	if err != nil {
 		return api.GetDAGDAGRunHistory200JSONResponse{}, fmt.Errorf("list recent DAG runs for %s: %w", dagName, err)
 	}
@@ -1041,7 +1074,7 @@ func (a *API) ExecuteDAG(ctx context.Context, request api.ExecuteDAGRequestObjec
 		}
 	}
 
-	selection, err := selectedStepsFromBody(request.Body.Steps, request.Body.OutputsFromRunId, request.Body.Outputs)
+	selection, err := selectedStepsFromBody(request.Body.Steps, request.Body.OutputsFromRunId, request.Body.OutputsFromRuns, request.Body.Outputs, request.Body.OutputsSources, request.Body.Ephemeral)
 	if err != nil {
 		return nil, err
 	}
@@ -2151,7 +2184,7 @@ func (a *API) GetDAGHistoryData(ctx context.Context, fileName string) (any, erro
 		}
 
 		dagName := a.resolveDAGName(readCtx, fileName)
-		return a.buildDAGRunHistoryResponse(readCtx, dag, dagName)
+		return a.buildDAGRunHistoryResponse(readCtx, dag, dagName, false)
 	})
 }
 
