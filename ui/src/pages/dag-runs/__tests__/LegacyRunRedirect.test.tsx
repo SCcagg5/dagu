@@ -1,0 +1,84 @@
+// Copyright (C) 2026 Yota Hamada
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+import { cleanup, render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { afterEach, describe, expect, it } from 'vitest';
+import { AppBarContext } from '@/contexts/AppBarContext';
+import LegacyRunRedirect from '../LegacyRunRedirect';
+
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <div data-testid="location">{`${location.pathname}${location.search}`}</div>
+  );
+}
+
+function renderAt(entry: string, selectedRemoteNode?: string) {
+  return render(
+    <MemoryRouter initialEntries={[entry]}>
+      <AppBarContext.Provider value={{ selectedRemoteNode } as never}>
+        <Routes>
+          <Route
+            path="/dag-runs/:name/:dagRunId"
+            element={<LegacyRunRedirect />}
+          />
+          <Route path="*" element={<LocationProbe />} />
+        </Routes>
+      </AppBarContext.Provider>
+    </MemoryRouter>
+  );
+}
+
+afterEach(cleanup);
+
+// parity:run-page-route
+describe('LegacyRunRedirect', () => {
+  it('sends the run page to the workflow page with ?run', () => {
+    renderAt('/dag-runs/etl/run-1?remoteNode=edge&workspace=ops');
+
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/dags/etl?remoteNode=edge&workspace=ops&run=run-1'
+    );
+  });
+
+  it('encodes the names and takes the node of the app bar', () => {
+    renderAt('/dag-runs/my%20flow/run%201', 'edge-b');
+
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/dags/my%20flow?remoteNode=edge-b&run=run+1'
+    );
+  });
+
+  it('drops ?run for the latest run', () => {
+    renderAt('/dag-runs/etl/latest');
+
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/dags/etl?remoteNode=local'
+    );
+  });
+
+  it('opens the root run for a sub-run link', () => {
+    renderAt(
+      '/dag-runs/root/root-run?subDAGRunId=child&dagRunId=root-run&dagRunName=root&remoteNode=local'
+    );
+
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/dags/root?remoteNode=local&run=root-run'
+    );
+  });
+
+  it('turns the old tab into a dock tab and keeps the step', () => {
+    renderAt('/dag-runs/etl/run-1?tab=artifacts&step=load');
+
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/dags/etl?remoteNode=local&run=run-1&step=load&dock=artifacts'
+    );
+  });
+
+  it('shows the action tab for an approval link', () => {
+    renderAt('/dag-runs/etl/run-1?tab=approval');
+
+    expect(screen.getByTestId('location')).toHaveTextContent('dock=actions');
+  });
+});
