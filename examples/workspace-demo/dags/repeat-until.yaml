@@ -1,0 +1,12 @@
+# A step that repeats until a condition holds, at most six times.
+description: Repeat until the command prints 0 (a random number), up to six times.
+type: graph
+steps:
+  - name: poll
+    run: echo "polling"
+    repeat_policy:
+      repeat: until
+      condition: "`echo $((RANDOM % 3))`"
+      expected: "0"
+      interval_sec: 3
+      limit: 6

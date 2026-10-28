@@ -1,0 +1,11 @@
+# A scheduled chain: a backup every five minutes, a verification at the half hour.
+description: Back up, then verify. Two schedules, so the list shows the soonest and a +1 badge.
+type: chain
+schedule:
+  - "*/5 * * * *"
+  - "30 3 * * *"
+steps:
+  - name: backup
+    run: echo "backing up"
+  - name: verify
+    run: echo "verifying"
