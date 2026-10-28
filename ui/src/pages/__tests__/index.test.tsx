@@ -37,10 +37,6 @@ vi.mock('../../features/dags/components/common', async () => ({
   ).default,
 }));
 
-vi.mock('@/features/dag-runs/components/dag-run-details', () => ({
-  DAGRunDetailsModal: () => null,
-}));
-
 vi.mock('@/features/dag-runs/components/common', () => ({
   DAGRunActions: () => <button type="button">Retry</button>,
 }));

@@ -4,6 +4,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import dayjs from '@/lib/dayjs';
 import type { KanbanFilters } from '../../hooks/useDateKanbanData';
@@ -20,11 +21,6 @@ const sectionProps: CapturedProps[] = [];
 vi.mock('@/contexts/ConfigContext', () => ({
   useConfig: () => ({ tzOffsetInSec: 0 }),
 }));
-
-vi.mock(
-  '@/features/dag-runs/components/dag-run-details/DAGRunDetailsModal',
-  () => ({ default: () => null })
-);
 
 vi.mock('../ArtifactListModal', () => ({
   ArtifactListModal: () => null,
@@ -52,11 +48,13 @@ afterEach(() => {
 describe('BucketKanbanList', () => {
   it('renders one N-day bucket initially and forwards filters', () => {
     render(
-      <BucketKanbanList
-        intervalDays={3}
-        filters={{ workspace: 'prod' }}
-        resetKey="v1"
-      />
+      <MemoryRouter>
+        <BucketKanbanList
+          intervalDays={3}
+          filters={{ workspace: 'prod' }}
+          resetKey="v1"
+        />
+      </MemoryRouter>
     );
 
     expect(screen.getAllByTestId('bucket')).toHaveLength(1);
@@ -69,7 +67,11 @@ describe('BucketKanbanList', () => {
 
   it('loads an older bucket on demand, stepped by the interval', async () => {
     const user = userEvent.setup();
-    render(<BucketKanbanList intervalDays={3} filters={{}} resetKey="v1" />);
+    render(
+      <MemoryRouter>
+        <BucketKanbanList intervalDays={3} filters={{}} resetKey="v1" />
+      </MemoryRouter>
+    );
 
     expect(screen.getAllByTestId('bucket')).toHaveLength(1);
     const firstTo = sectionProps[0]!.toStr;

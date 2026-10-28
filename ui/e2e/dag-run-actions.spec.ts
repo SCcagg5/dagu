@@ -23,26 +23,44 @@ test.describe('DAG run actions', () => {
     await loginViaUI(page, stack.auth.adminUsername, stack.auth.adminPassword);
   });
 
-  test('downloads step logs as an authenticated ZIP', async ({ page, context, request }) => {
+  test('downloads step logs as an authenticated ZIP', async ({
+    page,
+    context,
+    request,
+  }) => {
     const stack = await loadStack();
-    const token = await loginViaAPI(request, stack.auth.adminUsername, stack.auth.adminPassword);
+    const token = await loginViaAPI(
+      request,
+      stack.auth.adminUsername,
+      stack.auth.adminPassword
+    );
     const dagName = uniqueName('e2e-log-zip');
-    const fileName = await writeLocalDAG(dagName, `
+    const fileName = await writeLocalDAG(
+      dagName,
+      `
 name: ${dagName}
 steps:
   - name: output
     run: echo archive-output
-`);
+`
+    );
     await waitForDAGAvailable(request, token, fileName);
     const runId = await startDAG(request, token, fileName);
     await waitForRunStatus(request, token, dagName, runId, ['succeeded']);
-    await page.goto(`/dags/${encodeURIComponent(fileName)}/dagRun-log?dagRunId=${runId}`);
+    await page.goto(
+      `/dags/${encodeURIComponent(fileName)}/dagRun-log?dagRunId=${runId}`
+    );
     const runURL = page.url();
-    const navigation = context.waitForEvent('request', (req) =>
-      req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/steps/log/download')
+    const navigation = context.waitForEvent(
+      'request',
+      (req) =>
+        req.method() === 'POST' &&
+        new URL(req.url()).pathname.endsWith('/steps/log/download')
     );
     const downloaded = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download step logs (ZIP)' }).click();
+    await page
+      .getByRole('button', { name: 'Download step logs (ZIP)' })
+      .click();
     const download = await downloaded;
     expect((await navigation).isNavigationRequest()).toBe(true);
     expect(download.suggestedFilename()).toBe(`${dagName}-${runId}-steps.zip`);
@@ -53,51 +71,81 @@ steps:
     expect(bytes.includes(Buffer.from('001-output/stdout.log'))).toBe(true);
     expect(bytes.subarray(-22, -18).toString('hex')).toBe('504b0506');
     await expect(page).toHaveURL(runURL);
-    await expect(page.getByText('Download requested. Check your browser downloads.')).toBeVisible();
+    await expect(
+      page.getByText('Download requested. Check your browser downloads.')
+    ).toBeVisible();
 
     // A rejected form submission must leave the run page usable.
     await context.route('**/steps/log/download?*', async (route) => {
       await route.continue({ postData: 'token=invalid-token' });
     });
     const rejected = context.waitForEvent('page');
-    await page.getByRole('button', { name: 'Download step logs (ZIP)' }).click();
+    await page
+      .getByRole('button', { name: 'Download step logs (ZIP)' })
+      .click();
     const errorPage = await rejected;
     await errorPage.waitForLoadState('domcontentloaded');
-    expect(await errorPage.locator('body').innerText()).toMatch(/unauthorized/i);
+    expect(await errorPage.locator('body').innerText()).toMatch(
+      /unauthorized/i
+    );
     await expect(page).toHaveURL(runURL);
     await errorPage.close();
   });
 
-  test('pages a large log and downloads its complete contents', async ({ page, request }) => {
+  test('pages a large log and downloads its complete contents', async ({
+    page,
+    request,
+  }) => {
     const stack = await loadStack();
-    const token = await loginViaAPI(request, stack.auth.adminUsername, stack.auth.adminPassword);
+    const token = await loginViaAPI(
+      request,
+      stack.auth.adminUsername,
+      stack.auth.adminPassword
+    );
     const dagName = uniqueName('e2e-log-pages');
-    const fileName = await writeLocalDAG(dagName, `
+    const fileName = await writeLocalDAG(
+      dagName,
+      `
 name: ${dagName}
 steps:
   - name: output
     run: |
       awk 'BEGIN { for (i = 1; i <= 100000; i++) printf "line %06d\\n", i }'
-`);
+`
+    );
     await waitForDAGAvailable(request, token, fileName);
     const runId = await startDAG(request, token, fileName);
     await waitForRunStatus(request, token, dagName, runId, ['succeeded']);
     await page.emulateMedia({ reducedMotion: 'reduce' });
 
-    const waitForLog = (params: Record<string, number>) => page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return url.pathname.endsWith(`/steps/output/log`) &&
-        Object.entries(params).every(([name, value]) => url.searchParams.get(name) === String(value));
-    });
+    const waitForLog = (params: Record<string, number>) =>
+      page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.pathname.endsWith(`/steps/output/log`) &&
+          Object.entries(params).every(
+            ([name, value]) => url.searchParams.get(name) === String(value)
+          )
+        );
+      });
     const initialLog = waitForLog({ tail: 1000 });
-    await page.goto(`/dags/${encodeURIComponent(fileName)}/log?dagRunId=${runId}&step=output`);
+    await page.goto(
+      `/dags/${encodeURIComponent(fileName)}/log?dagRunId=${runId}&step=output`
+    );
     expect((await (await initialLog).json()).lineCount).toBe(1000);
-    const output = page.getByRole('region', { name: 'Step output', exact: true });
+    const output = page.getByRole('region', {
+      name: 'Step output',
+      exact: true,
+    });
     await expect(output).toContainText('line 100000');
 
     const customLog = waitForLog({ tail: 1234 });
-    await page.getByLabel('Lines per page', { exact: true }).selectOption('custom');
-    const customSize = page.getByLabel('Custom lines per page', { exact: true });
+    await page
+      .getByLabel('Lines per page', { exact: true })
+      .selectOption('custom');
+    const customSize = page.getByLabel('Custom lines per page', {
+      exact: true,
+    });
     await customSize.fill('1234');
     await customSize.press('Enter');
     expect((await (await customLog).json()).lineCount).toBe(1234);
@@ -119,7 +167,9 @@ steps:
     const search = page.getByPlaceholder('Search in loaded lines...');
     await search.fill('line 004936');
     await search.press('Enter');
-    await expect(output.getByText('line 004936', { exact: true })).toBeInViewport();
+    await expect(
+      output.getByText('line 004936', { exact: true })
+    ).toBeInViewport();
     await search.press('Escape');
 
     const largestPage = waitForLog({ offset: 1, limit: 10000 });
@@ -136,7 +186,9 @@ steps:
     await jump.press('Enter');
     expect((await (await lastPage).json()).lineCount).toBe(10000);
     await expect(pageInput).toHaveValue('10');
-    await expect(output.getByText('line 100000', { exact: true })).toBeInViewport();
+    await expect(
+      output.getByText('line 100000', { exact: true })
+    ).toBeInViewport();
 
     await pageInput.fill('10.9');
     await pageInput.press('Enter');
@@ -228,9 +280,16 @@ steps:
     await expect(
       page.getByRole('dialog', { name: 'Run progress' })
     ).toHaveCount(0);
-    await expect(page).toHaveURL(
-      new RegExp(`/dags/${dagName}\\.yaml\\?remoteNode=local&run=${runId}`)
-    );
+    await expect
+      .poll(() => {
+        const url = new URL(page.url());
+        return [
+          url.pathname,
+          url.searchParams.get('remoteNode'),
+          url.searchParams.get('run'),
+        ];
+      })
+      .toEqual([`/dags/${encodeURIComponent(fileName)}`, 'local', runId]);
     try {
       await expect(
         page.getByTestId('ww-run-chip').getByTestId('ww-run-progress')
@@ -279,8 +338,8 @@ steps:
       30_000
     );
 
-    // The workflow page shows the run with its actions.
-    await page.goto(`/dags/${encodeURIComponent(fileName)}?run=${dagRunId}`);
+    // The old run page redirects to the workflow page with the run.
+    await page.goto(`/dag-runs/${dagName}/${dagRunId}`);
     await page
       .getByTestId('ww-run-actions')
       .getByRole('button', { name: 'Stop', exact: true })
@@ -337,27 +396,41 @@ steps:
 
     await waitForDAGAvailable(request, token, fileName);
     const dagRunId = await startDAG(request, token, fileName);
-    await waitForRunStatus(request, token, dagName, dagRunId, ['failed'], 'local', 30_000);
+    await waitForRunStatus(
+      request,
+      token,
+      dagName,
+      dagRunId,
+      ['failed'],
+      'local',
+      30_000
+    );
 
     await page.goto(`/dag-runs/${dagName}/${dagRunId}`);
-    await page.getByRole('button', { name: 'Retry', exact: true }).first().click();
+    await page
+      .getByRole('button', { name: 'Retry', exact: true })
+      .first()
+      .click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Retry' }).click();
 
-    await waitForRunStatus(request, token, dagName, dagRunId, ['succeeded'], 'local', 30_000);
+    await waitForRunStatus(
+      request,
+      token,
+      dagName,
+      dagRunId,
+      ['succeeded'],
+      'local',
+      30_000
+    );
     await expect
       .poll(
         () =>
-          getStepStdout(
-            request,
-            token,
-            dagName,
-            dagRunId,
-            'retry-step',
-            { retryNotFound: true }
-          ),
+          getStepStdout(request, token, dagName, dagRunId, 'retry-step', {
+            retryNotFound: true,
+          }),
         {
           timeout: 15_000,
         }
@@ -365,7 +438,10 @@ steps:
       .toContain('retry succeeded');
   });
 
-  test('reschedules a completed queue-backed DAG run from the UI', async ({ page, request }) => {
+  test('reschedules a completed queue-backed DAG run from the UI', async ({
+    page,
+    request,
+  }) => {
     const stack = await loadStack();
     const token = await loginViaAPI(
       request,
@@ -401,7 +477,10 @@ steps:
 
     const newRunId = uniqueName('rescheduled-run');
     await page.goto(`/dag-runs/${dagName}/${originalRunId}`);
-    await page.getByRole('button', { name: 'Retry', exact: true }).first().click();
+    await page
+      .getByRole('button', { name: 'Retry', exact: true })
+      .first()
+      .click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
