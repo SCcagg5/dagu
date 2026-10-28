@@ -295,4 +295,304 @@ describe('DAGRunActions', () => {
     // The disabled button cannot take focus, so its wrapper does.
     expect(retry.parentElement).toHaveAttribute('tabindex', '0');
   });
+
+  // parity:actions-stop-all
+  describe('stopAll', () => {
+    it('changes nothing when absent', async () => {
+      const withOption = render(
+        <DAGRunActions
+          dagRun={runningRun}
+          name="etl"
+          displayMode="full"
+          stopAll={{ fileName: 'etl.yaml' }}
+        />
+      );
+      const optionHtml = withOption.container.innerHTML;
+      withOption.unmount();
+      const { container } = render(
+        <DAGRunActions dagRun={runningRun} name="etl" displayMode="full" />
+      );
+      expect(container.innerHTML).toBe(optionHtml);
+
+      const dialog = openStopDialog();
+      expect(
+        within(dialog).getByRole('heading', { name: 'Stop this run?' })
+      ).toBeInTheDocument();
+      expect(within(dialog).queryByRole('checkbox')).toBeNull();
+      expect(
+        within(dialog).queryByText('Stop all running instances')
+      ).toBeNull();
+
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
+      await waitFor(() => expect(h.client.POST).toHaveBeenCalledTimes(1));
+      expect(h.client.POST).toHaveBeenCalledWith(
+        '/dag-runs/{name}/{dagRunId}/stop',
+        {
+          params: {
+            query: { remoteNode: 'local' },
+            path: { name: 'etl', dagRunId: 'run-7' },
+          },
+        }
+      );
+    });
+
+    it('stops every running instance when checked', async () => {
+      const refresh = vi.fn();
+      render(
+        <DAGRunActions
+          dagRun={runningRun}
+          name="etl"
+          displayMode="full"
+          refresh={refresh}
+          stopAll={{ fileName: 'etl.yaml' }}
+        />
+      );
+
+      const dialog = openStopDialog();
+      const option = within(dialog).getByRole('checkbox', {
+        name: 'Stop all running instances',
+      });
+      expect(option).not.toBeChecked();
+      fireEvent.click(option);
+      expect(
+        within(dialog).getByRole('heading', {
+          name: 'Stop all running instances?',
+        })
+      ).toBeInTheDocument();
+      expect(
+        within(dialog).getByText(
+          'Running steps in every instance of this workflow are canceled.'
+        )
+      ).toBeInTheDocument();
+
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
+      await waitFor(() =>
+        expect(h.showToast).toHaveBeenCalledWith(
+          'Stop signal sent to all running instances'
+        )
+      );
+      expect(h.client.POST).toHaveBeenCalledTimes(1);
+      expect(h.client.POST).toHaveBeenCalledWith('/dags/{fileName}/stop-all', {
+        params: {
+          path: { fileName: 'etl.yaml' },
+          query: { remoteNode: 'local' },
+        },
+      });
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops only the run when left unchecked', async () => {
+      render(
+        <DAGRunActions
+          dagRun={runningRun}
+          name="etl"
+          displayMode="full"
+          stopAll={{ fileName: 'etl.yaml' }}
+        />
+      );
+
+      const dialog = openStopDialog();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
+      await waitFor(() => expect(h.client.POST).toHaveBeenCalledTimes(1));
+      expect(h.client.POST.mock.calls[0]?.[0]).toBe(
+        '/dag-runs/{name}/{dagRunId}/stop'
+      );
+    });
+
+    it('starts unchecked each time the confirm opens', () => {
+      render(
+        <DAGRunActions
+          dagRun={runningRun}
+          name="etl"
+          displayMode="full"
+          stopAll={{ fileName: 'etl.yaml' }}
+        />
+      );
+
+      let dialog = openStopDialog();
+      fireEvent.click(
+        within(dialog).getByRole('checkbox', {
+          name: 'Stop all running instances',
+        })
+      );
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      dialog = openStopDialog();
+      expect(
+        within(dialog).getByRole('checkbox', {
+          name: 'Stop all running instances',
+        })
+      ).not.toBeChecked();
+    });
+
+    it('shows the stop-all error in the error modal', async () => {
+      h.client.POST.mockResolvedValue({ error: { message: 'busy' } });
+      render(
+        <DAGRunActions
+          dagRun={runningRun}
+          name="etl"
+          displayMode="full"
+          stopAll={{ fileName: 'etl.yaml' }}
+        />
+      );
+
+      const dialog = openStopDialog();
+      fireEvent.click(
+        within(dialog).getByRole('checkbox', {
+          name: 'Stop all running instances',
+        })
+      );
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
+      await waitFor(() =>
+        expect(h.showError).toHaveBeenCalledWith(
+          'busy',
+          'Some instances may have already completed or the worker is unavailable.'
+        )
+      );
+      expect(h.showToast).not.toHaveBeenCalled();
+    });
+
+    it('is not offered on a cancel of auto-retry', () => {
+      render(
+        <DAGRunActions
+          dagRun={{
+            ...runningRun,
+            status: Status.Failed,
+            statusLabel: StatusLabel.failed,
+            autoRetryCount: 1,
+            autoRetryLimit: 3,
+          }}
+          name="etl"
+          displayMode="full"
+          stopAll={{ fileName: 'etl.yaml' }}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      const dialog = screen.getByRole('dialog');
+      expect(
+        within(dialog).getByRole('heading', { name: 'Cancel auto-retry?' })
+      ).toBeInTheDocument();
+      expect(within(dialog).queryByRole('checkbox')).toBeNull();
+    });
+  });
+
+  // parity:run-action-stop-cancel
+  it('cancels a pending auto-retry through the stop endpoint', async () => {
+    render(
+      <DAGRunActions
+        dagRun={{
+          ...runningRun,
+          status: Status.Failed,
+          statusLabel: StatusLabel.failed,
+          autoRetryCount: 1,
+          autoRetryLimit: 3,
+        }}
+        name="etl"
+        displayMode="full"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const dialog = screen.getByRole('dialog');
+    // The footer has the dismiss button first, then the submit button, and
+    // both read 'Cancel' here.
+    const [, submit] = within(dialog).getAllByRole('button', {
+      name: 'Cancel',
+    });
+    fireEvent.click(submit!);
+    await waitFor(() =>
+      expect(h.client.POST).toHaveBeenCalledWith(
+        '/dag-runs/{name}/{dagRunId}/stop',
+        {
+          params: {
+            query: { remoteNode: 'local' },
+            path: { name: 'etl', dagRunId: 'run-7' },
+          },
+        }
+      )
+    );
+  });
+
+  // parity:run-action-retry
+  // parity:run-action-reschedule
+  it('retries the run, or reschedules it as a new run', async () => {
+    const finished = {
+      ...runningRun,
+      status: Status.Failed,
+      statusLabel: StatusLabel.failed,
+    };
+    render(<DAGRunActions dagRun={finished} name="etl" displayMode="full" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    let dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Retry' }));
+    await waitFor(() =>
+      expect(h.client.POST).toHaveBeenCalledWith(
+        '/dag-runs/{name}/{dagRunId}/retry',
+        {
+          params: {
+            path: { name: 'etl', dagRunId: 'run-7' },
+            query: { remoteNode: 'local' },
+          },
+          body: { dagRunId: 'run-7' },
+        }
+      )
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    dialog = screen.getByRole('dialog');
+    fireEvent.click(
+      within(dialog).getByRole('checkbox', { name: 'Reschedule as a new run' })
+    );
+    fireEvent.change(within(dialog).getByLabelText('New run ID (optional)'), {
+      target: { value: 'run-8' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reschedule' }));
+    await waitFor(() =>
+      expect(h.client.POST).toHaveBeenCalledWith(
+        '/dag-runs/{name}/{dagRunId}/reschedule',
+        {
+          params: {
+            path: { name: 'etl', dagRunId: 'run-7' },
+            query: { remoteNode: 'local' },
+          },
+          body: { dagRunId: 'run-8', useCurrentDagFile: false },
+        }
+      )
+    );
+  });
+
+  // parity:runpage-dequeue
+  // parity:run-action-dequeue
+  it('dequeues a queued run', async () => {
+    const refresh = vi.fn();
+    render(
+      <DAGRunActions
+        dagRun={{
+          ...runningRun,
+          status: Status.Queued,
+          statusLabel: StatusLabel.queued,
+        }}
+        name="etl"
+        displayMode="full"
+        refresh={refresh}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dequeue' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Dequeue' }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(h.client.GET).toHaveBeenCalledWith(
+      '/dag-runs/{name}/{dagRunId}/dequeue',
+      {
+        params: {
+          path: { name: 'etl', dagRunId: 'run-7' },
+          query: { remoteNode: 'local' },
+        },
+      }
+    );
+    expect(h.showToast).toHaveBeenCalledWith('DAG run dequeued');
+  });
 });
