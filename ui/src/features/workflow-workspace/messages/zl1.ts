@@ -16,6 +16,8 @@ export default defineMessages({
     'Recent runs of {name}': 'Recent runs of {name}',
     'Open the workflow': 'Open the workflow',
     'Could not load the recent runs': 'Could not load the recent runs',
+    '{own} + {cached} cached': '{own} + {cached} cached',
+    'queued {time}': 'queued {time}',
   },
   'zh-CN': {
     'Runs in the last 24 hours': '过去 24 小时内的运行',
@@ -27,6 +29,8 @@ export default defineMessages({
     'Recent runs of {name}': '{name} 的最近运行',
     'Open the workflow': '打开工作流',
     'Could not load the recent runs': '无法加载最近的运行',
+    '{own} + {cached} cached': '{own} + 缓存 {cached}',
+    'queued {time}': '排队 {time}',
   },
   ja: {
     'Runs in the last 24 hours': '過去 24 時間の実行',
@@ -38,5 +42,7 @@ export default defineMessages({
     'Recent runs of {name}': '{name} の最近の実行',
     'Open the workflow': 'ワークフローを開く',
     'Could not load the recent runs': '最近の実行を読み込めませんでした',
+    '{own} + {cached} cached': '{own} + キャッシュ {cached}',
+    'queued {time}': '待機 {time}',
   },
 });

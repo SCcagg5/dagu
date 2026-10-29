@@ -13,18 +13,25 @@ import {
   cachedMsOf,
   runDurationMs,
 } from '@/features/workflow-workspace/dock/runTimelineModel';
+import { triggerTypeLabels } from '@/features/dags/components/common/TriggerTypeIndicator';
 import { useQuery } from '@/hooks/api';
 import { I18nText } from '@/i18n/I18nText';
 import { useI18n } from '@/i18n/I18nProvider';
 import { formatDurationMs } from '@/lib/formatDuration';
+import { withoutWorkspaceLabels } from '@/lib/workspace';
+import { cn } from '@/lib/utils';
 import { runDisplayStatus } from '@/lib/runDisplayStatus';
 import { runStatusText } from '@/lib/status-utils';
+
+import { failureCause, queueWaitMs } from './recentRunFacts';
 
 type Run = components['schemas']['DAGRunDetails'];
 
 /** The runs that the list under a workflow shows. */
 export const RECENT_RUNS_SHOWN = 10;
 const REFRESH_MS = 15_000;
+/** The labels of a run that its line shows; the others go in the tooltip. */
+const MAX_LABELS_SHOWN = 2;
 
 /**
  * The latest runs of a workflow, under its row in the list. It reads the
@@ -95,6 +102,23 @@ function RunLine({
   const own = runDurationMs(run, Date.now());
   const cached = cachedMsOf(run);
   const total = own === null ? null : own + cached;
+  const wait = queueWaitMs(run);
+  const timeDetail = [
+    own !== null && cached > 0
+      ? ts('{own} + {cached} cached', {
+          own: formatDurationMs(own),
+          cached: formatDurationMs(cached),
+        })
+      : null,
+    wait !== null
+      ? ts('queued {time}', { time: formatDurationMs(wait) })
+      : null,
+  ].filter(Boolean);
+  const cause = failureCause(run);
+  const params = (run.params ?? '').trim();
+  const labels = withoutWorkspaceLabels(run.labels ?? run.tags ?? []);
+  const shownLabels = labels.slice(0, MAX_LABELS_SHOWN);
+  const trigger = run.triggerType ? triggerTypeLabels[run.triggerType] : null;
   return (
     <li>
       <button
@@ -105,7 +129,7 @@ function RunLine({
         }}
         className="flex w-full items-center gap-3 rounded-sm px-1 py-1 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="w-28 shrink-0">
+        <span className="w-24 shrink-0">
           <StatusChip
             status={run.status}
             healthy={runDisplayStatus(run).healthy}
@@ -123,7 +147,7 @@ function RunLine({
           />
         </span>
         <span
-          className="w-24 shrink-0 text-muted-foreground"
+          className="w-56 shrink-0 truncate text-muted-foreground"
           title={
             own !== null && cached > 0
               ? ts('Total {total} = own {own} + cached {cached}', {
@@ -134,9 +158,59 @@ function RunLine({
               : undefined
           }
         >
-          {total === null ? '-' : formatDurationMs(total)}
+          <span className="text-foreground/80">
+            {total === null ? '-' : formatDurationMs(total)}
+          </span>
+          {timeDetail.length > 0 && <> · {timeDetail.join(' · ')}</>}
         </span>
-        <span className="min-w-0 truncate font-mono text-muted-foreground">
+        <span className="w-24 shrink-0">
+          {trigger && (
+            <span
+              title={run.triggerActor || undefined}
+              className="inline-block max-w-full truncate rounded border border-border/60 px-1.5 text-[11px] leading-4 text-muted-foreground"
+            >
+              {ts(trigger)}
+            </span>
+          )}
+        </span>
+        <span
+          title={cause ?? (params || undefined)}
+          className={cn(
+            'min-w-0 flex-1 truncate',
+            cause ? 'text-destructive' : 'font-mono text-muted-foreground'
+          )}
+        >
+          {cause ?? params}
+        </span>
+        {shownLabels.length > 0 && (
+          <span
+            title={labels.join(', ')}
+            className="flex shrink-0 items-center gap-0.5"
+          >
+            {shownLabels.map((label) => (
+              <span
+                key={label}
+                className="rounded bg-muted px-1.5 text-[11px] leading-4 text-muted-foreground"
+              >
+                {label}
+              </span>
+            ))}
+            {labels.length > shownLabels.length && (
+              <span className="text-[11px] text-muted-foreground">
+                +{labels.length - shownLabels.length}
+              </span>
+            )}
+          </span>
+        )}
+        {run.workerId && (
+          <span
+            title={`${ts('Worker')} ${run.workerId}`}
+            className="max-w-24 shrink-0 truncate font-mono text-[11px] text-muted-foreground"
+          >
+            {run.workerId}
+          </span>
+        )}
+        <span className="w-40 shrink-0 truncate text-right font-mono text-muted-foreground">
           {run.dagRunId}
         </span>
       </button>

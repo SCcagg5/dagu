@@ -847,6 +847,46 @@ describe('DAGTable', () => {
       expect(within(panel).getByText('5m ago')).toBeInTheDocument();
     });
 
+    it('tells the trigger, the cause of a failure, the labels and the queue wait', () => {
+      recentRuns.dagRuns = [
+        {
+          ...run('broken', HOUR, Status.Failed),
+          triggerType: 'scheduler',
+          queuedAt: new Date(Date.now() - HOUR - 12_000).toISOString(),
+          labels: ['env=prod', 'team=data', 'extra'],
+          workerId: 'worker-7',
+          nodes: [
+            {
+              step: { name: 'load' },
+              status: NodeStatus.Failed,
+              error: 'exit status 2\nmore',
+            },
+          ],
+        },
+        {
+          ...run('param', 2 * HOUR),
+          triggerType: 'manual',
+          params: 'DATE=2026-10-29',
+        },
+      ];
+      renderTable('', { dags: [withActivity([])] });
+      const table = screen.getByRole('table');
+      fireEvent.click(within(table).getByTestId('dag-activity-toggle'));
+
+      const panel = within(table).getByTestId('dag-recent-runs');
+      expect(within(panel).getByText('Scheduled')).toBeInTheDocument();
+      expect(within(panel).getByText('Manual')).toBeInTheDocument();
+      expect(
+        within(panel).getByText('load: exit status 2')
+      ).toBeInTheDocument();
+      expect(within(panel).getByText('DATE=2026-10-29')).toBeInTheDocument();
+      expect(within(panel).getByText(/queued 12s/)).toBeInTheDocument();
+      expect(within(panel).getByText('env=prod')).toBeInTheDocument();
+      expect(within(panel).getByText('team=data')).toBeInTheDocument();
+      expect(within(panel).getByText('+1')).toBeInTheDocument();
+      expect(within(panel).getByText('worker-7')).toBeInTheDocument();
+    });
+
     it('counts the cached time of a run in its time', () => {
       recentRuns.dagRuns = [
         {
@@ -869,9 +909,12 @@ describe('DAGTable', () => {
       fireEvent.click(within(table).getByTestId('dag-activity-toggle'));
 
       // 5 s of its own and 55 s that it took from the earlier run.
-      expect(
-        within(within(table).getByTestId('dag-recent-runs')).getByText('1m')
-      ).toHaveAttribute('title', 'Total 1m = own 5s + cached 55s');
+      const panel = within(table).getByTestId('dag-recent-runs');
+      expect(within(panel).getByText('1m').parentElement).toHaveAttribute(
+        'title',
+        'Total 1m = own 5s + cached 55s'
+      );
+      expect(within(panel).getByText(/5s \+ 55s cached/)).toBeInTheDocument();
     });
   });
 });
