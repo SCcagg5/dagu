@@ -12,7 +12,7 @@ import {
 } from '@/features/dag-runs/components/common/runtimeConditions';
 import dayjs from '@/lib/dayjs';
 import { cn } from '@/lib/utils';
-import StatusChip from '@/components/ui/status-chip';
+import { RunStatusChip } from '@/features/dag-runs/components/common/RunStatusChip';
 import { I18nText } from '@/i18n/I18nText';
 import { I18nProps } from '@/i18n/I18nProps';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -186,9 +186,14 @@ function QueueRunsTable({
                   {dagRun.name}
                 </td>
                 <td className="py-1.5 px-2">
-                  <StatusChip status={dagRun.status} size="xs">
+                  <RunStatusChip
+                    name={dagRun.name}
+                    dagRunId={dagRun.dagRunId}
+                    status={dagRun.status}
+                    size="xs"
+                  >
                     {dagRun.statusLabel}
-                  </StatusChip>
+                  </RunStatusChip>
                 </td>
                 <td className="py-1.5 px-2 text-xs text-muted-foreground tabular-nums">
                   <div className="flex flex-col gap-0.5">

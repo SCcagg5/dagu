@@ -17,6 +17,7 @@ import { useQuery } from '@/hooks/api';
 import { I18nText } from '@/i18n/I18nText';
 import { useI18n } from '@/i18n/I18nProvider';
 import { formatDurationMs } from '@/lib/formatDuration';
+import { runDisplayStatus } from '@/lib/runDisplayStatus';
 import { runStatusText } from '@/lib/status-utils';
 
 type Run = components['schemas']['DAGRunDetails'];
@@ -105,12 +106,21 @@ function RunLine({
         className="flex w-full items-center gap-3 rounded-sm px-1 py-1 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="w-28 shrink-0">
-          <StatusChip status={run.status} size="xs">
+          <StatusChip
+            status={run.status}
+            healthy={runDisplayStatus(run).healthy}
+            size="xs"
+          >
             {ts(runStatusText(run.status))}
           </StatusChip>
         </span>
-        <span className="w-32 shrink-0 text-foreground/80">
-          <RelativeTime timestamp={run.startedAt} absolute={run.startedAt} />
+        <span className="w-20 shrink-0 text-foreground/80">
+          <RelativeTime
+            timestamp={run.startedAt}
+            absolute={run.startedAt}
+            compact
+            ago
+          />
         </span>
         <span
           className="w-24 shrink-0 text-muted-foreground"

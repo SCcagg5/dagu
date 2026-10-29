@@ -721,7 +721,10 @@ const defaultColumns = [
             <DAGNameLink fileName={data.dag.fileName}>{getValue()}</DAGNameLink>
 
             {description && (
-              <div className="text-xs text-muted-foreground whitespace-normal leading-tight line-clamp-2">
+              <div
+                title={description}
+                className="truncate text-xs text-muted-foreground leading-tight"
+              >
                 {description}
               </div>
             )}
@@ -1849,14 +1852,14 @@ function DAGTable({
           className={`w-full text-xs ${isLoading ? 'opacity-70' : ''}`}
           style={{ tableLayout: 'fixed' }}
         >
-          {/* Column widths: Select 40px, Expand 32px, Name auto, LastRun 88px, Activity 244px, Schedule 26%, Actions 160px */}
+          {/* Column widths: Select 40px, Expand 32px, Name 28%, LastRun 88px, Activity 244px, Schedule auto, Actions 160px */}
           <colgroup>
             {canDeleteDAGs && <col style={{ width: '40px' }} />}
             <col style={{ width: '32px' }} />
-            <col />
+            <col style={{ width: '28%' }} />
             <col style={{ width: '88px' }} />
             <col className={activityColumn.col} style={{ width: '244px' }} />
-            <col style={{ width: '26%' }} />
+            <col />
             <col style={{ width: '160px' }} />
           </colgroup>
           <TableHeader>

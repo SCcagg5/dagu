@@ -11,7 +11,12 @@ import {
 import React from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Status, ViewSortField, ViewSortOrder } from '@/api/v1/schema';
+import {
+  NodeStatus,
+  Status,
+  ViewSortField,
+  ViewSortOrder,
+} from '@/api/v1/schema';
 import { PanelWidthContext } from '@/components/SplitLayout';
 import { AppBarContext } from '@/contexts/AppBarContext';
 import { ConfigContext } from '@/contexts/ConfigContext';
@@ -813,6 +818,33 @@ describe('DAGTable', () => {
 
       fireEvent.click(toggle);
       expect(within(table).queryByTestId('dag-recent-runs')).toBeNull();
+    });
+
+    it('reads a continuous run as Healthy and its start as "3h ago"', () => {
+      recentRuns.dagRuns = [
+        {
+          ...run('service', 3 * HOUR, Status.Running),
+          nodes: [
+            {
+              step: {
+                name: 'serve',
+                repeatPolicy: { repeat: 'while', condition: 'true' },
+              },
+              status: NodeStatus.Running,
+            },
+          ],
+        },
+        run('plain', 5 * 60_000),
+      ];
+      renderTable('', { dags: [withActivity([])] });
+      const table = screen.getByRole('table');
+      fireEvent.click(within(table).getByTestId('dag-activity-toggle'));
+
+      const panel = within(table).getByTestId('dag-recent-runs');
+      expect(within(panel).getByText('Healthy')).toBeInTheDocument();
+      expect(within(panel).queryByText('Running')).toBeNull();
+      expect(within(panel).getByText('3h ago')).toBeInTheDocument();
+      expect(within(panel).getByText('5m ago')).toBeInTheDocument();
     });
 
     it('counts the cached time of a run in its time', () => {
