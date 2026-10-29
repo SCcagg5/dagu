@@ -15,12 +15,22 @@ import {
 const RUNNING_REFRESH_MS = 10_000;
 
 /**
- * The status that a list prints for a run. The summary of a run has no steps,
- * so a running run reads its details (once, cached for each run, and again
- * every 10 s while it runs when it has a continuous step, the only kind that
- * can be Healthy): runDisplayStatus then decides, with the failed steps in
- * view. Until the details are there, and for every run that is not running,
- * the API status stands.
+ * How long a list reuses the definition of a workflow, in ms: a row that
+ * mounts later reads it again once this time has passed.
+ */
+const DEFINITION_TTL_MS = 5 * 60_000;
+
+/**
+ * The status that a list prints for a run. The summary of a run has no steps.
+ * A running run can be "Healthy" only when its workflow has a continuous step,
+ * so the hook reads the definition first (one request for each workflow name,
+ * shared by all its rows). Only a continuous workflow, or a definition that
+ * the name does not give (for example a name that differs from the file name),
+ * reads the details of the run (once, and again every 10 s while it runs and
+ * has a continuous step): runDisplayStatus then decides, with the failed
+ * steps in view. Until the details are there, and for every run that is not
+ * running, the API status stands. A definition edited after the run started
+ * can hide a continuous step of that run until it ends.
  */
 export function useListRunDisplay(
   name: string,
@@ -28,7 +38,24 @@ export function useListRunDisplay(
   status: Status | undefined
 ): RunDisplayStatus | undefined {
   const remoteNode = useRemoteNode();
-  const enabled = status === Status.Running && !!dagRunId;
+  const running = status === Status.Running && !!dagRunId;
+  const definition = useQuery(
+    '/dags/{fileName}',
+    running
+      ? { params: { path: { fileName: name }, query: { remoteNode } } }
+      : null,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+      dedupingInterval: DEFINITION_TTL_MS,
+    }
+  );
+  const enabled =
+    running &&
+    (definition.error !== undefined ||
+      (definition.data !== undefined &&
+        hasContinuousStep(definition.data.dag?.steps)));
   const { data } = useQuery(
     '/dag-runs/{name}/{dagRunId}',
     enabled
