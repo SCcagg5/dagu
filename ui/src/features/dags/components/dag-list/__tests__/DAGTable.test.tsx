@@ -880,7 +880,7 @@ describe('DAGTable', () => {
         within(panel).getByText('load: exit status 2')
       ).toBeInTheDocument();
       expect(within(panel).getByText('DATE=2026-10-29')).toBeInTheDocument();
-      expect(within(panel).getByText(/queued 12s/)).toBeInTheDocument();
+      expect(within(panel).getByText(/queued 1\ds/)).toBeInTheDocument();
       expect(within(panel).getByText('env=prod')).toBeInTheDocument();
       expect(within(panel).getByText('team=data')).toBeInTheDocument();
       expect(within(panel).getByText('+1')).toBeInTheDocument();

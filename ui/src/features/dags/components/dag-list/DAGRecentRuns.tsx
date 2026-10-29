@@ -50,6 +50,7 @@ export function DAGRecentRuns({ fileName }: { fileName: string }) {
     () => (data?.dagRuns ?? []).slice(0, RECENT_RUNS_SHOWN),
     [data]
   );
+  const columns = useMemo(() => runColumns(runs), [runs]);
   const open = (run: string, event?: React.MouseEvent) =>
     openPage(buildDAGPageURL({ fileName, remoteNode, run }), event);
 
@@ -73,11 +74,19 @@ export function DAGRecentRuns({ fileName }: { fileName: string }) {
           <I18nText text={'No runs'} />
         </p>
       ) : (
-        <ul className="divide-y divide-border/40">
-          {runs.map((run) => (
-            <RunLine key={run.dagRunId} run={run} onOpen={open} />
-          ))}
-        </ul>
+        <>
+          <RunHeader columns={columns} />
+          <ul className="divide-y divide-border/40">
+            {runs.map((run) => (
+              <RunLine
+                key={run.dagRunId}
+                run={run}
+                columns={columns}
+                onOpen={open}
+              />
+            ))}
+          </ul>
+        </>
       )}
       <Link
         to={buildDAGPageURL({ fileName, remoteNode })}
@@ -90,11 +99,74 @@ export function DAGRecentRuns({ fileName }: { fileName: string }) {
   );
 }
 
+/** The columns of the runs of a workflow: those of the Executions page. */
+interface RunColumns {
+  scheduled: boolean;
+  queued: boolean;
+  profile: boolean;
+  worker: boolean;
+  /** The CSS grid template that the header and every line share. */
+  template: string;
+}
+
+/**
+ * The columns that at least one run fills, so that no column stays empty.
+ * They share the width in fractions: a wide list spreads them, not leaves a
+ * gap.
+ */
+function runColumns(runs: readonly Run[]): RunColumns {
+  const scheduled = runs.some((r) => !!r.scheduleTime);
+  const queued = runs.some((r) => !!r.queuedAt);
+  const profile = runs.some((r) => !!r.profileName);
+  const worker = runs.some((r) => !!r.workerId);
+  const template = [
+    '7rem', // status
+    'minmax(0,1fr)', // started
+    'minmax(0,2fr)', // duration and its detail
+    'minmax(0,1fr)', // trigger
+    scheduled && 'minmax(0,1fr)',
+    queued && 'minmax(0,1fr)',
+    profile && 'minmax(0,1fr)',
+    worker && 'minmax(0,1fr)',
+    'minmax(0,2fr)', // run id
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return { scheduled, queued, profile, worker, template };
+}
+
+function RunHeader({ columns }: { columns: RunColumns }) {
+  const head = (text: string) => (
+    <span className="truncate">
+      <I18nText text={text} />
+    </span>
+  );
+  return (
+    <div
+      aria-hidden="true"
+      style={{ gridTemplateColumns: columns.template }}
+      className="grid items-center gap-x-3 border-b border-border/40 px-1 pb-1 text-[11px] text-muted-foreground"
+    >
+      {head('Status')}
+      {head('Started At')}
+      {head('Duration')}
+      {head('Trigger')}
+      {columns.scheduled && head('Scheduled At')}
+      {columns.queued && head('Queued At')}
+      {columns.profile && head('Profile')}
+      {columns.worker && head('Worker')}
+      {head('Run ID')}
+    </div>
+  );
+}
+
 function RunLine({
   run,
+  columns,
   onOpen,
 }: {
   run: Run;
+  columns: RunColumns;
   onOpen(runId: string, event?: React.MouseEvent): void;
 }) {
   const { ts } = useI18n();
@@ -127,9 +199,10 @@ function RunLine({
           event.stopPropagation();
           onOpen(run.dagRunId, event);
         }}
-        className="flex w-full items-center gap-3 rounded-sm px-1 py-1 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        style={{ gridTemplateColumns: columns.template }}
+        className="grid w-full items-center gap-x-3 gap-y-0.5 rounded-sm px-1 py-1 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="w-24 shrink-0">
+        <span>
           <StatusChip
             status={run.status}
             healthy={runDisplayStatus(run).healthy}
@@ -138,7 +211,7 @@ function RunLine({
             {ts(runStatusText(run.status))}
           </StatusChip>
         </span>
-        <span className="w-20 shrink-0 text-foreground/80">
+        <span className="truncate text-foreground/80">
           <RelativeTime
             timestamp={run.startedAt}
             absolute={run.startedAt}
@@ -147,7 +220,7 @@ function RunLine({
           />
         </span>
         <span
-          className="w-56 shrink-0 truncate text-muted-foreground"
+          className="truncate text-muted-foreground"
           title={
             own !== null && cached > 0
               ? ts('Total {total} = own {own} + cached {cached}', {
@@ -163,7 +236,7 @@ function RunLine({
           </span>
           {timeDetail.length > 0 && <> · {timeDetail.join(' · ')}</>}
         </span>
-        <span className="w-24 shrink-0">
+        <span>
           {trigger && (
             <span
               title={run.triggerActor || undefined}
@@ -173,46 +246,86 @@ function RunLine({
             </span>
           )}
         </span>
-        <span
-          title={cause ?? (params || undefined)}
-          className={cn(
-            'min-w-0 flex-1 truncate',
-            cause ? 'text-destructive' : 'font-mono text-muted-foreground'
-          )}
-        >
-          {cause ?? params}
-        </span>
-        {shownLabels.length > 0 && (
+        {columns.scheduled && (
+          <span className="truncate text-muted-foreground">
+            {run.scheduleTime ? (
+              <RelativeTime
+                timestamp={run.scheduleTime}
+                absolute={run.scheduleTime}
+                compact
+                ago
+              />
+            ) : (
+              '-'
+            )}
+          </span>
+        )}
+        {columns.queued && (
+          <span className="truncate text-muted-foreground">
+            {run.queuedAt ? (
+              <RelativeTime
+                timestamp={run.queuedAt}
+                absolute={run.queuedAt}
+                compact
+                ago
+              />
+            ) : (
+              '-'
+            )}
+          </span>
+        )}
+        {columns.profile && (
           <span
-            title={labels.join(', ')}
-            className="flex shrink-0 items-center gap-0.5"
+            title={run.profileName}
+            className="truncate font-mono text-muted-foreground"
           >
-            {shownLabels.map((label) => (
+            {run.profileName || '-'}
+          </span>
+        )}
+        {columns.worker && (
+          <span
+            title={run.workerId ? `${ts('Worker')} ${run.workerId}` : undefined}
+            className="truncate font-mono text-muted-foreground"
+          >
+            {run.workerId || '-'}
+          </span>
+        )}
+        <span className="truncate font-mono text-muted-foreground">
+          {run.dagRunId}
+        </span>
+        {(cause || params || labels.length > 0) && (
+          <span className="col-span-full flex min-w-0 items-center gap-2 pl-1">
+            <span
+              title={cause ?? (params || undefined)}
+              className={cn(
+                'min-w-0 truncate',
+                cause ? 'text-destructive' : 'font-mono text-muted-foreground'
+              )}
+            >
+              {cause ?? params}
+            </span>
+            {shownLabels.length > 0 && (
               <span
-                key={label}
-                className="rounded bg-muted px-1.5 text-[11px] leading-4 text-muted-foreground"
+                title={labels.join(', ')}
+                className="flex shrink-0 items-center gap-0.5"
               >
-                {label}
-              </span>
-            ))}
-            {labels.length > shownLabels.length && (
-              <span className="text-[11px] text-muted-foreground">
-                +{labels.length - shownLabels.length}
+                {shownLabels.map((label) => (
+                  <span
+                    key={label}
+                    className="rounded bg-muted px-1.5 text-[11px] leading-4 text-muted-foreground"
+                  >
+                    {label}
+                  </span>
+                ))}
+                {labels.length > shownLabels.length && (
+                  <span className="text-[11px] text-muted-foreground">
+                    +{labels.length - shownLabels.length}
+                  </span>
+                )}
               </span>
             )}
           </span>
         )}
-        {run.workerId && (
-          <span
-            title={`${ts('Worker')} ${run.workerId}`}
-            className="max-w-24 shrink-0 truncate font-mono text-[11px] text-muted-foreground"
-          >
-            {run.workerId}
-          </span>
-        )}
-        <span className="w-40 shrink-0 truncate text-right font-mono text-muted-foreground">
-          {run.dagRunId}
-        </span>
       </button>
     </li>
   );
