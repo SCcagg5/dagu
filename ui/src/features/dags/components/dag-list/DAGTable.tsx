@@ -854,7 +854,7 @@ const defaultColumns = [
     size: 244,
     minSize: 244,
     header: () => (
-      <span className="text-xs">
+      <span className="block text-center text-xs">
         <I18nText text={'Activity'} />
       </span>
     ),
