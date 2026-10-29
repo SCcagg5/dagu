@@ -38,7 +38,6 @@ import React, {
 import { Link } from 'react-router-dom';
 import { DAGNameInputModal } from '@/components/DAGNameInputModal';
 import { components, Status } from '../../../../api/v1/schema';
-import dayjs from '../../../../lib/dayjs';
 import RelativeTime from '@/components/ui/relative-time';
 import { RunStatusChip } from '@/features/dag-runs/components/common/RunStatusChip';
 import VisuallyHidden from '@/components/ui/visually-hidden';
@@ -47,9 +46,9 @@ import DAGActions from '../common/DAGActions';
 import LiveSwitch from '../common/LiveSwitch';
 import ActivityBars from './ActivityBars';
 import { DAGRecentRuns } from './DAGRecentRuns';
+import { LastRunCell, useIsHeartbeat } from './LastRunCell';
 import { ScheduleLine } from './ScheduleSummary';
 import PinToggle from '../common/PinToggle';
-import { formatDurationMs } from '@/lib/formatDuration';
 
 // Import shadcn/ui components
 import { PanelWidthContext } from '../../../../components/SplitLayout';
@@ -101,7 +100,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 const CARD_VIEW_THRESHOLD = 700;
 // The strip of the activity needs room: below this width of the table, or below
 // the xl breakpoint of the page, the column is left out and the cards show it.
-const ACTIVITY_COLUMN_MIN_WIDTH = 1000;
+const ACTIVITY_COLUMN_MIN_WIDTH = 1100;
 
 /** The name of a workflow: a real link, so a middle click or a Ctrl click opens a new tab. */
 function DAGNameLink({
@@ -187,6 +186,23 @@ function DeleteDAGButton({
         <Trash2 className="h-4 w-4" />
       </Button>
     </I18nProps>
+  );
+}
+
+/** The strip of the activity of a workflow; a heartbeat draws its run as a band. */
+function HeartbeatAwareActivity({
+  dag,
+  onOpenRun,
+}: {
+  dag: components['schemas']['DAGFile'];
+  onOpenRun: (runId: string, event: React.MouseEvent) => void;
+}) {
+  return (
+    <ActivityBars
+      activity={dag.activity}
+      healthy={useIsHeartbeat(dag)}
+      onOpenRun={onOpenRun}
+    />
   );
 }
 
@@ -811,39 +827,11 @@ const defaultColumns = [
   }),
   // Labels column removed as labels are now displayed under the name
   // The filter functionality is preserved in the Name column
-  columnHelper.accessor('kind', {
-    id: 'Status',
-    size: 80,
-    minSize: 80,
-    header: () => (
-      <span className="text-xs">
-        <I18nText text={'Status'} />
-      </span>
-    ),
-    cell: ({ row }) => {
-      // Use row
-      const data = row.original!;
-      if (data.kind === ItemKind.DAG) {
-        // Use the updated StatusChip component with xs size
-        return (
-          <RunStatusChip
-            name={data.dag.dag.name}
-            dagRunId={data.dag.latestDAGRun?.dagRunId}
-            status={data.dag.latestDAGRun.status}
-            size="xs"
-          >
-            {data.dag.latestDAGRun?.statusLabel}
-          </RunStatusChip>
-        );
-      }
-      return null;
-    },
-  }),
   // Removed Started At and Finished At columns
   columnHelper.accessor('kind', {
     id: 'LastRun',
-    size: 110,
-    minSize: 90,
+    size: 88,
+    minSize: 76,
     header: () => (
       <span className="text-xs">
         <I18nText text={'Last Run'} />
@@ -854,54 +842,14 @@ const defaultColumns = [
       if (data.kind !== ItemKind.DAG) {
         return null;
       }
-
-      const { startedAt, finishedAt, status } = data.dag.latestDAGRun;
-
-      if (!startedAt || startedAt === '-') {
-        // If no start time, display nothing or a placeholder
-        return <span className="font-normal text-muted-foreground">-</span>;
-      }
-
-      let durationContent: React.ReactNode = null;
-
-      if (finishedAt && finishedAt !== '-') {
-        const start = dayjs(startedAt);
-        const end = dayjs(finishedAt);
-
-        if (start.isValid() && end.isValid()) {
-          const durationMs = end.diff(start);
-
-          if (durationMs > 0) {
-            durationContent = (
-              <div className="text-xs text-muted-foreground">
-                {formatDurationMs(durationMs)}
-              </div>
-            );
-          }
-        }
-      } else if (status === Status.Running) {
-        durationContent = (
-          <div className="text-xs text-muted-foreground">
-            <I18nText text={'(Running)'} />
-          </div>
-        );
-      }
-
-      return (
-        <div className="space-y-0.5 min-w-0">
-          <div className="font-normal text-foreground/70 text-xs truncate">
-            <RelativeTime timestamp={startedAt} absolute={startedAt} />
-          </div>
-          {durationContent}
-        </div>
-      );
+      return <LastRunCell dag={data.dag} />;
     },
   }),
   columnHelper.accessor('kind', {
     id: 'Activity',
-    size: 150,
-    minSize: 150,
-    maxSize: 150,
+    size: 244,
+    minSize: 244,
+    maxSize: 244,
     header: () => (
       <span className="text-xs">
         <I18nText text={'Activity'} />
@@ -916,8 +864,8 @@ const defaultColumns = [
       const fileName = data.dag.fileName;
       return (
         <div className="flex items-center gap-1">
-          <ActivityBars
-            activity={data.dag.activity}
+          <HeartbeatAwareActivity
+            dag={data.dag}
             onOpenRun={(runId, event) =>
               meta?.onOpenRun?.(fileName, runId, event)
             }
@@ -1019,7 +967,7 @@ const columnToSortField: Record<string, string> = {
 };
 
 // Client-side sortable columns
-const clientSortableColumns = ['Status', 'LastRun'];
+const clientSortableColumns = ['LastRun'];
 
 const cardSortOptions = [
   { value: 'name', label: 'Name' },
@@ -1520,9 +1468,6 @@ function DAGTable({
     (
       dag: components['schemas']['DAGFile']
     ): string | components['schemas']['Status'] => {
-      if (clientSort === 'Status') {
-        return dag.latestDAGRun?.status || '';
-      }
       if (clientSort === 'LastRun') {
         return dag.latestDAGRun?.startedAt || '';
       }
@@ -1904,15 +1849,14 @@ function DAGTable({
           className={`w-full text-xs ${isLoading ? 'opacity-70' : ''}`}
           style={{ tableLayout: 'fixed' }}
         >
-          {/* Column widths: Select 40px, Expand 32px, Name auto, Status 9%, LastRun 11%, Activity 150px, Schedule 22%, Actions 160px */}
+          {/* Column widths: Select 40px, Expand 32px, Name auto, LastRun 88px, Activity 244px, Schedule 26%, Actions 160px */}
           <colgroup>
             {canDeleteDAGs && <col style={{ width: '40px' }} />}
             <col style={{ width: '32px' }} />
             <col />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '11%' }} />
-            <col className={activityColumn.col} style={{ width: '150px' }} />
-            <col style={{ width: '22%' }} />
+            <col style={{ width: '88px' }} />
+            <col className={activityColumn.col} style={{ width: '244px' }} />
+            <col style={{ width: '26%' }} />
             <col style={{ width: '160px' }} />
           </colgroup>
           <TableHeader>
@@ -2008,7 +1952,7 @@ function DAGTable({
                       {row.getVisibleCells().map((cell) => (
                         <TableCell
                           key={cell.id}
-                          className={`py-1 align-middle ${cell.column.id === 'Status' ? 'overflow-visible whitespace-nowrap' : 'overflow-hidden truncate'} ${cell.column.id === 'Select' || cell.column.id === 'Expand' ? 'px-0' : 'px-2'} ${cell.column.id === 'Activity' ? activityColumn.cell : ''}`}
+                          className={`py-1 align-middle overflow-hidden truncate ${cell.column.id === 'Select' || cell.column.id === 'Expand' ? 'px-0' : 'px-2'} ${cell.column.id === 'Activity' ? activityColumn.cell : ''}`}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,

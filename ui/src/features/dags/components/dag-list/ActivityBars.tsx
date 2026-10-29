@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { memo, useMemo } from 'react';
-import type { components } from '@/api/v1/schema';
+import { Status, type components } from '@/api/v1/schema';
 import { CACHED_WASH } from '@/features/workflow-workspace/dock/runTimelineModel';
 import { useClock } from '@/hooks/useClock';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -12,6 +12,7 @@ import { runStatusText } from '@/lib/status-utils';
 import { toneClasses } from '@/lib/statusPalette';
 import { cn } from '@/lib/utils';
 import {
+  ACTIVITY_BAND_PX,
   ACTIVITY_BAR_PX,
   ACTIVITY_HEIGHT_PX,
   ACTIVITY_WIDTH_PX,
@@ -26,6 +27,11 @@ const REFRESH_MS = 60_000;
 
 interface ActivityBarsProps {
   activity?: Activity;
+  /**
+   * The workflow is a heartbeat that runs well: its run is a band from its
+   * start to now, not a bar, since it has no end and no length to tell.
+   */
+  healthy?: boolean;
   /** Called when the user clicks the bar of a run. */
   onOpenRun?(runId: string, event: React.MouseEvent): void;
   className?: string;
@@ -38,7 +44,12 @@ interface ActivityBarsProps {
  * the workflow page. The strip is cheap on purpose: a list shows hundreds of
  * them, so a bar is a plain element with a native tooltip.
  */
-function ActivityBars({ activity, onOpenRun, className }: ActivityBarsProps) {
+function ActivityBars({
+  activity,
+  healthy = false,
+  onOpenRun,
+  className,
+}: ActivityBarsProps) {
   const { ts } = useI18n();
   const minute = useClock(activity?.runs.length ? REFRESH_MS : null, (now) =>
     Math.floor(now / REFRESH_MS)
@@ -52,12 +63,6 @@ function ActivityBars({ activity, onOpenRun, className }: ActivityBarsProps) {
     return <div style={{ width: ACTIVITY_WIDTH_PX }} className={className} />;
   }
   const count = activity.runs.length;
-  // A list that the server cut stops at its oldest run: the time before it is
-  // not known, and the strip says so instead of showing it as empty.
-  const unseenPx =
-    activity.truncated && bars.length > 0
-      ? Math.min(...bars.map((bar) => bar.left))
-      : 0;
   const summary = activity.truncated
     ? ts('{count}+ runs in the last 24 hours', { count })
     : count === 0
@@ -72,29 +77,26 @@ function ActivityBars({ activity, onOpenRun, className }: ActivityBarsProps) {
       title={summary}
       data-testid="dag-activity"
       data-runs={count}
-      style={{ width: ACTIVITY_WIDTH_PX, height: ACTIVITY_HEIGHT_PX }}
+      style={{ width: ACTIVITY_WIDTH_PX, height: ACTIVITY_HEIGHT_PX + 1 }}
       className={cn('relative shrink-0', className)}
     >
+      {/* The axis of the time, and a very light line at the height that a bar
+          can reach: the longest run of the strip. */}
       <span
         aria-hidden="true"
-        className={cn(
-          'absolute inset-x-0 bottom-0 border-b',
-          count === 0 ? 'border-dashed border-border' : 'border-border/60'
-        )}
+        data-testid="dag-activity-ceiling"
+        className="absolute inset-x-0 top-0 border-t border-dashed border-border/40"
       />
-      {unseenPx > 0 && (
-        <span
-          aria-hidden="true"
-          data-testid="dag-activity-unseen"
-          title={ts('Only the last {n} runs are loaded', { n: count })}
-          style={{ width: unseenPx }}
-          className="absolute inset-y-0 left-0 rounded-sm bg-muted/70"
-        />
-      )}
+      <span
+        aria-hidden="true"
+        data-testid="dag-activity-axis"
+        className="absolute inset-x-0 bottom-0 border-b border-border"
+      />
       {bars.map((bar) => (
         <Bar
           key={bar.id}
           bar={bar}
+          band={healthy && bar.status === Status.Running}
           title={barTitle(bar, ts)}
           onOpenRun={onOpenRun}
         />
@@ -120,13 +122,41 @@ function barTitle(bar: ActivityBar, ts: ReturnType<typeof useI18n>['ts']) {
 
 function Bar({
   bar,
+  band,
   title,
   onOpenRun,
 }: {
   bar: ActivityBar;
+  /** Drawn as the band of a heartbeat, from its start to the end of the strip. */
+  band: boolean;
   title: string;
   onOpenRun?(runId: string, event: React.MouseEvent): void;
 }) {
+  const { ts } = useI18n();
+  if (band) {
+    return (
+      <span
+        title={`${ts('Healthy')} · ${formatAbsoluteTime(bar.startedAt) ?? ''}`}
+        data-run-id={bar.id}
+        data-tone="success"
+        data-band="true"
+        onClick={
+          onOpenRun
+            ? (event) => {
+                event.stopPropagation();
+                onOpenRun(bar.id, event);
+              }
+            : undefined
+        }
+        style={{ left: bar.left, right: 0, height: ACTIVITY_BAND_PX }}
+        className={cn(
+          'absolute bottom-px block rounded-sm opacity-60 hover:opacity-100',
+          toneClasses('success').dot,
+          onOpenRun && 'cursor-pointer'
+        )}
+      />
+    );
+  }
   return (
     <span
       title={title}
@@ -150,7 +180,7 @@ function Bar({
             : undefined,
       }}
       className={cn(
-        'absolute bottom-0 block rounded-t-[1px] opacity-80 hover:opacity-100',
+        'absolute bottom-px block rounded-t-sm opacity-80 hover:opacity-100',
         bar.tone !== 'partial' && toneClasses(bar.tone).dot,
         onOpenRun && 'cursor-pointer'
       )}

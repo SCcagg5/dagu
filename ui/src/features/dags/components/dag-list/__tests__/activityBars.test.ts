@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { Status } from '@/api/v1/schema';
 import {
   ACTIVITY_BAR_MIN_PX,
-  ACTIVITY_BAR_PX,
+  ACTIVITY_SLOT_PX,
   ACTIVITY_HEIGHT_PX,
   ACTIVITY_WIDTH_PX,
   activityBars,
@@ -32,15 +32,46 @@ function run(
 }
 
 describe('activityBars', () => {
-  it('places a run by its start in the window', () => {
+  it('places a run in the slot of its start in the window', () => {
     const [oldest, middle, newest] = activityBars(
       [run('a', 24 * HOUR, 1000), run('b', 12 * HOUR, 1000), run('c', 0, 1000)],
       NOW
     );
-    const last = ACTIVITY_WIDTH_PX - ACTIVITY_BAR_PX;
+    const slots = Math.floor(ACTIVITY_WIDTH_PX / ACTIVITY_SLOT_PX);
     expect(oldest?.left).toBe(0);
-    expect(middle?.left).toBe(Math.round(last / 2));
-    expect(newest?.left).toBe(last);
+    expect(middle?.left).toBe(Math.floor(slots / 2) * ACTIVITY_SLOT_PX);
+    expect(newest?.left).toBe((slots - 1) * ACTIVITY_SLOT_PX);
+  });
+
+  it('moves a run to the next free slot toward the past when its slot is taken', () => {
+    const bars = activityBars(
+      [
+        run('newest', 1 * 60_000, 1000),
+        run('next', 3 * 60_000, 1000),
+        run('last', 6 * 60_000, 1000),
+      ],
+      NOW
+    );
+    const slots = Math.floor(ACTIVITY_WIDTH_PX / ACTIVITY_SLOT_PX);
+    // The three runs started in the last slot: they stand side by side, newest on the right.
+    expect(bars.map((b) => b.id)).toEqual(['newest', 'next', 'last']);
+    const lefts = bars.map((b) => b.left).sort((a, b) => b - a);
+    expect(lefts).toEqual([
+      (slots - 1) * ACTIVITY_SLOT_PX,
+      (slots - 2) * ACTIVITY_SLOT_PX,
+      (slots - 3) * ACTIVITY_SLOT_PX,
+    ]);
+    expect(bars.find((b) => b.id === 'newest')?.left).toBe(
+      (slots - 1) * ACTIVITY_SLOT_PX
+    );
+  });
+
+  it('leaves out the runs that find no free slot', () => {
+    const slots = Math.floor(ACTIVITY_WIDTH_PX / ACTIVITY_SLOT_PX);
+    const runs = Array.from({ length: slots + 5 }, (_, i) =>
+      run(`r${i}`, i * 1000, 10)
+    );
+    expect(activityBars(runs, NOW)).toHaveLength(slots);
   });
 
   it('keeps a run that started before the window at the left edge', () => {

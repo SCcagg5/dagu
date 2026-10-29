@@ -580,7 +580,7 @@ describe('DAGTable', () => {
   });
 
   // Ascending status order alone would put the failed workflow first.
-  it('keeps pinned workflows on top when sorting by status', () => {
+  it('keeps pinned workflows on top when sorting by last run', () => {
     renderTable('', {
       dags: [
         workflow({ name: 'zeta', pinned: true, status: Status.Success }),
@@ -589,7 +589,7 @@ describe('DAGTable', () => {
     });
     const table = screen.getByRole('table');
 
-    fireEvent.click(within(table).getByRole('button', { name: /^Status/ }));
+    fireEvent.click(within(table).getByRole('button', { name: /^Last Run/ }));
 
     const texts = bodyRowTexts(table);
     expect(texts.findIndex((text) => text.includes('zeta'))).toBeLessThan(
@@ -743,6 +743,13 @@ describe('DAGTable', () => {
         '2 runs in the last 24 hours'
       );
       expect(strip.querySelectorAll('[data-run-id]')).toHaveLength(2);
+      // The time axis and the line of the greatest height frame the bars.
+      expect(
+        within(strip).getByTestId('dag-activity-axis')
+      ).toBeInTheDocument();
+      expect(
+        within(strip).getByTestId('dag-activity-ceiling')
+      ).toBeInTheDocument();
     });
 
     it('says when the window holds no run', () => {
@@ -764,10 +771,6 @@ describe('DAGTable', () => {
       expect(
         within(screen.getByRole('table')).getByTestId('dag-activity')
       ).toHaveAttribute('aria-label', '60+ runs in the last 24 hours');
-      // The time before the oldest listed run is not known: the strip says so.
-      expect(
-        within(screen.getByRole('table')).getByTestId('dag-activity-unseen')
-      ).toBeInTheDocument();
     });
 
     it('opens the workflow on the run of a bar without opening the row', () => {
