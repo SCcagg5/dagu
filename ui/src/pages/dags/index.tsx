@@ -25,6 +25,7 @@ import {
   DAGTable,
   type DAGDeleteResult,
 } from '../../features/dags/components/dag-list';
+import { ACTIVITY_WINDOW_SECONDS } from '../../features/dags/components/dag-list/activityBars';
 import DAGListHeader from '../../features/dags/components/dag-list/DAGListHeader';
 import type {
   WorkflowFilterSet,
@@ -595,6 +596,7 @@ function DAGsContent() {
       active: requestFilters.activeOnly || undefined,
       sort: workflowSortFieldQuery(requestFilters.sortField),
       order: workflowSortOrderQuery(requestFilters.sortOrder),
+      activityWindow: ACTIVITY_WINDOW_SECONDS,
       ...workspaceQuery,
     }),
     [remoteNode, preferences.pageLimit, requestFilters, workspaceQuery]

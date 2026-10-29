@@ -64,6 +64,7 @@ import {
   barTone,
   BAR_MAX_PX,
   BAR_PX,
+  CACHED_WASH,
   cachedBarPx,
   cachedMsOf,
   countOptions,
@@ -90,13 +91,7 @@ import {
 
 export { RUN_COUNT_KEY, SHOW_TESTS_KEY };
 
-/**
- * The layers of the cached part of a bar or an extent: the page colour at
- * half opacity over the status colour (the same colour, paler), and the hatch
- * of the test runs over it.
- */
-export const CACHED_WASH =
-  'color-mix(in srgb, var(--background) 55%, transparent)';
+export { CACHED_WASH };
 
 // The plot starts below this room; the extents and the axis take the rows
 // under the plot.

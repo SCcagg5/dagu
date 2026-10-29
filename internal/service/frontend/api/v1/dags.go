@@ -898,7 +898,14 @@ func (a *API) ListDAGs(ctx context.Context, request api.ListDAGsRequestObject) (
 	if err != nil {
 		return nil, err
 	}
-	resp, err := a.listDAGsData(ctx, persis.DAGListOptions{
+	var activityWindow time.Duration
+	if request.Params.ActivityWindow != nil {
+		activityWindow, err = activityWindowFromSeconds(*request.Params.ActivityWindow)
+		if err != nil {
+			return nil, err
+		}
+	}
+	resp, err := a.listDAGsDataWithSearchPaths(ctx, persis.DAGListOptions{
 		Paginator:       &pg,
 		Name:            valueOf(request.Params.Name),
 		Labels:          labels,
@@ -906,7 +913,7 @@ func (a *API) ListDAGs(ctx context.Context, request api.ListDAGsRequestObject) (
 		Sort:            sortField,
 		Order:           sortOrder,
 		WorkspaceFilter: workspaceFilter,
-	})
+	}, dagListSource{pinnedFirst: true, activityWindow: activityWindow})
 	if err != nil {
 		return nil, err
 	}
@@ -2229,6 +2236,9 @@ func (a *API) GetDAGsListDataIncludingAltDirs(ctx context.Context, queryString s
 type dagListSource struct {
 	includeSearchPaths bool
 	pinnedFirst        bool
+	// activityWindow, when above zero, adds the activity of each DAG over a
+	// window of this length that ends now.
+	activityWindow time.Duration
 }
 
 func (a *API) getDAGsListData(ctx context.Context, queryString string, source dagListSource) (any, error) {
@@ -2236,6 +2246,11 @@ func (a *API) getDAGsListData(ctx context.Context, queryString string, source da
 		endpoint: "/dags",
 	}, func(readCtx context.Context) (any, error) {
 		listOpts, err := a.buildDAGListOptions(readCtx, queryString)
+		if err != nil {
+			return nil, err
+		}
+		params, _ := url.ParseQuery(queryString)
+		source.activityWindow, err = activityWindowFromQuery(params)
 		if err != nil {
 			return nil, err
 		}
@@ -2300,10 +2315,6 @@ func (a *API) buildDAGListOptions(ctx context.Context, queryString string) (pers
 	}, nil
 }
 
-func (a *API) listDAGsData(ctx context.Context, listOpts persis.DAGListOptions) (api.ListDAGs200JSONResponse, error) {
-	return a.listDAGsDataWithSearchPaths(ctx, listOpts, dagListSource{pinnedFirst: true})
-}
-
 // listDAGsDataWithSearchPaths lists DAGs and, when source.includeSearchPaths
 // is true, also includes DAGs found under the configured alternate directory
 // (paths.alt_dags_dir). Query semantics are applied to the combined collection.
@@ -2356,6 +2367,13 @@ func (a *API) listDAGsDataWithSearchPaths(ctx context.Context, listOpts persis.D
 		}
 		if statusErr != nil {
 			errList = append(errList, statusErr.Error())
+		}
+		if source.activityWindow > 0 {
+			activity, activityErr := a.dagActivity(ctx, item.DAG, dagStatus, projectionTime.Add(-source.activityWindow))
+			if activityErr != nil {
+				errList = append(errList, activityErr.Error())
+			}
+			dagFile.Activity = activity
 		}
 		dagFiles = append(dagFiles, dagFile)
 	}

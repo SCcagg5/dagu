@@ -206,6 +206,14 @@ export function totalDurationMs(
 }
 
 /**
+ * The layers of the cached part of a bar or an extent: the page colour at
+ * half opacity over the status colour (the same colour, paler), and the hatch
+ * of the test runs over it.
+ */
+export const CACHED_WASH =
+  'color-mix(in srgb, var(--background) 55%, transparent)';
+
+/**
  * The height of the cached segment of a bar of `height` pixels: the share of
  * the cached time in the total time, whole pixels. At least one pixel for a
  * cached part and one for the own part, so that both stay visible.

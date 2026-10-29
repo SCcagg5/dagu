@@ -5695,6 +5695,7 @@ export interface components {
             fileName: string;
             dag: components["schemas"]["DAG"];
             latestDAGRun: components["schemas"]["DAGRunSummary"];
+            activity?: components["schemas"]["DAGListActivity"];
             /**
              * Format: date-time
              * @description Scheduler-aware next planned run time. Pending overdue one-offs remain visible until consumed.
@@ -6202,6 +6203,27 @@ export interface components {
              * @description Creation time of that process as a Unix timestamp in milliseconds, as reported by the host operating system. Compare it against the creation time of the live process with this pid before attributing anything to the DAG-run; operating systems reuse pids, and a pid alone cannot identify a process.
              */
             startedAtMs: number;
+        };
+        /** @description The runs of a DAG that started in the window of a list request, newest first. */
+        DAGListActivity: {
+            /** @description Runs that started in the window, at most 60 */
+            runs: components["schemas"]["DAGListActivityRun"][];
+            /** @description True when the DAG has more runs in the window than runs lists */
+            truncated: boolean;
+        };
+        /** @description One run in the activity of a DAG */
+        DAGListActivityRun: {
+            dagRunId: components["schemas"]["DAGRunId"];
+            status: components["schemas"]["Status"];
+            /** @description RFC 3339 timestamp when the run started */
+            startedAt: string;
+            /** @description RFC 3339 timestamp when the run finished. Absent for a run that has not finished. */
+            finishedAt?: string;
+            /**
+             * Format: int64
+             * @description Sum in milliseconds of the times that the steps reused from other runs took in those runs. Absent for a run that reused no timed step.
+             */
+            cachedMs?: number;
         };
         /** @description Current status of a DAG-run */
         DAGRunSummary: {
@@ -9473,6 +9495,8 @@ export interface operations {
                 sort?: PathsDagsGetParametersQuerySort;
                 /** @description Sort order (ascending or descending) */
                 order?: PathsDagsGetParametersQueryOrder;
+                /** @description Length in seconds of a window that ends now. When set, each DAG in the list carries `activity`: its runs that started in the window, newest first. Without it, no DAG carries `activity`. */
+                activityWindow?: number;
             };
             header?: never;
             path?: never;

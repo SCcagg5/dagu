@@ -20,13 +20,20 @@ import { I18nProvider } from '@/i18n/I18nProvider';
 import { WorkspaceKind } from '@/lib/workspace';
 import DAGTable from '../DAGTable';
 
+const recentRuns = vi.hoisted(() => ({
+  dagRuns: [] as unknown[],
+}));
+
 vi.mock('@/hooks/api', () => ({
   useClient: () => ({ POST: vi.fn() }),
-  useQuery: () => ({
-    data: {
-      labels: ['team=ops'],
-    },
-  }),
+  useQuery: (path: string) =>
+    path === '/dags/{fileName}/dag-runs'
+      ? { data: { dagRuns: recentRuns.dagRuns }, isLoading: false }
+      : {
+          data: {
+            labels: ['team=ops'],
+          },
+        },
 }));
 
 vi.mock('@/features/dags/components/common/DAGActions', () => ({
@@ -701,5 +708,135 @@ describe('DAGTable', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/dags');
     expect(screen.getByTestId('location')).not.toHaveTextContent('alpha');
     openMock.mockRestore();
+  });
+  describe('activity of the last 24 hours', () => {
+    const HOUR = 3_600_000;
+    function withActivity(runs: unknown[], truncated = false) {
+      return {
+        ...workflow({ name: 'alpha' }),
+        activity: { runs, truncated },
+      } as never;
+    }
+    function run(id: string, agoMs: number, status = Status.Success) {
+      const start = Date.now() - agoMs;
+      return {
+        dagRunId: id,
+        status,
+        startedAt: new Date(start).toISOString(),
+        finishedAt: new Date(start + 60_000).toISOString(),
+      };
+    }
+
+    beforeEach(() => {
+      recentRuns.dagRuns = [];
+    });
+
+    it('draws a bar for each run of the window and tells how many', () => {
+      renderTable('', {
+        dags: [withActivity([run('r1', HOUR), run('r2', 2 * HOUR)])],
+      });
+      const table = screen.getByRole('table');
+
+      const strip = within(table).getByTestId('dag-activity');
+      expect(strip).toHaveAttribute(
+        'aria-label',
+        '2 runs in the last 24 hours'
+      );
+      expect(strip.querySelectorAll('[data-run-id]')).toHaveLength(2);
+    });
+
+    it('says when the window holds no run', () => {
+      renderTable('', { dags: [withActivity([])] });
+      expect(
+        within(screen.getByRole('table')).getByTestId('dag-activity')
+      ).toHaveAttribute('aria-label', 'No runs in the last 24 hours');
+    });
+
+    it('says when the list of runs of the window is cut', () => {
+      renderTable('', {
+        dags: [
+          withActivity(
+            Array.from({ length: 60 }, (_, i) => run(`r${i}`, HOUR)),
+            true
+          ),
+        ],
+      });
+      expect(
+        within(screen.getByRole('table')).getByTestId('dag-activity')
+      ).toHaveAttribute('aria-label', '60+ runs in the last 24 hours');
+      // The time before the oldest listed run is not known: the strip says so.
+      expect(
+        within(screen.getByRole('table')).getByTestId('dag-activity-unseen')
+      ).toBeInTheDocument();
+    });
+
+    it('opens the workflow on the run of a bar without opening the row', () => {
+      renderTable('', { dags: [withActivity([run('r1', HOUR)])] });
+      const bar = within(screen.getByRole('table'))
+        .getByTestId('dag-activity')
+        .querySelector('[data-run-id="r1"]')!;
+
+      fireEvent.click(bar);
+
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/dags/alpha.yaml?remoteNode=local&run=r1'
+      );
+    });
+
+    it('unfolds the recent runs under the row from the chevron', () => {
+      recentRuns.dagRuns = [
+        run('older', 3 * HOUR, Status.Failed),
+        run('newer', HOUR),
+      ];
+      renderTable('', { dags: [withActivity([run('r1', HOUR)])] });
+      const table = screen.getByRole('table');
+      expect(within(table).queryByTestId('dag-recent-runs')).toBeNull();
+
+      const toggle = within(table).getByTestId('dag-activity-toggle');
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle);
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      const panel = within(table).getByTestId('dag-recent-runs');
+      expect(within(panel).getByText('older')).toBeInTheDocument();
+      expect(within(panel).getByText('newer')).toBeInTheDocument();
+      // The chevron neither opens the workflow nor selects the row.
+      expect(screen.getByTestId('location')).toHaveTextContent(/^\/dags$/);
+
+      fireEvent.click(within(panel).getByText('older'));
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/dags/alpha.yaml?remoteNode=local&run=older'
+      );
+
+      fireEvent.click(toggle);
+      expect(within(table).queryByTestId('dag-recent-runs')).toBeNull();
+    });
+
+    it('counts the cached time of a run in its time', () => {
+      recentRuns.dagRuns = [
+        {
+          ...run('stepwise', HOUR),
+          startedAt: '2026-10-29T12:00:00Z',
+          finishedAt: '2026-10-29T12:00:05Z',
+          reusedInputs: [
+            {
+              step: 'slow',
+              runId: 'source',
+              via: 'run',
+              startedAt: '2026-10-29T11:00:00Z',
+              finishedAt: '2026-10-29T11:00:55Z',
+            },
+          ],
+        },
+      ];
+      renderTable('', { dags: [withActivity([])] });
+      const table = screen.getByRole('table');
+      fireEvent.click(within(table).getByTestId('dag-activity-toggle'));
+
+      // 5 s of its own and 55 s that it took from the earlier run.
+      expect(
+        within(within(table).getByTestId('dag-recent-runs')).getByText('1m')
+      ).toHaveAttribute('title', 'Total 1m = own 5s + cached 55s');
+    });
   });
 });

@@ -845,6 +845,14 @@ paths:
             enum: ["asc", "desc"]
             default: "asc"
           description: "Sort order (ascending or descending)"
+        - name: "activityWindow"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 60
+            maximum: 604800
+          description: "Length in seconds of a window that ends now. When set, each DAG in the list carries `activity`: its runs that started in the window, newest first. Without it, no DAG carries `activity`."
       responses:
         "200":
           description: "A successful response"
@@ -14820,6 +14828,8 @@ components:
           $ref: "#/components/schemas/DAG"
         latestDAGRun:
           $ref: "#/components/schemas/DAGRunSummary"
+        activity:
+          $ref: "#/components/schemas/DAGListActivity"
         nextRun:
           type: string
           format: date-time
@@ -15744,6 +15754,45 @@ components:
       required:
         - pid
         - startedAtMs
+
+    DAGListActivity:
+      type: object
+      description: "The runs of a DAG that started in the window of a list request, newest first."
+      properties:
+        runs:
+          type: array
+          description: "Runs that started in the window, at most 60"
+          items:
+            $ref: "#/components/schemas/DAGListActivityRun"
+        truncated:
+          type: boolean
+          description: "True when the DAG has more runs in the window than runs lists"
+      required:
+        - runs
+        - truncated
+
+    DAGListActivityRun:
+      type: object
+      description: "One run in the activity of a DAG"
+      properties:
+        dagRunId:
+          $ref: "#/components/schemas/DAGRunId"
+        status:
+          $ref: "#/components/schemas/Status"
+        startedAt:
+          type: string
+          description: "RFC 3339 timestamp when the run started"
+        finishedAt:
+          type: string
+          description: "RFC 3339 timestamp when the run finished. Absent for a run that has not finished."
+        cachedMs:
+          type: integer
+          format: int64
+          description: "Sum in milliseconds of the times that the steps reused from other runs took in those runs. Absent for a run that reused no timed step."
+      required:
+        - dagRunId
+        - status
+        - startedAt
 
     DAGRunSummary:
       type: object
