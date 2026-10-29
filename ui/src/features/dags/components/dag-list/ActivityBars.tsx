@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Status, type components } from '@/api/v1/schema';
 import { CACHED_WASH } from '@/features/workflow-workspace/dock/runTimelineModel';
 import { useClock } from '@/hooks/useClock';
@@ -32,6 +32,12 @@ interface ActivityBarsProps {
    * start to now, not a bar, since it has no end and no length to tell.
    */
   healthy?: boolean;
+  /**
+   * The strip fills the width of its cell and holds as many bars as fit, so
+   * that the cell takes the changes of the width of the page. Without it, the
+   * strip has the fixed width ACTIVITY_WIDTH_PX.
+   */
+  fluid?: boolean;
   /** Called when the user clicks the bar of a run. */
   onOpenRun?(runId: string, event: React.MouseEvent): void;
   className?: string;
@@ -47,20 +53,41 @@ interface ActivityBarsProps {
 function ActivityBars({
   activity,
   healthy = false,
+  fluid = false,
   onOpenRun,
   className,
 }: ActivityBarsProps) {
   const { ts } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState(ACTIVITY_WIDTH_PX);
+  useEffect(() => {
+    const el = ref.current;
+    if (!fluid || !el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = Math.floor(entry?.contentRect.width ?? 0);
+      if (width > 0) setMeasured(width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fluid]);
+  const width = fluid ? measured : ACTIVITY_WIDTH_PX;
   const minute = useClock(activity?.runs.length ? REFRESH_MS : null, (now) =>
     Math.floor(now / REFRESH_MS)
   );
   const runs = activity?.runs;
   const bars = useMemo(
-    () => (runs ? activityBars(runs, minute * REFRESH_MS) : []),
-    [runs, minute]
+    () =>
+      runs ? activityBars(runs, minute * REFRESH_MS, undefined, width) : [],
+    [runs, minute, width]
   );
   if (!activity) {
-    return <div style={{ width: ACTIVITY_WIDTH_PX }} className={className} />;
+    return (
+      <div
+        ref={ref}
+        style={fluid ? undefined : { width: ACTIVITY_WIDTH_PX }}
+        className={cn(fluid && 'min-w-0 flex-1', className)}
+      />
+    );
   }
   const count = activity.runs.length;
   const summary = activity.truncated
@@ -77,8 +104,16 @@ function ActivityBars({
       title={summary}
       data-testid="dag-activity"
       data-runs={count}
-      style={{ width: ACTIVITY_WIDTH_PX, height: ACTIVITY_HEIGHT_PX + 1 }}
-      className={cn('relative shrink-0', className)}
+      ref={ref}
+      style={{
+        width: fluid ? undefined : ACTIVITY_WIDTH_PX,
+        height: ACTIVITY_HEIGHT_PX + 1,
+      }}
+      className={cn(
+        'relative',
+        fluid ? 'min-w-0 flex-1' : 'shrink-0',
+        className
+      )}
     >
       {/* The axis of the time, and a very light line at the height that a bar
           can reach: the longest run of the strip. */}

@@ -15,13 +15,13 @@ export type ActivityRun = components['schemas']['DAGListActivityRun'];
 
 /** The window of the activity that the list asks for, in seconds. */
 export const ACTIVITY_WINDOW_SECONDS = 24 * 60 * 60;
-/** The width of the strip of bars, in pixels. */
+/** The width of a strip that does not fill its cell, in pixels. */
 export const ACTIVITY_WIDTH_PX = 196;
 /** The height of the strip of bars, in pixels. */
 export const ACTIVITY_HEIGHT_PX = 24;
 /** The width of one bar. */
 export const ACTIVITY_BAR_PX = 5;
-/** The width of the slot of a bar: the bar and the space after it. */
+/** The least width of the slot of a bar: the bar and the space after it. */
 export const ACTIVITY_SLOT_PX = 7;
 /** The height of the band of a heartbeat that runs well. */
 export const ACTIVITY_BAND_PX = 6;
@@ -67,10 +67,14 @@ function time(value: string | undefined): number | null {
 export function activityBars(
   runs: readonly ActivityRun[],
   now: number,
-  windowSeconds: number = ACTIVITY_WINDOW_SECONDS
+  windowSeconds: number = ACTIVITY_WINDOW_SECONDS,
+  widthPx: number = ACTIVITY_WIDTH_PX
 ): ActivityBar[] {
   const windowMs = windowSeconds * 1000;
-  const slots = Math.floor(ACTIVITY_WIDTH_PX / ACTIVITY_SLOT_PX);
+  // As many slots as the strip holds; they share its width, so the last bar
+  // meets the right edge. A wider column holds more slots, not wider bars.
+  const slots = Math.max(1, Math.floor(widthPx / ACTIVITY_SLOT_PX));
+  const slotPx = widthPx / slots;
   const parts = runs.flatMap((run) => {
     const start = time(run.startedAt);
     if (start === null) return [];
@@ -99,7 +103,7 @@ export function activityBars(
       id: p.run.dagRunId,
       status: p.run.status,
       tone: barTone(p.run.status),
-      left: slot * ACTIVITY_SLOT_PX,
+      left: slot * slotPx,
       height,
       cachedPx: cachedBarPx(height, {
         own: p.own,

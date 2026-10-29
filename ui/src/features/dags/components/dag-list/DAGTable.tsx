@@ -201,6 +201,7 @@ function HeartbeatAwareActivity({
     <ActivityBars
       activity={dag.activity}
       healthy={useIsHeartbeat(dag)}
+      fluid
       onOpenRun={onOpenRun}
     />
   );
@@ -852,7 +853,6 @@ const defaultColumns = [
     id: 'Activity',
     size: 244,
     minSize: 244,
-    maxSize: 244,
     header: () => (
       <span className="text-xs">
         <I18nText text={'Activity'} />
@@ -1852,14 +1852,14 @@ function DAGTable({
           className={`w-full text-xs ${isLoading ? 'opacity-70' : ''}`}
           style={{ tableLayout: 'fixed' }}
         >
-          {/* Column widths: Select 40px, Expand 32px, Name 28%, LastRun 88px, Activity 244px, Schedule auto, Actions 160px */}
+          {/* Column widths: Select 40px, Expand 32px, Name 28%, LastRun 88px, Activity auto, Schedule 220px, Actions 160px */}
           <colgroup>
             {canDeleteDAGs && <col style={{ width: '40px' }} />}
             <col style={{ width: '32px' }} />
             <col style={{ width: '28%' }} />
             <col style={{ width: '88px' }} />
-            <col className={activityColumn.col} style={{ width: '244px' }} />
-            <col />
+            <col className={activityColumn.col} />
+            <col style={{ width: '220px' }} />
             <col style={{ width: '160px' }} />
           </colgroup>
           <TableHeader>

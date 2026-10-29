@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { Status } from '@/api/v1/schema';
 import {
   ACTIVITY_BAR_MIN_PX,
+  ACTIVITY_BAR_PX,
   ACTIVITY_SLOT_PX,
   ACTIVITY_HEIGHT_PX,
   ACTIVITY_WIDTH_PX,
@@ -129,5 +130,17 @@ describe('activityBars', () => {
     expect(activityBars([run('bad', 0, 0, { startedAt: '-' })], NOW)).toEqual(
       []
     );
+  });
+
+  it('holds more slots in a wider strip and ends at its right edge', () => {
+    const runs = Array.from({ length: 60 }, (_, i) =>
+      run(`r${i}`, i * 10 * 60_000, 1_000)
+    );
+    const narrow = activityBars(runs, NOW, undefined, 196);
+    const wide = activityBars(runs, NOW, undefined, 490);
+    expect(wide.length).toBeGreaterThan(narrow.length);
+    const last = wide.reduce((a, b) => (b.left > a.left ? b : a));
+    expect(last.left + ACTIVITY_BAR_PX).toBeLessThanOrEqual(490);
+    expect(last.left).toBeGreaterThan(490 - 2 * 8);
   });
 });
