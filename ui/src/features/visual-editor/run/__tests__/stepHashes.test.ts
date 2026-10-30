@@ -89,6 +89,38 @@ steps:
     expect(after.get('b')).not.toBe(before.get('b'));
   });
 
+  // A chain step with no name or id is still the step before the next one.
+  it('follows a step with no name in a chain', () => {
+    const spec = `type: chain
+steps:
+  - name: a
+    run: echo a
+  - run: echo middle
+  - name: c
+    run: echo c
+`;
+    const before = stepHashes(spec);
+    const after = stepHashes(spec.replace('echo middle', 'echo MIDDLE'));
+    expect([...before.keys()]).toEqual(['a', 'c']);
+    expect(after.get('a')).toBe(before.get('a'));
+    expect(after.get('c')).not.toBe(before.get('c'));
+  });
+
+  // A step can run a sub-DAG that a later document defines.
+  it('changes every step when a later document changes', () => {
+    const child = (run: string) =>
+      `${SPEC}---\nname: child\nsteps:\n  - name: work\n    run: ${run}\n`;
+    const before = stepHashes(child('echo a'));
+    const after = stepHashes(child('echo b'));
+    for (const name of before.keys()) {
+      expect(after.get(name)).not.toBe(before.get(name));
+    }
+  });
+
+  it('gives one result to the calls with the same text', () => {
+    expect(stepHashes(SPEC)).toBe(stepHashes(SPEC));
+  });
+
   it('changes every step when a top-level key changes', () => {
     const before = stepHashes(SPEC);
     const after = stepHashes(`env:\n  - X: 1\n${SPEC}`);

@@ -9,7 +9,12 @@ import type {
   CanvasNode,
 } from '../contracts';
 import { routedCurve, type Obstacle } from './edgeRouting';
-import { Position, curvePathData, curvePointAt } from './engine/geometry';
+import {
+  Position,
+  curvePathData,
+  curvePointAt,
+  sampleCurve,
+} from './engine/geometry';
 import {
   COMPACT_CAPTION_HEIGHT,
   COMPACT_CAPTION_WIDTH,
@@ -396,6 +401,7 @@ function edgeStyle(kind: CanvasEdge['kind'], palette: Palette): EdgeStyle {
   }
 }
 
+/** The markup of an edge and the points that bound its curve and label. */
 function drawEdge(
   edge: CanvasEdge,
   source: Box & { node: CanvasNode },
@@ -404,7 +410,7 @@ function drawEdge(
   palette: Palette,
   obstacles: readonly Obstacle[],
   waypoints: readonly Point[] | undefined
-): string {
+): { markup: string; extent: Point[] } {
   const lr = direction === 'LR';
   let from: Point = lr
     ? { x: source.x + source.width, y: source.y + source.height / 2 }
@@ -442,6 +448,7 @@ function drawEdge(
     obstacles
   );
   const path = curvePathData(segments);
+  const extent: Point[] = sampleCurve(segments);
   const { x: labelX, y: labelY } = curvePointAt(segments, 0.5);
   const style = edgeStyle(edge.kind, palette);
   let out = `<path data-edge="${esc(edge.id)}" data-kind="${edge.kind}" d="${path.replace(/-?\d+\.\d+/g, (m) => num(Number(m)))}" fill="none" stroke="${style.color}" stroke-width="1.5"${style.dash}${style.cap} marker-end="url(#${style.marker})"/>`;
@@ -450,9 +457,10 @@ function drawEdge(
     const width = Array.from(label).length * SMALL_MONO_CHAR_PX + 8;
     const x = lr ? labelX - width / 2 : labelX + 8;
     const y = lr ? labelY - 22 : labelY - 8;
+    extent.push({ x, y }, { x: x + width, y: y + 16 });
     out += `<g data-edge-label="${esc(edge.id)}"><rect x="${num(x)}" y="${num(y)}" width="${num(width)}" height="16" rx="3" ry="3" fill="${palette.card}" stroke="${palette.border}" stroke-width="1"/>${text(x + width / 2, y + 12, label, { size: 10, fill: palette.muted, family: MONO, anchor: 'middle' })}</g>`;
   }
-  return out;
+  return { markup: out, extent };
 }
 
 function markers(palette: Palette): string {
@@ -509,8 +517,6 @@ export function buildExportSvg(
   if (boxes.size === 0) {
     minX = minY = maxX = maxY = 0;
   }
-  const width = Math.round(maxX - minX + 2 * MARGIN);
-  const height = Math.round(maxY - minY + 2 * MARGIN);
 
   const routesWithEdge = new Map<string, Set<string>>();
   for (const edge of graph.edges) {
@@ -521,6 +527,7 @@ export function buildExportSvg(
     }
   }
 
+  // A detour around a card and a route label can reach past the cards.
   const edges: string[] = [];
   for (const edge of graph.edges) {
     const source = boxes.get(edge.source);
@@ -537,18 +544,26 @@ export function buildExportSvg(
     const obstacles = [...boxes.entries()]
       .filter(([key]) => key !== edge.source && key !== edge.target)
       .map(([, box]) => box);
-    edges.push(
-      drawEdge(
-        edge,
-        source,
-        target,
-        direction,
-        palette,
-        obstacles,
-        opts.waypoints?.[edge.id]
-      )
+    const drawn = drawEdge(
+      edge,
+      source,
+      target,
+      direction,
+      palette,
+      obstacles,
+      opts.waypoints?.[edge.id]
     );
+    edges.push(drawn.markup);
+    for (const point of drawn.extent) {
+      minX = Math.min(minX, point.x);
+      minY = Math.min(minY, point.y);
+      maxX = Math.max(maxX, point.x);
+      maxY = Math.max(maxY, point.y);
+    }
   }
+  const width = Math.round(maxX - minX + 2 * MARGIN);
+  const height = Math.round(maxY - minY + 2 * MARGIN);
+
   const nodes: string[] = [];
   for (const node of graph.nodes) {
     const box = boxes.get(node.key);

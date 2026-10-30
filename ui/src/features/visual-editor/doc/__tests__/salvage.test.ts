@@ -440,7 +440,7 @@ describe('undo and redo around a break', () => {
   });
 });
 
-describe('the steps of the add step panel', () => {
+describe.skipIf(realSchema === null)('the steps of the add step panel', () => {
   const BASE = 'steps:\n  - name: first\n    run: echo hi\n';
   const entries = realSchema ? buildActionCatalog(realSchema, []) : [];
 

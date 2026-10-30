@@ -58,21 +58,17 @@ export function useRunAvailability(
 ): RunAvailability {
   const links = useRunLinks();
   const resolved = runId && links ? links.resolve(runId) : null;
-  const [answer, setAnswer] = useState<boolean | undefined>(() =>
-    runId ? asked.get(runId) : undefined
-  );
+  // Renders again when the server answers; the answer itself is in `asked`,
+  // so it always belongs to the current run id.
+  const [, setAnswered] = useState(0);
   useEffect(() => {
     if (!enabled || !runId || !links || resolved !== null) return;
-    const known = asked.get(runId);
-    if (known !== undefined) {
-      setAnswer(known);
-      return;
-    }
+    if (asked.has(runId)) return;
     let cancelled = false;
     void links.exists(runId).then(
       (found) => {
         asked.set(runId, found);
-        if (!cancelled) setAnswer(found);
+        if (!cancelled) setAnswered((n) => n + 1);
       },
       () => undefined
     );
@@ -80,6 +76,7 @@ export function useRunAvailability(
       cancelled = true;
     };
   }, [enabled, runId, links, resolved]);
+  const answer = runId ? asked.get(runId) : undefined;
   if (!runId || !links) return { state: 'unknown' };
   if (resolved !== null) return { state: 'available', runId: resolved };
   if (answer === undefined) {

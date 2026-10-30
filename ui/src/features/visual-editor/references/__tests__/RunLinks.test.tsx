@@ -83,6 +83,17 @@ describe('useRunAvailability', () => {
     expect(value.exists).toHaveBeenCalledTimes(1);
   });
 
+  it('does not give the answer of one run to the next run', async () => {
+    const value = links({ exists: vi.fn(async () => false) });
+    const view = renderHook(
+      ({ runId, enabled }) => useRunAvailability(runId, enabled),
+      { wrapper: wrap(value), initialProps: { runId: 'r1', enabled: true } }
+    );
+    await waitFor(() => expect(view.result.current).toEqual({ state: 'gone' }));
+    view.rerender({ runId: 'r2', enabled: false });
+    expect(view.result.current).toEqual({ state: 'unknown' });
+  });
+
   it('says that a run is gone when the server does not have it, and remembers it', async () => {
     const value = links({ exists: vi.fn(async () => false) });
     const first = renderHook(() => useRunAvailability('r9', true), {

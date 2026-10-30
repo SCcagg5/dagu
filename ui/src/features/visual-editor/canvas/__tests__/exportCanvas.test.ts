@@ -459,6 +459,29 @@ describe('buildExportSvg', () => {
     expect(xs.some((x) => x < -6 || x > 246)).toBe(true);
   });
 
+  // In TB a route label starts right of the middle of its edge. Under a
+  // centred router it reaches past the right side of the target card.
+  it('keeps a route label inside the image', () => {
+    const pattern = 'x'.repeat(40);
+    const graph = graphOf(
+      [node('r', { kind: 'router', routes: [pattern] }), node('t')],
+      [edge('r', 't', 'route', pattern)]
+    );
+    const positions = {
+      r: { x: (NODE_WIDTH - routerSize(1)) / 2, y: 0 },
+      t: { x: 0, y: 300 },
+    };
+    const { svg, width } = buildExportSvg(graph, positions, 'TB');
+    const doc = parse(svg);
+    const shift = Number(/translate\((-?[\d.]+) /.exec(svg)?.[1] ?? Number.NaN);
+    const rect = doc.querySelector('[data-edge-label] rect')!;
+    const right =
+      shift +
+      Number(rect.getAttribute('x')) +
+      Number(rect.getAttribute('width'));
+    expect(right).toBeLessThanOrEqual(width);
+  });
+
   it('uses a dark palette that differs from the light one', () => {
     const graph = graphOf([node('a'), node('b')], [edge('a', 'b')]);
     const positions = layoutGraph(graph, 'LR');
