@@ -524,7 +524,7 @@ describe('useStepRunActions dialogs', () => {
 
     await waitFor(() => expect(editorRun.runSteps).toHaveBeenCalled());
     // The unsaved text makes a test run: it is selectable while it exists.
-    expect(location.search).toContain('run=run-2');
+    await waitFor(() => expect(location.search).toContain('run=run-2'));
     expect(editorRun.runSteps).toHaveBeenCalledWith(['build'], undefined);
   });
 
@@ -551,7 +551,7 @@ describe('useStepRunActions dialogs', () => {
 
     await waitFor(() => expect(editorRun.runSteps).toHaveBeenCalled());
     // A start selects the new run in the URL.
-    expect(location.search).toContain('run=run-2');
+    await waitFor(() => expect(location.search).toContain('run=run-2'));
     expect(editorRun.runSteps).toHaveBeenCalledWith(
       ['build', 'test', 'lint', 'ship'],
       undefined
@@ -578,7 +578,7 @@ describe('useStepRunActions dialogs', () => {
 
     await waitFor(() => expect(editorRun.runSteps).toHaveBeenCalled());
     // A start selects the new run in the URL.
-    expect(location.search).toContain('run=run-2');
+    await waitFor(() => expect(location.search).toContain('run=run-2'));
     expect(editorRun.runSteps).toHaveBeenCalledWith(
       ['test'],
       expect.objectContaining({ reuseOutputsFrom: 'run-1' })
@@ -610,7 +610,7 @@ describe('useStepRunActions dialogs', () => {
 
     await waitFor(() => expect(editorRun.runSteps).toHaveBeenCalled());
     // A start selects the new run in the URL.
-    expect(location.search).toContain('run=run-2');
+    await waitFor(() => expect(location.search).toContain('run=run-2'));
     expect(editorRun.runSteps).toHaveBeenCalledWith(
       ['build', 'test', 'lint'],
       undefined
@@ -673,7 +673,9 @@ describe('useStepRunActions dialogs', () => {
       );
       expect(editorRun.runSteps).toHaveBeenCalledWith(['build'], undefined);
       expect(location.pathname).toBe('/dags/example.yaml');
-      expect(location.search).toBe('?run=run-2&step=test&ndv=expanded');
+      await waitFor(() =>
+        expect(location.search).toBe('?run=run-2&step=test&ndv=expanded')
+      );
     });
 
     it('follows the run of Step only without leaving the editor', async () => {
@@ -701,7 +703,9 @@ describe('useStepRunActions dialogs', () => {
         expect.objectContaining({ reuseOutputsFrom: 'run-1' })
       );
       expect(location.pathname).toBe('/dags/example.yaml');
-      expect(location.search).toBe('?run=run-2&step=test&ndv=expanded');
+      await waitFor(() =>
+        expect(location.search).toBe('?run=run-2&step=test&ndv=expanded')
+      );
     });
 
     // Run follows the run as the button of the upstream steps does: the
@@ -729,7 +733,9 @@ describe('useStepRunActions dialogs', () => {
         undefined
       );
       expect(location.pathname).toBe('/dags/example.yaml');
-      expect(location.search).toBe('?run=run-2&step=test&ndv=expanded');
+      await waitFor(() =>
+        expect(location.search).toBe('?run=run-2&step=test&ndv=expanded')
+      );
     });
 
     it('follows the run of the graph Run step when its node view is open', async () => {
@@ -760,7 +766,9 @@ describe('useStepRunActions dialogs', () => {
 
       await waitFor(() => expect(editorRun.runSteps).toHaveBeenCalled());
       expect(location.pathname).toBe('/dags/example.yaml');
-      expect(location.search).toBe('?run=run-2&step=build&ndv=expanded');
+      await waitFor(() =>
+        expect(location.search).toBe('?run=run-2&step=build&ndv=expanded')
+      );
       expect(actions.followed).toEqual([]);
     });
 
@@ -781,7 +789,7 @@ describe('useStepRunActions dialogs', () => {
         )
       );
       expect(location.pathname).toBe('/dags/example.yaml');
-      expect(location.search).toBe('?run=run-2&step=test');
+      await waitFor(() => expect(location.search).toBe('?run=run-2&step=test'));
       expect(actions.followed).toEqual([]);
     });
 
@@ -1828,7 +1836,9 @@ describe('useStepRunActions with the cache and the draft', () => {
           expect.objectContaining({ kind: 'execute', runId: 'run-2' }),
         ])
       );
-      expect(location.search).toBe('?run=run-2&step=merge&ndv=expanded');
+      await waitFor(() =>
+        expect(location.search).toBe('?run=run-2&step=merge&ndv=expanded')
+      );
       expect(location.pathname).toBe('/dags/example.yaml');
     });
 
@@ -1837,9 +1847,11 @@ describe('useStepRunActions with the cache and the draft', () => {
       act(() => actions.runStep('merge'));
       fireEvent.click(await screen.findByRole('button', { name: 'Step only' }));
       await waitFor(() => expect(actions.followed).toHaveLength(1));
-      expect(location.search).toContain('step=merge');
-      expect(location.search).toContain('ndv=expanded');
-      expect(location.search).toContain('run=run-2');
+      await waitFor(() => {
+        expect(location.search).toContain('step=merge');
+        expect(location.search).toContain('ndv=expanded');
+        expect(location.search).toContain('run=run-2');
+      });
     });
 
     it('tells the timeline that this tab started a test run', async () => {
