@@ -250,9 +250,16 @@ func TestEvents(t *testing.T) {
 	require.Len(t, w.Events, 3)
 	_, err = rd.Events(ctx, EventQuery{Before: "bad"})
 	require.ErrorIs(t, err, ErrInvalidCursor)
+	// A cursor that decodes but that the store did not give is rejected too.
+	for _, c := range []string{encodeCursor(0), encodeCursor(1), encodeCursor(1 << 40)} {
+		_, err = rd.Events(ctx, EventQuery{Before: c})
+		require.ErrorIs(t, err, ErrInvalidCursor, c)
+	}
 	// A store without events still rejects a cursor it did not make.
-	_, err = OpenReader(filepath.Join(t.TempDir(), "none")).Events(ctx, EventQuery{Before: "bad"})
-	require.ErrorIs(t, err, ErrInvalidCursor)
+	for _, c := range []string{"bad", encodeCursor(5)} {
+		_, err = OpenReader(filepath.Join(t.TempDir(), "none")).Events(ctx, EventQuery{Before: c})
+		require.ErrorIs(t, err, ErrInvalidCursor, c)
+	}
 }
 
 // An outage goes on over a restart: no second failed event, one recovered event with the whole outage.

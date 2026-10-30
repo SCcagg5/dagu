@@ -90,6 +90,46 @@ func TestStepOutputsByName(t *testing.T) {
 	assert.Equal(t, "hello", got.OutputVariable.Value)
 }
 
+// An executor that publishes outputs without declaring them fills only the
+// channel that ${steps.<id>.outputs.<name>} falls back to. Its outputs show,
+// unless the step has declared outputs, which win as they do in a reference.
+func TestStepOutputsFromPublishedPayload(t *testing.T) {
+	payload := `{"rows":3,"name":"x"}`
+	published := &ir.Node{Step: ir.Step{Name: "load"}, Status: ir.NodeSucceeded, OutputsValue: &payload}
+	declared := stepOutputsNode("both", "", map[string]any{"a": "1"})
+	declared.OutputsValue = &payload
+	a := newStepOutputsAPI(t, published, declared)
+
+	got := requireStepOutputs(t, getStepOutputs(t, a, "run-1", "load"))
+	assert.Equal(t, []openapiv1.StepOutputValue{
+		{Name: "name", Value: "x", Size: 1},
+		{Name: "rows", Value: "3", Size: 1},
+	}, got.Outputs)
+
+	got = requireStepOutputs(t, getStepOutputs(t, a, "run-1", "both"))
+	assert.Equal(t, []openapiv1.StepOutputValue{{Name: "a", Value: "1", Size: 1}}, got.Outputs)
+}
+
+// The output variable is the value that ${NAME} gives, the captured stdout,
+// also when output_schema keeps a normalized copy as the output value.
+func TestStepOutputsVariableIsCaptured(t *testing.T) {
+	normalized := `{"a":1}`
+	vars := &collections.SyncMap{}
+	vars.Store("RESULT", `RESULT={ "a": 1 }`)
+	node := &ir.Node{
+		Step:            ir.Step{Name: "build", Output: "RESULT"},
+		Status:          ir.NodeSucceeded,
+		OutputValue:     &normalized,
+		OutputVariables: vars,
+	}
+	a := newStepOutputsAPI(t, node)
+
+	got := requireStepOutputs(t, getStepOutputs(t, a, "run-1", "build"))
+	require.NotNil(t, got.OutputVariable)
+	assert.Equal(t, "RESULT", got.OutputVariable.Name)
+	assert.Equal(t, `{ "a": 1 }`, got.OutputVariable.Value)
+}
+
 func TestStepOutputsByID(t *testing.T) {
 	a := newStepOutputsAPI(t, stepOutputsNode("build", "b1", map[string]any{"k": "v"}))
 
