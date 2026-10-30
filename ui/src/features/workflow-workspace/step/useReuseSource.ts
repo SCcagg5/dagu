@@ -105,7 +105,8 @@ export interface ReuseSourceState {
  * The reuse source of a step run (decision D12) and what changed upstream of
  * it (D14). The user can choose the run (`choose`, kept for the session): a
  * chosen run that is gone or does not hold the reads gives way to the
- * automatic choice. The browser cache of outputs covers the steps that the
+ * automatic choice, and so does a chosen cache that no fresh entry backs.
+ * The browser cache of outputs covers the steps that the
  * source run cannot give: a step that changed or has no output in it. A
  * cache entry names a run, never holds a value to send: it covers a step only
  * while that run exists (the history, else a request) and holds the step. The
@@ -234,42 +235,10 @@ export function useReuseSource(p: {
       ? found
       : null;
   }, [choice, history.runs, selected, p.reads]);
-  const cacheChosen = choice.kind === 'cache';
-  const source = cacheChosen ? null : (chosenRun ?? autoSource);
-
-  const names = useMemo(() => {
-    if (!source?.nodes) return undefined;
-    return {
-      snapshot: {
-        name: dagName,
-        steps: source.nodes
-          .map((node) => node.step)
-          .filter((step) => step.name !== AGENT_RUN_STEP),
-      } as unknown as ApiDAGDetails,
-      live: dagData.dag as ApiDAGDetails | undefined,
-    };
-  }, [dagData.dag, dagName, source]);
-
-  const diff = useRunSpecDiff({
-    dagName,
-    fileName: p.fileName,
-    runId: source?.dagRunId ?? null,
-    ...(p.liveText !== undefined ? { liveText: p.liveText } : {}),
-    ...(names ? { names } : {}),
-  });
 
   const previous = useMemo(
     () => p.previous.filter((name) => name !== p.step),
     [p.previous, p.step]
-  );
-  const deps = useMemo(() => stepNeeds(dagData.dag?.steps), [dagData.dag]);
-  const runStale = useMemo(
-    () => (diff && source ? staleUpstream({ diff, previous, deps }) : []),
-    [deps, diff, previous, source]
-  );
-  const runMissing = useMemo(
-    () => missingIn(source, previous),
-    [source, previous]
   );
 
   // The cache: the entries of the workflow, and the hash that each previous
@@ -306,12 +275,16 @@ export function useReuseSource(p: {
       asked[id],
     [asked, listed, selected]
   );
+  // Each run is asked once. A pass never drops the answers of an earlier
+  // one, and the pass after an answer asks for the runs past the limit.
+  const requested = useRef(new Set<string>());
   useEffect(() => {
     if (history.isLoading) return;
-    const missingIds = runIds.filter((id) => runOfId(id) === undefined);
-    if (missingIds.length === 0) return;
-    let cancelled = false;
+    const missingIds = runIds.filter(
+      (id) => !requested.current.has(id) && runOfId(id) === undefined
+    );
     for (const id of missingIds.slice(0, MAX_RUN_CHECKS)) {
+      requested.current.add(id);
       void clientRef.current
         .GET('/dag-runs/{name}/{dagRunId}', {
           params: {
@@ -320,23 +293,19 @@ export function useReuseSource(p: {
           },
         })
         .then(({ data, response }) => {
-          if (cancelled) return;
           // Only a clear "not found" says that the run is gone.
           // Another failure leaves the decision to the server.
           const answer: ReuseRun | 'gone' | 'unknown' = data
-            ? (data as unknown as ReuseRun)
+            ? data.dagRunDetails
             : response.status === 404
               ? 'gone'
               : 'unknown';
           setAsked((held) => ({ ...held, [id]: answer }));
         })
         .catch(() => {
-          if (!cancelled) setAsked((held) => ({ ...held, [id]: 'unknown' }));
+          setAsked((held) => ({ ...held, [id]: 'unknown' }));
         });
     }
-    return () => {
-      cancelled = true;
-    };
   }, [dagName, history.isLoading, remoteNode, runIds, runOfId]);
   const check = useCallback(
     (step: string, entry: { runId: string }): RunCheck => {
@@ -348,19 +317,6 @@ export function useReuseSource(p: {
       return nodeHoldsOutputs(node) ? 'ok' : 'gone';
     },
     [runOfId]
-  );
-  const cover = useMemo(
-    () =>
-      coverFromCache({
-        previous,
-        stale: runStale,
-        missing: runMissing,
-        hasSource: source !== null,
-        entries,
-        hashes,
-        check,
-      }),
-    [check, entries, hashes, previous, runMissing, runStale, source]
   );
 
   // The cached values that the picker offers: the fresh entries, with the
@@ -377,6 +333,60 @@ export function useReuseSource(p: {
         check,
       }),
     [check, entries, hashes, previous]
+  );
+
+  // A choice of the cache gives way to the automatic choice once no fresh
+  // entry backs it; it holds while the entries are checked.
+  const cacheChosen =
+    choice.kind === 'cache' &&
+    (offered.cached.length > 0 ||
+      offered.checking ||
+      (hasEntries && hashes === null));
+  const source = cacheChosen ? null : (chosenRun ?? autoSource);
+
+  const names = useMemo(() => {
+    if (!source?.nodes) return undefined;
+    return {
+      snapshot: {
+        name: dagName,
+        steps: source.nodes
+          .map((node) => node.step)
+          .filter((step) => step.name !== AGENT_RUN_STEP),
+      } as unknown as ApiDAGDetails,
+      live: dagData.dag as ApiDAGDetails | undefined,
+    };
+  }, [dagData.dag, dagName, source]);
+
+  const diff = useRunSpecDiff({
+    dagName,
+    fileName: p.fileName,
+    runId: source?.dagRunId ?? null,
+    ...(p.liveText !== undefined ? { liveText: p.liveText } : {}),
+    ...(names ? { names } : {}),
+  });
+
+  const deps = useMemo(() => stepNeeds(dagData.dag?.steps), [dagData.dag]);
+  const runStale = useMemo(
+    () => (diff && source ? staleUpstream({ diff, previous, deps }) : []),
+    [deps, diff, previous, source]
+  );
+  const runMissing = useMemo(
+    () => missingIn(source, previous),
+    [source, previous]
+  );
+
+  const cover = useMemo(
+    () =>
+      coverFromCache({
+        previous,
+        stale: runStale,
+        missing: runMissing,
+        hasSource: source !== null,
+        entries,
+        hashes,
+        check,
+      }),
+    [check, entries, hashes, previous, runMissing, runStale, source]
   );
   const options = useMemo(() => {
     const runs: SourceRun[] = [...history.runs];

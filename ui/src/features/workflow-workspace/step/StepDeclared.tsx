@@ -10,8 +10,8 @@ import { buildWorkspaceUrl, useWorkspaceUrl } from '../state/workspaceUrl';
 /**
  * What the definition of a step declares for the steps after it: the output
  * variable and the named outputs. It needs no run. The link selects the last
- * run in the same tab (a push of `?run=<id>`). It shows only when the
- * workspace has a run id.
+ * run in the same tab (a push of `?run=<id>`), else the run of the host when
+ * the last run is not known. It shows only when the workspace has a run id.
  */
 export function StepDeclared({
   step,
@@ -38,7 +38,7 @@ export function StepDeclared({
       kind: out.type,
     });
   }
-  const runId = run.ref?.runId ?? null;
+  const runId = run.latestRef?.runId ?? run.ref?.runId ?? null;
   if (rows.length === 0 && runId === null) return null;
 
   const runUrl =

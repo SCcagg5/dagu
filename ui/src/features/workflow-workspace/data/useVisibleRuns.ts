@@ -155,18 +155,18 @@ const ACTIONS: RunViewActions = {
   setHiddenTypes: (hiddenTypes) => update({ hiddenTypes }),
 };
 
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+const serverSnapshot = () => SERVER_SETTINGS;
+
 /** The choices of the run timeline, kept in the browser, and their setters. */
 export function useRunViewSettings(): [RunViewSettings, RunViewActions] {
-  const settings = useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-    snapshot,
-    () => SERVER_SETTINGS
-  );
+  const settings = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   return [settings, ACTIONS];
 }
 
