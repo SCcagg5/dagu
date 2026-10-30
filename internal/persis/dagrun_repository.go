@@ -85,11 +85,16 @@ func (r *DAGRunRepository) CreateAttempt(
 
 // RecentStatuses returns the newest readable status for recent DAG runs.
 func (r *DAGRunRepository) RecentStatuses(ctx context.Context, name string, limit int) ([]ir.DAGRunStatus, error) {
+	return r.store.RecentStatuses(ctx, name, recentLimit(ctx, limit))
+}
+
+// recentLimit returns limit, or the default for a limit that is not positive.
+func recentLimit(ctx context.Context, limit int) int {
 	if limit <= 0 {
 		logger.Warn(ctx, "Non-positive recent DAG-run limit, using default of 10", slog.Int("limit", limit))
-		limit = 10
+		return 10
 	}
-	return r.store.RecentStatuses(ctx, name, limit)
+	return limit
 }
 
 // LatestAttempt returns the newest visible attempt for a DAG.
@@ -215,8 +220,12 @@ func (r *DAGRunRepository) FindAttempt(ctx context.Context, ref ir.DAGRunRef) (d
 		return nil, dagrun.ErrDAGRunIDEmpty
 	}
 	if r.ephemeral != nil {
-		if attempt, err := r.ephemeral.FindAttempt(ctx, ref); err == nil {
+		attempt, err := r.ephemeral.FindAttempt(ctx, ref)
+		if err == nil {
 			return newEventingAttempt(attempt, nil, true), nil
+		}
+		if errors.Is(err, dagrun.ErrNoStatusData) {
+			return nil, err
 		}
 	}
 	attempt, err := r.store.FindAttempt(ctx, ref)
@@ -232,8 +241,12 @@ func (r *DAGRunRepository) FindSubAttempt(ctx context.Context, root ir.DAGRunRef
 		return nil, dagrun.ErrDAGRunIDEmpty
 	}
 	if r.ephemeral != nil {
-		if attempt, err := r.ephemeral.FindSubAttempt(ctx, root, childRunID); err == nil {
+		attempt, err := r.ephemeral.FindSubAttempt(ctx, root, childRunID)
+		if err == nil {
 			return newEventingAttempt(attempt, nil, true), nil
+		}
+		if errors.Is(err, dagrun.ErrNoStatusData) {
+			return nil, err
 		}
 	}
 	attempt, err := r.store.FindSubAttempt(ctx, root, childRunID)
