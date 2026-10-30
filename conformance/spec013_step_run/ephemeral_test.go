@@ -6,6 +6,7 @@ package spec013_step_run_test
 import (
 	"fmt"
 	"net/http"
+	"runtime"
 	"testing"
 	"time"
 
@@ -198,6 +199,9 @@ func TestOutputsFeedSelectedStep(t *testing.T) {
 // stays literal text (Spec 007), so the selected step runs with that text and
 // fails when its shell rejects it.
 func TestUnsuppliedOutputLeavesReferenceLiteral(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("relies on sh rejecting the unresolved reference")
+	}
 	server := newServer(t)
 	const name = "step_run_missing_output"
 	createDAG(t, server, name, `steps:

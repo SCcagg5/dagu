@@ -6,6 +6,7 @@ package spec013_step_run_test
 import (
 	"fmt"
 	"net/http"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,9 @@ func builtTag(t *testing.T, server test.Server, name, runID string) string {
 // A step named in outputsFromRuns carries its outputs from that run, in place
 // of outputsFromRunId, and the run record says which run and when the step ran.
 func TestOutputsFromRunsSeedsTheStep(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixtures assume a POSIX sh is available")
+	}
 	server := newServer(t)
 	const name = "from_runs_seed"
 	createDAG(t, server, name, fromRunsDAG)
@@ -135,6 +139,9 @@ func TestOutputsFromRunsSeedsTheStep(t *testing.T) {
 // A run of a step that cannot give it is a bad request that names the step and
 // the run: the run is gone, belongs to another DAG, or the step failed there.
 func TestOutputsFromRunsRejects(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixtures assume a POSIX sh is available")
+	}
 	server := newServer(t)
 	const name = "from_runs_rules"
 	createDAG(t, server, name, fromRunsDAG)
