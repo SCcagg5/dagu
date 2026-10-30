@@ -84,7 +84,9 @@ function withSegments(field: string): string[] | null {
 export function issuesToErrorSchema(
   fieldIssues: Record<string, ValidationIssue[]>
 ): ErrorSchema {
-  const root: Plain = {};
+  // Nodes without a prototype: a `__proto__` segment is a plain key and
+  // never reaches Object.prototype.
+  const root: Plain = Object.create(null);
   for (const [field, issues] of Object.entries(fieldIssues)) {
     const segments = withSegments(field);
     if (!segments) {
@@ -92,7 +94,9 @@ export function issuesToErrorSchema(
     }
     let node = root;
     for (const segment of segments) {
-      node[segment] = isPlainObject(node[segment]) ? node[segment] : {};
+      node[segment] = isPlainObject(node[segment])
+        ? node[segment]
+        : Object.create(null);
       node = node[segment] as Plain;
     }
     const errors = Array.isArray(node.__errors)

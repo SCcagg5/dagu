@@ -42,6 +42,16 @@ describe('savedStepText', () => {
     expect(savedStepText(savedModel, current, 'steps[9]')).toBeNull();
   });
 
+  // The deleted step `a` was at the place of `b`: the name wins over it.
+  it('follows a step by its name before its place', () => {
+    const current = parseDagDoc(
+      saved.replace('  - name: a\n    run: echo a\n\n', '')
+    );
+    expect(savedStepText(savedModel, current, 'steps[0]')).toBe(
+      '  - id: b\n    name: b\n    run: echo b'
+    );
+  });
+
   it('takes a renamed step for the same step', () => {
     const current = parseDagDoc(saved.replace('name: a', 'name: renamed'));
     expect(savedStepText(savedModel, current, 'steps[0]')).toBe(

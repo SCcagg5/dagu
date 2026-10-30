@@ -43,7 +43,16 @@ export function savedStepText(
 ): string | null {
   const step = everyStep(current).find((item) => item.key === key);
   if (!step) return null;
-  const match = everyStep(saved).find((item) => sameStep(item, step, current));
+  const savedSteps = everyStep(saved);
+  // The id, then the name, of any saved step goes before a match by place.
+  const match =
+    (step.id !== undefined
+      ? savedSteps.find((item) => item.id === step.id)
+      : undefined) ??
+    (step.explicitName !== undefined
+      ? savedSteps.find((item) => item.explicitName === step.explicitName)
+      : undefined) ??
+    savedSteps.find((item) => sameStep(item, step, current));
   if (!match) return null;
   const lines = saved.text.split('\n');
   return lines
