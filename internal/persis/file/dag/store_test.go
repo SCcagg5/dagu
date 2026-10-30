@@ -5,6 +5,8 @@ package dag
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1067,6 +1069,46 @@ steps:
 	invalidContent := `invalid: yaml: content`
 	err = store.UpdateSpec(ctx, "update-dag", []byte(invalidContent))
 	require.Error(t, err)
+}
+
+// Two saves from the same read of a DAG: one writes, the other gets a
+// conflict and writes nothing.
+func TestUpdateSpecIfMatch(t *testing.T) {
+	tmpDir := fileutil.MustTempDir("test-update-spec-if-match")
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	store := newRepository(tmpDir, WithSkipExamples(true))
+	ctx := context.Background()
+	initial := "name: cas-dag\nsteps:\n  - name: step1\n    run: echo initial\n"
+	require.NoError(t, store.Create(ctx, "cas-dag", []byte(initial)))
+	sum := sha256.Sum256([]byte(initial))
+	base := hex.EncodeToString(sum[:])
+
+	contents := []string{
+		"name: cas-dag\nsteps:\n  - name: step1\n    run: echo first\n",
+		"name: cas-dag\nsteps:\n  - name: step1\n    run: echo second\n",
+	}
+	errs := make([]error, len(contents))
+	var wg sync.WaitGroup
+	for i, content := range contents {
+		wg.Go(func() { errs[i] = store.UpdateSpecIfMatch(ctx, "cas-dag", base, []byte(content)) })
+	}
+	wg.Wait()
+
+	var won []string
+	for i, err := range errs {
+		if err == nil {
+			won = append(won, contents[i])
+			continue
+		}
+		require.ErrorIs(t, err, persis.ErrConflict)
+	}
+	require.Len(t, won, 1)
+	spec, err := store.GetSpec(ctx, "cas-dag")
+	require.NoError(t, err)
+	assert.Equal(t, won[0], spec)
 }
 
 func TestDelete(t *testing.T) {

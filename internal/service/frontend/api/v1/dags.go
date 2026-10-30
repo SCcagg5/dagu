@@ -348,16 +348,14 @@ func (a *API) UpdateDAGSpec(ctx context.Context, request api.UpdateDAGSpecReques
 	if err := a.requireDAGWriteForWorkspace(ctx, dagWorkspaceName(currentDAG)); err != nil {
 		return nil, err
 	}
-	if expected := request.Body.ExpectedSha256; expected != nil {
+	expected := request.Body.ExpectedSha256
+	if expected != nil {
 		current, err := a.dagRepository.GetSpec(ctx, request.FileName)
 		if err != nil {
 			return nil, err
 		}
 		if actual := specSHA256(current); actual != *expected {
-			return api.UpdateDAGSpec409JSONResponse{
-				Code:    api.ErrorCodeConflict,
-				Message: fmt.Sprintf("DAG %s changed since it was read: expected sha256 %s, current sha256 %s", request.FileName, *expected, actual),
-			}, nil
+			return specConflict(request.FileName, *expected, actual), nil
 		}
 	}
 	nextDAG, err := a.dagRepository.LoadSpec(ctx,
@@ -374,7 +372,20 @@ func (a *API) UpdateDAGSpec(ctx context.Context, request api.UpdateDAGSpecReques
 		}
 	}
 
-	err = a.dagRepository.UpdateSpec(ctx, request.FileName, []byte(request.Body.Spec))
+	if expected != nil {
+		// The check above answers early; this one holds against a write that
+		// lands after it.
+		err = a.dagRepository.UpdateSpecIfMatch(ctx, request.FileName, *expected, []byte(request.Body.Spec))
+	} else {
+		err = a.dagRepository.UpdateSpec(ctx, request.FileName, []byte(request.Body.Spec))
+	}
+	if errors.Is(err, persis.ErrConflict) {
+		current, readErr := a.dagRepository.GetSpec(ctx, request.FileName)
+		if readErr != nil {
+			return nil, readErr
+		}
+		return specConflict(request.FileName, *expected, specSHA256(current)), nil
+	}
 
 	var errs []string
 
@@ -392,7 +403,11 @@ func (a *API) UpdateDAGSpec(ctx context.Context, request api.UpdateDAGSpecReques
 	written := request.Body.Spec
 	if len(errs) > 0 {
 		// The repository rejected the spec, so the file still holds the old bytes.
-		written, _ = a.dagRepository.GetSpec(ctx, request.FileName)
+		current, err := a.dagRepository.GetSpec(ctx, request.FileName)
+		if err != nil {
+			return nil, err
+		}
+		written = current
 	}
 	return api.UpdateDAGSpec200JSONResponse{
 		Errors: errs,
@@ -401,6 +416,14 @@ func (a *API) UpdateDAGSpec(ctx context.Context, request api.UpdateDAGSpecReques
 }
 
 // specSHA256 returns the lowercase hex SHA-256 of the spec bytes.
+// specConflict answers a save of a spec that changed since the client read it.
+func specConflict(fileName, expected, actual string) api.UpdateDAGSpec409JSONResponse {
+	return api.UpdateDAGSpec409JSONResponse{
+		Code:    api.ErrorCodeConflict,
+		Message: fmt.Sprintf("DAG %s changed since it was read: expected sha256 %s, current sha256 %s", fileName, expected, actual),
+	}
+}
+
 func specSHA256(spec string) string {
 	sum := sha256.Sum256([]byte(spec))
 	return hex.EncodeToString(sum[:])
