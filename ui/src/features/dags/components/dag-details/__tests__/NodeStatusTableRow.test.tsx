@@ -1,7 +1,13 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
@@ -803,8 +809,9 @@ describe('NodeStatusTableRow', () => {
         }
       );
     });
-    expect(await screen.findByText('Step retry started')).toBeVisible();
-    expect(refresh).toHaveBeenCalled();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    // A success shows no notification in the middle of the screen.
+    expect(screen.queryByText('Step retry started')).toBeNull();
   });
 
   it('retries the selected step and downstream steps when requested', async () => {
@@ -877,8 +884,9 @@ describe('NodeStatusTableRow', () => {
         }
       );
     });
-    expect(await screen.findByText('Step retry started')).toBeVisible();
-    expect(refresh).toHaveBeenCalled();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    // A success shows no notification in the middle of the screen.
+    expect(screen.queryByText('Step retry started')).toBeNull();
   });
 
   it('sends bypassPreconditions when the checkbox is checked', async () => {
@@ -951,8 +959,9 @@ describe('NodeStatusTableRow', () => {
         }
       );
     });
-    expect(await screen.findByText('Step retry started')).toBeVisible();
-    expect(refresh).toHaveBeenCalled();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    // A success shows no notification in the middle of the screen.
+    expect(screen.queryByText('Step retry started')).toBeNull();
   });
 
   it('resets the bypass preconditions checkbox each time the dialog opens', async () => {
