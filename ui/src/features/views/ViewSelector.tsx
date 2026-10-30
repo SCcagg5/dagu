@@ -170,9 +170,6 @@ export function ViewSelector({
   const isCustomView = !activeView && !isAllView;
   const selectedLabel =
     activeView?.name ?? (isCustomView ? 'Custom view' : copy.allItems);
-  // With the toolbar buttons, the selector shows once a view is saved: with
-  // only "All workflows" it has nothing to choose.
-  const showSelector = !onRenameView || views.length > 0 || !isAllView;
   const normalizedName = viewName.trim();
   const duplicateName = views.some(
     (view) => view.name.toLowerCase() === normalizedName.toLowerCase()
@@ -266,117 +263,149 @@ export function ViewSelector({
 
   return (
     <>
-      <div className="flex min-w-0 items-center gap-2">
-        {showSelector && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-9 min-w-[190px] max-w-[280px] justify-start px-3"
-                aria-label={copy.triggerAria(selectedLabel)}
-              >
-                {activeView?.pinned ? (
-                  <Star className="fill-current text-primary" />
-                ) : (
-                  <Bookmark />
-                )}
-                <span className="min-w-0 flex-1 truncate text-left">
-                  {selectedLabel}
-                </span>
-                {activeViewId === defaultViewId && (
-                  <Badge variant="primary" className="hidden sm:inline-flex">
-                    <I18nText text={'Default'} />
-                  </Badge>
-                )}
-                {isActiveViewEdited && (
-                  <Badge variant="secondary">
-                    <I18nText text={'Edited'} />
-                  </Badge>
-                )}
-                <ChevronDown className="text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[280px]">
-              <DropdownMenuItem onSelect={onShowAll}>
-                <span className="mr-2 flex size-4 items-center justify-center">
-                  {isAllView && <Check />}
-                </span>
-                <I18nText text={copy.allItems} />
-              </DropdownMenuItem>
-
-              {views.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[11px] text-muted-foreground">
-                    <I18nText text={'Shared views'} />
-                  </DropdownMenuLabel>
-                  {views.map((view) => (
-                    <DropdownMenuItem
-                      key={view.id}
-                      onSelect={() => onSelectView(view.id)}
-                    >
-                      <span className="mr-2 flex size-4 items-center justify-center">
-                        {view.id === activeViewId && <Check />}
-                      </span>
-                      <span className="min-w-0 flex-1 whitespace-normal break-words">
-                        {view.name}
-                      </span>
-                      {view.pinned && (
-                        <Star className="fill-current text-primary" />
-                      )}
-                      {view.id === defaultViewId && (
-                        <Badge variant="primary">
-                          <I18nText text={'Default'} />
-                        </Badge>
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </>
+      <div
+        className={
+          // With the toolbar, the selector is a child of the row of the page,
+          // and the toolbar goes to the end of that row.
+          onRenameView ? 'contents' : 'flex min-w-0 items-center gap-2'
+        }
+      >
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 min-w-[190px] max-w-[280px] justify-start px-3"
+              aria-label={copy.triggerAria(selectedLabel)}
+            >
+              {activeView?.pinned ? (
+                <Star className="fill-current text-primary" />
+              ) : (
+                <Bookmark />
               )}
+              <span className="min-w-0 flex-1 truncate text-left">
+                {selectedLabel}
+              </span>
+              {activeViewId === defaultViewId && (
+                <Badge variant="primary" className="hidden sm:inline-flex">
+                  <I18nText text={'Default'} />
+                </Badge>
+              )}
+              {isActiveViewEdited && (
+                <Badge variant="secondary">
+                  <I18nText text={'Edited'} />
+                </Badge>
+              )}
+              <ChevronDown className="text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[280px]">
+            <DropdownMenuItem onSelect={onShowAll}>
+              <span className="mr-2 flex size-4 items-center justify-center">
+                {isAllView && <Check />}
+              </span>
+              <I18nText text={copy.allItems} />
+            </DropdownMenuItem>
 
-              {activeView && isActiveViewEdited && (
-                <>
-                  <DropdownMenuSeparator />
-                  {canManageViews && (
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        void runMutation(onUpdateView).catch(() => undefined)
-                      }
-                      disabled={isMutating}
-                    >
-                      <Save className="mr-2" />
-                      <I18nText
-                        text="Update “{name}”"
-                        values={{ name: activeView.name }}
-                      />
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onSelect={onResetView}>
-                    <RotateCcw className="mr-2" />
-                    <I18nText text={'Reset changes'} />
+            {views.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[11px] text-muted-foreground">
+                  <I18nText text={'Shared views'} />
+                </DropdownMenuLabel>
+                {views.map((view) => (
+                  <DropdownMenuItem
+                    key={view.id}
+                    onSelect={() => onSelectView(view.id)}
+                  >
+                    <span className="mr-2 flex size-4 items-center justify-center">
+                      {view.id === activeViewId && <Check />}
+                    </span>
+                    <span className="min-w-0 flex-1 whitespace-normal break-words">
+                      {view.name}
+                    </span>
+                    {view.pinned && (
+                      <Star className="fill-current text-primary" />
+                    )}
+                    {view.id === defaultViewId && (
+                      <Badge variant="primary">
+                        <I18nText text={'Default'} />
+                      </Badge>
+                    )}
                   </DropdownMenuItem>
-                </>
-              )}
+                ))}
+              </>
+            )}
 
-              {canManageViews && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={openSaveDialog}>
+            {activeView && isActiveViewEdited && (
+              <>
+                <DropdownMenuSeparator />
+                {canManageViews && (
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      void runMutation(onUpdateView).catch(() => undefined)
+                    }
+                    disabled={isMutating}
+                  >
                     <Save className="mr-2" />
-                    <I18nText text={'Save current filters as view…'} />
+                    <I18nText
+                      text="Update “{name}”"
+                      values={{ name: activeView.name }}
+                    />
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setManageDialogOpen(true)}>
-                    <Settings2 className="mr-2" />
-                    <I18nText text={'Manage views…'} />
+                )}
+                <DropdownMenuItem onSelect={onResetView}>
+                  <RotateCcw className="mr-2" />
+                  <I18nText text={'Reset changes'} />
+                </DropdownMenuItem>
+              </>
+            )}
+
+            {canManageViews && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={openSaveDialog}>
+                  <Save className="mr-2" />
+                  <I18nText text={'Save current filters as view…'} />
+                </DropdownMenuItem>
+                {activeView && (
+                  <DropdownMenuItem
+                    onSelect={() => requestDelete(activeView, false)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2" />
+                    <I18nText text={'Delete view'} />
                   </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+                )}
+                <DropdownMenuItem onSelect={() => setManageDialogOpen(true)}>
+                  <Settings2 className="mr-2" />
+                  <I18nText text={'Manage views…'} />
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {onRenameView && canManageViews && (
-          <div className="flex items-center gap-1">
+          <div className="order-last flex items-center gap-1">
+            {activeView && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  title={ts('Rename view')}
+                  aria-label={ts('Rename view')}
+                  disabled={isMutating}
+                  onClick={() => {
+                    setRenameName(activeView.name);
+                    setRenameOpen(true);
+                  }}
+                >
+                  <PencilLine />
+                </Button>
+              </>
+            )}
             <Button
               type="button"
               variant="primary"
@@ -401,37 +430,6 @@ export function ViewSelector({
             >
               <Save aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
             </Button>
-            {activeView && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9"
-                  title={ts('Rename view')}
-                  aria-label={ts('Rename view')}
-                  disabled={isMutating}
-                  onClick={() => {
-                    setRenameName(activeView.name);
-                    setRenameOpen(true);
-                  }}
-                >
-                  <PencilLine />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9"
-                  title={ts('Delete view')}
-                  aria-label={ts('Delete view')}
-                  disabled={isMutating}
-                  onClick={() => requestDelete(activeView, false)}
-                >
-                  <Trash2 />
-                </Button>
-              </>
-            )}
           </div>
         )}
       </div>

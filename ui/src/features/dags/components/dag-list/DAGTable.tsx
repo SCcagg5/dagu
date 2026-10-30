@@ -525,9 +525,9 @@ const columnHelper = createColumnHelper<Data>();
 
 const deleteSelectionColumn = columnHelper.display({
   id: 'Select',
-  size: 28,
-  minSize: 28,
-  maxSize: 28,
+  size: 24,
+  minSize: 24,
+  maxSize: 24,
   header: ({ table }) => (
     <div className="flex h-8 items-center justify-center">
       <I18nProps>
@@ -567,6 +567,37 @@ const deleteSelectionColumn = columnHelper.display({
 });
 
 const defaultColumns = [
+  columnHelper.display({
+    id: 'Pin',
+    size: 24,
+    minSize: 24,
+    maxSize: 24,
+    header: () => (
+      <span className="sr-only">
+        <I18nText text={'Pinned'} />
+      </span>
+    ),
+    cell: ({ row, table }) => {
+      if (row.original.kind !== ItemKind.DAG) {
+        return null;
+      }
+      const dag = (row.original as DAGRow).dag;
+      const meta = table.options.meta;
+      return (
+        <div className="flex min-h-[2.5rem] items-center justify-center">
+          <PinToggle
+            name={dag.dag.name}
+            pinned={dag.pinned}
+            canToggle={meta?.canPinDAG?.(dag) ?? false}
+            pending={meta?.isPinPending?.(dag.fileName)}
+            revealOnHover
+            className="size-5"
+            onToggle={() => meta?.onTogglePin?.(dag)}
+          />
+        </div>
+      );
+    },
+  }),
   columnHelper.accessor('name', {
     id: 'Expand',
     header: ({ table }) => (
@@ -631,37 +662,6 @@ const defaultColumns = [
     size: 24,
     minSize: 24,
     maxSize: 24,
-  }),
-  columnHelper.display({
-    id: 'Pin',
-    size: 28,
-    minSize: 28,
-    maxSize: 28,
-    header: () => (
-      <span className="sr-only">
-        <I18nText text={'Pinned'} />
-      </span>
-    ),
-    cell: ({ row, table }) => {
-      if (row.original.kind !== ItemKind.DAG) {
-        return null;
-      }
-      const dag = (row.original as DAGRow).dag;
-      const meta = table.options.meta;
-      return (
-        <div className="flex min-h-[2.5rem] items-center justify-center">
-          <PinToggle
-            name={dag.dag.name}
-            pinned={dag.pinned}
-            canToggle={meta?.canPinDAG?.(dag) ?? false}
-            pending={meta?.isPinPending?.(dag.fileName)}
-            revealOnHover
-            className="size-5"
-            onToggle={() => meta?.onTogglePin?.(dag)}
-          />
-        </div>
-      );
-    },
   }),
   columnHelper.accessor('name', {
     id: 'Name',
@@ -915,7 +915,7 @@ const defaultColumns = [
       return (
         // Wrap DAGActions in a div and stop propagation on its click
         <div
-          className="flex items-center justify-center gap-0.5"
+          className="flex items-center justify-end gap-0.5"
           onClick={(e) => e.stopPropagation()}
         >
           <DAGActions
@@ -1815,9 +1815,9 @@ function DAGTable({
         >
           {/* Column widths: Select 40px, Expand 32px, Name 28%, LastRun 88px, Activity auto, Schedule 220px, Actions 160px */}
           <colgroup>
-            {canDeleteDAGs && <col style={{ width: '28px' }} />}
+            {canDeleteDAGs && <col style={{ width: '24px' }} />}
             <col style={{ width: '24px' }} />
-            <col style={{ width: '28px' }} />
+            <col style={{ width: '24px' }} />
             <col style={{ width: '28%' }} />
             <col style={{ width: '88px' }} />
             <col className={activityColumn.col} />
