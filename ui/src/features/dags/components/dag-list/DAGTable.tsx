@@ -509,6 +509,7 @@ declare module '@tanstack/react-table' {
     onOpenRenameDAG?: (dag: components['schemas']['DAGFile']) => void;
     canDeleteDAGs?: boolean;
     canPinDAG?: (dag: components['schemas']['DAGFile']) => boolean;
+    onToggleGroupPin?: (dags: components['schemas']['DAGFile'][]) => void;
     isPinPending?: (fileName: string) => boolean;
     onTogglePin?: (dag: components['schemas']['DAGFile']) => void;
     isActivityExpanded?: (fileName: string) => boolean;
@@ -579,11 +580,32 @@ const defaultColumns = [
       </span>
     ),
     cell: ({ row, table }) => {
-      if (row.original.kind !== ItemKind.DAG) {
-        return null;
+      const meta = table.options.meta;
+      if (row.original.kind === ItemKind.Group) {
+        const members = (row.original.subRows ?? [])
+          .filter((item): item is DAGRow => item.kind === ItemKind.DAG)
+          .map((item) => item.dag);
+        if (members.length === 0) {
+          return null;
+        }
+        return (
+          <div className="flex min-h-[2.5rem] items-center justify-center">
+            <PinToggle
+              name={row.original.name}
+              subject="group"
+              pinned={members.every((dag) => dag.pinned)}
+              canToggle={members.every((dag) => meta?.canPinDAG?.(dag))}
+              pending={members.some((dag) =>
+                meta?.isPinPending?.(dag.fileName)
+              )}
+              revealOnHover
+              className="size-5"
+              onToggle={() => meta?.onToggleGroupPin?.(members)}
+            />
+          </div>
+        );
       }
       const dag = (row.original as DAGRow).dag;
-      const meta = table.options.meta;
       return (
         <div className="flex min-h-[2.5rem] items-center justify-center">
           <PinToggle
@@ -1215,6 +1237,18 @@ function DAGTable({
     },
     [onSetDAGPinned]
   );
+  // A group is pinned when every workflow of it is: pinning it pins them all,
+  // one after the other, and unpinning it unpins them all.
+  const toggleGroupPin = useCallback(
+    async (members: components['schemas']['DAGFile'][]) => {
+      const pin = !members.every((dag) => dag.pinned);
+      for (const dag of members) {
+        if (dag.pinned === pin) continue;
+        await togglePin(dag);
+      }
+    },
+    [togglePin]
+  );
   const [expanded, setExpanded] = useState<ExpandedState>(() => {
     try {
       const saved = localStorage.getItem('dagu_dag_table_expanded');
@@ -1470,7 +1504,7 @@ function DAGTable({
   );
 
   // Transform the flat list of DAGs into a hierarchical structure with groups.
-  // Pinned DAGs lead as flat rows, even when they belong to a group.
+  // Pinned DAGs lead as flat rows, unless their whole group is pinned.
   const data = useMemo(() => {
     const sortedDags = [...dags];
 
@@ -1478,10 +1512,27 @@ function DAGTable({
       sortedDags.sort(compareDags);
     }
 
+    // A group whose workflows are all pinned stays a group, and leads the
+    // list; any other pinned workflow leads as a flat row.
+    const membersOf: { [key: string]: typeof sortedDags } = {};
+    sortedDags.forEach((dag) => {
+      const groupName = dag.dag.group;
+      if (groupName) (membersOf[groupName] ??= []).push(dag);
+    });
+    const pinnedGroupNames = new Set(
+      Object.entries(membersOf)
+        .filter(([, members]) => members.every((dag) => dag.pinned))
+        .map(([name]) => name)
+    );
+    const inPinnedGroup = (dag: (typeof sortedDags)[number]) =>
+      !!dag.dag.group && pinnedGroupNames.has(dag.dag.group);
+
     const pinnedRows: Data[] = sortedDags
-      .filter((dag) => dag.pinned)
+      .filter((dag) => dag.pinned && !inPinnedGroup(dag))
       .map((dag) => ({ kind: ItemKind.DAG, name: dag.dag.name, dag }));
-    const unpinnedDags = sortedDags.filter((dag) => !dag.pinned);
+    const unpinnedDags = sortedDags.filter(
+      (dag) => !dag.pinned || inPinnedGroup(dag)
+    );
 
     const groups: { [key: string]: Data } = {};
     unpinnedDags.forEach((dag) => {
@@ -1515,7 +1566,12 @@ function DAGTable({
       });
     }
 
-    const hierarchicalData: Data[] = [...pinnedRows, ...Object.values(groups)];
+    const groupRows = Object.values(groups);
+    const hierarchicalData: Data[] = [
+      ...pinnedRows,
+      ...groupRows.filter((group) => pinnedGroupNames.has(group.name)),
+      ...groupRows.filter((group) => !pinnedGroupNames.has(group.name)),
+    ];
     // Add DAGs without a group
     unpinnedDags
       .filter((dag) => !dag.dag.group)
@@ -1570,6 +1626,7 @@ function DAGTable({
       canPinDAG,
       isPinPending: (fileName) => pendingPins.has(fileName),
       onTogglePin: (dag) => void togglePin(dag),
+      onToggleGroupPin: (dags) => void toggleGroupPin(dags),
       isActivityExpanded: (fileName) => expandedActivity.has(fileName),
       onToggleActivity: toggleActivity,
       onOpenRun: openRun,

@@ -27,6 +27,9 @@ export default defineMessages({
     'Could not update the webhook': 'Could not update the webhook',
     'Rename view': 'Rename view',
     'Save the changes of “{name}”': 'Save the changes of “{name}”',
+    'Pin group {name}': 'Pin group {name}',
+    'Pin group': 'Pin group',
+    'Unpin group': 'Unpin group',
   },
   'zh-CN': {
     'Runs in the last 24 hours': '过去 24 小时内的运行',
@@ -49,6 +52,9 @@ export default defineMessages({
     'Could not update the webhook': '无法更新 Webhook',
     'Rename view': '重命名视图',
     'Save the changes of “{name}”': '保存“{name}”的更改',
+    'Pin group {name}': '固定分组 {name}',
+    'Pin group': '固定分组',
+    'Unpin group': '取消固定分组',
   },
   ja: {
     'Runs in the last 24 hours': '過去 24 時間の実行',
@@ -71,5 +77,8 @@ export default defineMessages({
     'Could not update the webhook': 'Webhook を更新できませんでした',
     'Rename view': 'ビューの名前を変更',
     'Save the changes of “{name}”': '「{name}」の変更を保存',
+    'Pin group {name}': 'グループ {name} をピン留め',
+    'Pin group': 'グループをピン留め',
+    'Unpin group': 'グループのピン留めを解除',
   },
 });
