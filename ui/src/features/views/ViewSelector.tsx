@@ -427,20 +427,18 @@ export function ViewSelector({
             >
               <Save aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
             </Button>
-            {activeView && (
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                className="h-7 w-7 justify-center p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                title={ts('Delete view')}
-                aria-label={ts('Delete view')}
-                disabled={isMutating}
-                onClick={() => requestDelete(activeView, false)}
-              >
-                <Trash2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              className="h-7 w-7 justify-center p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              title={ts('Delete view')}
+              aria-label={ts('Delete view')}
+              disabled={isMutating || !activeView}
+              onClick={() => activeView && requestDelete(activeView, false)}
+            >
+              <Trash2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+            </Button>
           </div>
         )}
       </div>

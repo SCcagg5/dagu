@@ -1712,6 +1712,7 @@ function DAGTable({
             <Button
               type="button"
               variant="destructive"
+              className="order-last"
               disabled={isDeleting}
               onClick={() => {
                 setDeleteError(null);
