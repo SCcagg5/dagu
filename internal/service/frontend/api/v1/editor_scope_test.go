@@ -36,6 +36,7 @@ func TestBuildReferenceScope(t *testing.T) {
 			{Name: "region", Default: "eu", Description: "target"},
 			{Name: "count", Default: 3},
 			{Name: "free"},
+			{Name: "blank", Default: ""},
 			{},
 		},
 		Steps: []ir.Step{
@@ -52,13 +53,16 @@ func TestBuildReferenceScope(t *testing.T) {
 	scope := buildReferenceScope(dag)
 	require.NotNil(t, scope)
 
-	require.Len(t, scope.Params, 3)
+	require.Len(t, scope.Params, 4)
 	assert.Equal(t, "${params.region}", scope.Params[0].Reference)
 	require.NotNil(t, scope.Params[0].DefaultValue)
 	assert.Equal(t, "eu", *scope.Params[0].DefaultValue)
 	require.NotNil(t, scope.Params[0].Description)
 	assert.Equal(t, "3", *scope.Params[1].DefaultValue)
 	assert.Nil(t, scope.Params[2].DefaultValue)
+	// An empty default is a default, unlike no default.
+	require.NotNil(t, scope.Params[3].DefaultValue)
+	assert.Empty(t, *scope.Params[3].DefaultValue)
 
 	require.Len(t, scope.Steps, 2)
 	fetch := scope.Steps[0]
