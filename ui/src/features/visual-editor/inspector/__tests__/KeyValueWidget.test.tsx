@@ -61,6 +61,21 @@ describe('KeyValueEditor', () => {
     expect(onChange).toHaveBeenCalledWith({ TOKEN: '1' });
   });
 
+  // Names of Object.prototype members are ordinary keys.
+  it('sends a key that matches an inherited property', () => {
+    const onChange = vi.fn();
+    render(<KeyValueEditor value={{}} readOnly={false} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add entry' }));
+    fireEvent.change(screen.getByLabelText('Key'), {
+      target: { value: 'constructor' },
+    });
+    fireEvent.change(screen.getByLabelText('Value'), {
+      target: { value: '1' },
+    });
+    fireEvent.blur(screen.getByLabelText('Value'));
+    expect(onChange).toHaveBeenCalledWith({ constructor: '1' });
+  });
+
   it('keeps the key order on a rename', () => {
     const onChange = vi.fn();
     render(
