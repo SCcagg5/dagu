@@ -80,6 +80,15 @@ describe('summarizeSchedules', () => {
     expect(wording('0 9 1 * *')).toBeNull();
   });
 
+  it('keeps a step raw when the step does not divide its range', () => {
+    const wording = (expression: string) =>
+      summarizeSchedules([cron(expression)], NOW, UTC).lead?.wording;
+    // :00 and :45 of each hour: the gaps are 45 and 15 minutes.
+    expect(wording('*/45 * * * *')).toBeNull();
+    // 00, 05, ..., 20 and again 00: the last gap is 4 hours.
+    expect(wording('0 */5 * * *')).toBeNull();
+  });
+
   it('reads the zone of the server and the zone of one schedule', () => {
     const daily = summarizeSchedules([cron('0 9 * * *')], NOW, {
       timeZone: 'Asia/Tokyo',
@@ -125,8 +134,7 @@ describe('summarizeSchedules', () => {
   });
 
   it('lets the server next run name the lead schedule', () => {
-    // The browser zone differs from the server: the computed times are off,
-    // but the schedule closest to the server time still leads.
+    // The server time matches one computed time: that schedule leads.
     const summary = summarizeSchedules(
       [cron('0 12 * * *'), cron('*/20 * * * *')],
       NOW,
@@ -134,6 +142,17 @@ describe('summarizeSchedules', () => {
     );
     expect(summary.lead?.expression).toBe('*/20 * * * *');
     expect(summary.nextRun?.toISOString()).toBe('2026-10-26T10:20:00.000Z');
+  });
+
+  it('takes the server next run that no computed time matches', () => {
+    // The zone of the server is not the one given: the computed time is
+    // hours off, and the server time still gives the next run.
+    const summary = summarizeSchedules([cron('0 9 * * *')], NOW, {
+      timeZone: 'UTC',
+      serverNextRun: new Date('2026-10-27T00:00:00Z'),
+    });
+    expect(summary.lead?.expression).toBe('0 9 * * *');
+    expect(summary.nextRun?.toISOString()).toBe('2026-10-27T00:00:00.000Z');
   });
 
   it('keeps an overdue one-off that the server still plans', () => {

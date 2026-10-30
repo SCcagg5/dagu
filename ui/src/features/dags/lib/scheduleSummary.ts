@@ -106,9 +106,11 @@ function describeCron(body: string): ScheduleWording | null {
 
   if (dow === '*') {
     if (minute === '*' && hour === '*') return { key: 'every minute' };
+    // A step that does not divide its range leaves an uneven last gap.
     const step = /^\*\/(\d+)$/.exec(minute);
-    if (step && hour === '*' && Number(step[1]) > 0) {
-      return describeMinutes(Number(step[1]));
+    if (step && hour === '*') {
+      const n = Number(step[1]);
+      if (n > 0 && 60 % n === 0) return describeMinutes(n);
     }
     if (isNumber(minute) && hour === '*') {
       return minute === '0'
@@ -116,8 +118,9 @@ function describeCron(body: string): ScheduleWording | null {
         : { key: 'hourly at :{minute}', values: { minute: pad(minute) } };
     }
     const hourStep = /^\*\/(\d+)$/.exec(hour);
-    if (minute === '0' && hourStep && Number(hourStep[1]) > 0) {
-      return describeMinutes(Number(hourStep[1]) * 60);
+    if (minute === '0' && hourStep) {
+      const n = Number(hourStep[1]);
+      if (n > 0 && 24 % n === 0) return describeMinutes(n * 60);
     }
   }
 
@@ -249,7 +252,7 @@ export function summarizeSchedules(
       nextRun = server;
     } else if (entries[0]?.next) {
       lead = entries[0];
-      nextRun = lead.next;
+      nextRun = server ?? lead.next;
     } else if (server) {
       nextRun = server;
     }
