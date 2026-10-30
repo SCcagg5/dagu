@@ -21,6 +21,7 @@ export function CompactCount({ value, className }: Props): ReactElement {
   const exact = formatExactCount(value, locale);
   return (
     <span
+      role="img"
       title={exact}
       aria-label={exact}
       data-testid="compact-count"

@@ -4,6 +4,11 @@
 type DAGRunPageURLInput = {
   rootDAGRunName: string;
   rootDAGRunId: string;
+  /**
+   * The workflow file of the root run. A caller that has it passes it: the
+   * name of a DAG can differ from the name of its file.
+   */
+  fileName?: string;
   remoteNode: string;
   /** Workspace scope (?workspace) to keep on the target page. */
   workspace?: string;
@@ -62,13 +67,14 @@ function appendQuery(path: string, params: URLSearchParams): string {
 export function buildDAGRunPageURL({
   rootDAGRunName,
   rootDAGRunId,
+  fileName,
   remoteNode,
   workspace,
   step,
   dock,
 }: DAGRunPageURLInput): string {
   return buildWorkspaceDAGPageURL({
-    fileName: rootDAGRunName,
+    fileName: fileName ?? rootDAGRunName,
     remoteNode,
     workspace,
     run: rootDAGRunId,

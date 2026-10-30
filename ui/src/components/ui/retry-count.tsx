@@ -18,6 +18,7 @@ export function RetryCount({ count }: { count: number }): ReactElement {
       variant="warning"
       size="sm"
       className="tabular-nums"
+      role="img"
       title={label}
       aria-label={label}
       data-testid="retry-count"
