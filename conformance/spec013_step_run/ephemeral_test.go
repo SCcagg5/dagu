@@ -240,9 +240,10 @@ func TestEphemeralNeedsSteps(t *testing.T) {
 	waitForStatus(t, server, name, runID, api.StatusSuccess)
 }
 
-// A step in outputs must name the run its values come from, and a source must
-// be for a step in outputs. A source run that does not exist is accepted.
-func TestOutputsNeedSources(t *testing.T) {
+// outputsSources is optional: a step in outputs without an entry runs with its
+// values and has no reused input. A source must be for a step in outputs. A
+// source run that does not exist is accepted.
+func TestOutputsSources(t *testing.T) {
 	server := newServer(t)
 	const name = "outputs_sources_rules"
 	createDAG(t, server, name, stepRunDAG)
@@ -252,21 +253,27 @@ func TestOutputsNeedSources(t *testing.T) {
 		return server.Client().Post(path, body).ExpectStatus(http.StatusBadRequest).Send(t).Body
 	}
 
-	body := post(map[string]any{
+	noSources := startRun(t, server, path, map[string]any{
 		"steps":   []string{"consume"},
 		"outputs": explicitOutputs,
 	})
-	assert.Contains(t, body, "outputs for step build must name the run they come from (outputsSources)")
+	waitForStatus(t, server, name, noSources, api.StatusSuccess)
+	assert.Contains(t, stepLog(t, server, name, noSources, "consume"), "tag=v9.9.9 captured=from-the-front")
+	assert.Nil(t, runDetails(t, server, name, noSources).ReusedInputs)
 
-	// One step with no source is enough to reject the request.
-	body = post(map[string]any{
+	// Only the step that names its run has an entry.
+	oneSource := startRun(t, server, path, map[string]any{
 		"steps":          []string{"consume"},
 		"outputs":        explicitOutputs,
 		"outputsSources": map[string]any{"build": explicitSources["build"]},
 	})
-	assert.Contains(t, body, "outputs for step capture must name the run they come from (outputsSources)")
+	waitForStatus(t, server, name, oneSource, api.StatusSuccess)
+	inputs := *runDetails(t, server, name, oneSource).ReusedInputs
+	require.Len(t, inputs, 1)
+	assert.Equal(t, "build", inputs[0].Step)
+	assert.Equal(t, api.ReusedInputViaCache, inputs[0].Via)
 
-	body = post(map[string]any{
+	body := post(map[string]any{
 		"steps":          []string{"consume"},
 		"outputs":        map[string]map[string]string{"build": {"image_tag": "v1"}},
 		"outputsSources": explicitSources,
@@ -281,12 +288,12 @@ func TestOutputsNeedSources(t *testing.T) {
 
 	// The inline-spec endpoint applies the same rule.
 	resp := server.Client().Post("/api/v1/dag-runs", map[string]any{
-		"spec":    stepRunDAG,
-		"name":    "inline_no_source",
-		"steps":   []string{"consume"},
-		"outputs": explicitOutputs,
+		"spec":           stepRunDAG,
+		"name":           "inline_source_only",
+		"steps":          []string{"consume"},
+		"outputsSources": explicitSources,
 	}).ExpectStatus(http.StatusBadRequest).Send(t)
-	assert.Contains(t, resp.Body, "must name the run they come from (outputsSources)")
+	assert.Contains(t, resp.Body, "outputsSources names step")
 
 	// An invalid run ID or time is a 400 too.
 	post(map[string]any{

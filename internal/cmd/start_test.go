@@ -744,6 +744,39 @@ func TestCmdStart_Only(t *testing.T) {
 		requireNoRun(t, th, dag.Name, "only")
 	})
 
+	// The deprecated --output stands in for the skipped producer without any
+	// earlier run, and records no source run.
+	t.Run("SetsOutput", func(t *testing.T) {
+		t.Parallel()
+		th := test.SetupCommand(t)
+		dag := th.DAG(t, outputsDAG)
+
+		th.RunCommand(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=only", "--only=consume", "--output=produce.VALUE=given", dag.Location},
+		})
+
+		status := readRunStatus(t, th, dag.Name, "only")
+		require.Equal(t, []ir.NodeStatus{ir.NodeSkipped, ir.NodeSucceeded}, nodeStatuses(status))
+		require.Equal(t, "RESULT=got-given", outputVariable(t, status.Nodes[1], "RESULT"))
+		require.Empty(t, status.ReusedInputs)
+	})
+
+	t.Run("OutputOverridesSource", func(t *testing.T) {
+		t.Parallel()
+		th := test.SetupCommand(t)
+		dag := th.DAG(t, outputsDAG)
+		th.RunCommand(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=source", dag.Location},
+		})
+
+		th.RunCommand(t, cmd.Start(), test.CmdTest{
+			Args: []string{"start", "--run-id=only", "--only=consume", "--outputs-from=source", "--output=produce.VALUE=given", dag.Location},
+		})
+
+		status := readRunStatus(t, th, dag.Name, "only")
+		require.Equal(t, "RESULT=got-given", outputVariable(t, status.Nodes[1], "RESULT"))
+	})
+
 	// A failed producer publishes no outputs, so none are carried into the
 	// selected step.
 	t.Run("FailedSource", func(t *testing.T) {
@@ -786,8 +819,11 @@ func TestCmdStart_Only(t *testing.T) {
 		{name: "OutputFromWithoutRun", args: []string{"--only=third", "--output-from=first"}, wantErr: `invalid --output-from "first": expected <step>=<run-id>`},
 		{name: "OutputFromWithoutStep", args: []string{"--only=third", "--output-from==source"}, wantErr: `invalid --output-from "=source": expected <step>=<run-id>`},
 		{name: "OutputFromTwice", args: []string{"--only=third", "--output-from=first=a", "--output-from=first=b"}, wantErr: `--output-from names step "first" more than once`},
-		{name: "OutputRemoved", args: []string{"--only=third", "--output=first.value=x"}, wantErr: "the --output flag was removed: use --output-from <step>=<run-id>"},
-		{name: "OutputRemovedWithoutOnly", args: []string{"--output=first.value=x"}, wantErr: "the --output flag was removed: use --output-from <step>=<run-id>"},
+		{name: "OutputNeedsOnly", args: []string{"--output=first.value=x"}, wantErr: "--output requires --only"},
+		{name: "OutputWithoutValue", args: []string{"--only=third", "--output=first.value"}, wantErr: `invalid --output "first.value": expected <step>.<name>=<value>`},
+		{name: "OutputWithoutName", args: []string{"--only=third", "--output=first=x"}, wantErr: `invalid --output "first": expected <step>.<name>=<value>`},
+		{name: "OutputTwice", args: []string{"--only=third", "--output=first.value=a", "--output=first.value=b"}, wantErr: `--output sets "first.value" more than once`},
+		{name: "OutputOfSelectedStep", args: []string{"--only=third", "--output=third.value=x"}, wantErr: `cannot set outputs of step "third": it is selected to run`},
 	}
 	for _, tt := range rejects {
 		t.Run(tt.name, func(t *testing.T) {

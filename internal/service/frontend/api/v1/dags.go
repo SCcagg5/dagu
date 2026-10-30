@@ -415,7 +415,6 @@ func (a *API) UpdateDAGSpec(ctx context.Context, request api.UpdateDAGSpecReques
 	}, nil
 }
 
-// specSHA256 returns the lowercase hex SHA-256 of the spec bytes.
 // specConflict answers a save of a spec that changed since the client read it.
 func specConflict(fileName, expected, actual string) api.UpdateDAGSpec409JSONResponse {
 	return api.UpdateDAGSpec409JSONResponse{
@@ -424,6 +423,7 @@ func specConflict(fileName, expected, actual string) api.UpdateDAGSpec409JSONRes
 	}
 }
 
+// specSHA256 returns the lowercase hex SHA-256 of the spec bytes.
 func specSHA256(spec string) string {
 	sum := sha256.Sum256([]byte(spec))
 	return hex.EncodeToString(sum[:])

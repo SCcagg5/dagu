@@ -141,15 +141,6 @@ func TestStartStepsRejects(t *testing.T) {
 			wantMsg:    `cannot set outputs of step "consume": it is selected to run`,
 		},
 		{
-			name: "OutputWithoutSource",
-			req: selectedStepsStart{selection: stepSelection{
-				steps:   []string{"consume"},
-				outputs: map[string]map[string]string{"build": {"RESULT": "x"}},
-			}, dagRunID: "run"},
-			wantStatus: http.StatusBadRequest,
-			wantMsg:    "outputs for step build must name the run they come from (outputsSources)",
-		},
-		{
 			name: "SourceWithoutOutput",
 			req: selectedStepsStart{selection: stepSelection{
 				steps:          []string{"consume"},

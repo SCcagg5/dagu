@@ -296,6 +296,7 @@ func TestRemoteStartSendsSteps(t *testing.T) {
 	require.NoError(t, command.Flags().Set("only", "load"))
 	require.NoError(t, command.Flags().Set("outputs-from", "source"))
 	require.NoError(t, command.Flags().Set("output-from", "extract=run-9"))
+	require.NoError(t, command.Flags().Set("output", "transform.rows=3"))
 	ctx := &Context{
 		Context: context.Background(),
 		Command: command,
@@ -311,7 +312,8 @@ func TestRemoteStartSendsSteps(t *testing.T) {
 	assert.Equal(t, "source", *body.OutputsFromRunId)
 	require.NotNil(t, body.OutputsFromRuns)
 	assert.Equal(t, map[string]string{"extract": "run-9"}, *body.OutputsFromRuns)
-	assert.Nil(t, body.Outputs)
+	require.NotNil(t, body.Outputs)
+	assert.Equal(t, map[string]map[string]string{"transform": {"rows": "3"}}, *body.Outputs)
 }
 
 // These cases replace process stdin and must remain sequential.

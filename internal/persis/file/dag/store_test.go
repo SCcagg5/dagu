@@ -1111,6 +1111,38 @@ func TestUpdateSpecIfMatch(t *testing.T) {
 	assert.Equal(t, won[0], spec)
 }
 
+// A plain update waits while a conditional update holds the lock of the file,
+// so it cannot land between the hash check and the write.
+func TestUpdateWaitsForSpecLock(t *testing.T) {
+	store := NewStore(t.TempDir(), WithSkipExamples(true))
+	ctx := context.Background()
+	initial := "name: lock-dag\nsteps:\n  - name: step1\n    run: echo initial\n"
+	require.NoError(t, store.Create(ctx, "lock-dag", []byte(initial)))
+	resolved, err := store.locateDAG(ctx, "lock-dag")
+	require.NoError(t, err)
+
+	unlock, err := store.lockSpec(ctx, "lock-dag", resolved)
+	require.NoError(t, err)
+	next := "name: lock-dag\nsteps:\n  - name: step1\n    run: echo next\n"
+	done := make(chan error, 1)
+	go func() { done <- store.Update(ctx, "lock-dag", []byte(next)) }()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("Update returned while the lock was held: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	current, err := os.ReadFile(resolved.ResolvedPath)
+	require.NoError(t, err)
+	assert.Equal(t, initial, string(current))
+
+	unlock()
+	require.NoError(t, <-done)
+	current, err = os.ReadFile(resolved.ResolvedPath)
+	require.NoError(t, err)
+	assert.Equal(t, next, string(current))
+}
+
 func TestDelete(t *testing.T) {
 	tmpDir := fileutil.MustTempDir("test-delete")
 	defer func() {

@@ -121,6 +121,8 @@ func TestParamsAreValidated(t *testing.T) {
 		{"events", url.Values{"limit": {"501"}}},
 		{"events", url.Values{"from": {"2026-02-01T00:00:00Z"}, "to": {"2026-01-01T00:00:00Z"}}},
 		{"events", url.Values{"before": {"bad"}}},
+		{"events", url.Values{"before": {"e0"}}},
+		{"events", url.Values{"before": {"e1"}}},
 	}
 	for _, tt := range bad {
 		t.Run(tt.endpoint+"?"+tt.query.Encode(), func(t *testing.T) {

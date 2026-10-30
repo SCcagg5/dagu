@@ -310,7 +310,7 @@ Shell selection order is:
 
 - `outputsSources` names the run that each step of `outputs` was captured from. It is an object keyed by step name or ID. Each value has `runId` and an optional `capturedAt`. It requires `steps`.
 
-- Every step in `outputs` MUST have an entry in `outputsSources`. A step in `outputs` with no entry is rejected with HTTP 400 and the message `outputs for step X must name the run they come from (outputsSources)`. An entry for a step that is not in `outputs` is also rejected with HTTP 400.
+- `outputsSources` is optional. A step in `outputs` with no entry is accepted and has no entry in `ReusedInputs`. An entry for a step that is not in `outputs` is rejected with HTTP 400.
 
 - `runId` MUST be a valid run ID, as for `outputsFromRunId`. The run does not need to exist, because the values can come from a run that was removed. `capturedAt` is an RFC 3339 timestamp. An invalid `runId` or `capturedAt` is rejected with HTTP 400.
 
@@ -334,7 +334,7 @@ Shell selection order is:
 
 - A step named in `--output-from` takes its outputs from its own run, not from `--outputs-from`. The run records `ReusedInputs` with `via` set to `run`, as for the server.
 
-- The command has no flag that sets an output value. The flag `--output <step>.<name>=<value>` was removed. The command stops with the message `the --output flag was removed: use --output-from <step>=<run-id>`.
+- `--output <step>.<name>=<value>` is the command line form of `outputs`. It is deprecated in favor of `--output-from`, and it still works: it requires `--only`, can be repeated, and takes precedence over `--outputs-from` and `--output-from` for that output. The command has no form of `outputsSources`, so a step set by `--output` has no entry in `ReusedInputs`.
 
 #### Handlers of a Selected-Steps Run
 
@@ -356,7 +356,7 @@ A graph end step is a step that no other step depends on. A dependency is an ent
 
 A selected-steps run records where the carried outputs of its skipped steps come from. The record is `ReusedInputs` in the run status.
 
-- `ReusedInputs` has one entry for each skipped step that carried outputs. The order of the entries is the order of the steps in the DAG.
+- `ReusedInputs` has one entry for each skipped step that carried outputs, except a step in `outputs` with no entry in `outputsSources`. The order of the entries is the order of the steps in the DAG.
 
 - Only a skipped step that a selected step depends on, directly or through other steps, carries outputs. This includes a step that `outputs` or `outputsFromRuns` names. A skipped step that no selected step depends on, such as a step after the selected steps, carries no outputs, no log and no times. It is recorded as skipped, has no entry, and shows no mark of reuse.
 
@@ -368,7 +368,7 @@ A selected-steps run records where the carried outputs of its skipped steps come
 
 - `via` is `cache` for a step whose outputs come from `outputs`. Then `runId` and `capturedAt` come from `outputsSources`, and the entry has no `startedAt` and no `finishedAt`. The web UI does not use this form.
 
-- A step that has a run and supplied outputs has the `cache` entry, because the values in `outputs` take precedence.
+- A step that has a run and supplied outputs has the `cache` entry, because the values in `outputs` take precedence. Without an entry in `outputsSources`, it has no entry.
 
 - A step that carried no outputs has no entry.
 

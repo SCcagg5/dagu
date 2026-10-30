@@ -21,14 +21,13 @@ type selectedSteps struct {
 	// outputFrom names, by step, the run that the step carries its outputs
 	// from instead of outputsFrom.
 	outputFrom map[string]string
+	// outputs are outputs of skipped steps, by step and then output name.
+	outputs map[string]map[string]string
 }
 
-// selectedStepsParams reads and validates --only, --outputs-from, and
-// --output-from. It rejects the removed --output flag.
+// selectedStepsParams reads and validates --only, --outputs-from,
+// --output-from, and the deprecated --output.
 func selectedStepsParams(ctx *Context) (selectedSteps, error) {
-	if ctx.Command.Flags().Changed(removedOutputFlag.name) {
-		return selectedSteps{}, fmt.Errorf("the --output flag was removed: use --output-from <step>=<run-id>")
-	}
 	steps, err := ctx.Command.Flags().GetStringArray(onlyFlag.name)
 	if err != nil {
 		return selectedSteps{}, fmt.Errorf("failed to get only: %w", err)
@@ -41,12 +40,19 @@ func selectedStepsParams(ctx *Context) (selectedSteps, error) {
 	if err != nil {
 		return selectedSteps{}, fmt.Errorf("failed to get output-from: %w", err)
 	}
+	outputEntries, err := ctx.Command.Flags().GetStringArray(outputFlag.name)
+	if err != nil {
+		return selectedSteps{}, fmt.Errorf("failed to get output: %w", err)
+	}
 	if len(steps) == 0 {
 		if outputsFrom != "" {
 			return selectedSteps{}, fmt.Errorf("--outputs-from requires --only")
 		}
 		if len(entries) > 0 {
 			return selectedSteps{}, fmt.Errorf("--output-from requires --only")
+		}
+		if len(outputEntries) > 0 {
+			return selectedSteps{}, fmt.Errorf("--output requires --only")
 		}
 		return selectedSteps{}, nil
 	}
@@ -62,7 +68,11 @@ func selectedStepsParams(ctx *Context) (selectedSteps, error) {
 	if err != nil {
 		return selectedSteps{}, err
 	}
-	return selectedSteps{steps: steps, outputsFrom: outputsFrom, outputFrom: outputFrom}, nil
+	outputs, err := parseStepOutputs(outputEntries)
+	if err != nil {
+		return selectedSteps{}, err
+	}
+	return selectedSteps{steps: steps, outputsFrom: outputsFrom, outputFrom: outputFrom, outputs: outputs}, nil
 }
 
 // parseOutputFrom parses --output-from entries of the form <step>=<run-id>.
@@ -89,6 +99,36 @@ func parseOutputFrom(entries []string) (map[string]string, error) {
 	return result, nil
 }
 
+// parseStepOutputs parses --output entries of the form <step>.<name>=<value>.
+// Output names never contain a dot, so the step is everything before the last
+// one. Errors quote only the part before "=", since values may be secrets.
+func parseStepOutputs(entries []string) (map[string]map[string]string, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	outputs := make(map[string]map[string]string)
+	for _, entry := range entries {
+		key, value, hasValue := strings.Cut(entry, "=")
+		dot := strings.LastIndex(key, ".")
+		if !hasValue || dot < 0 {
+			return nil, fmt.Errorf("invalid --output %q: expected <step>.<name>=<value>", key)
+		}
+		step := strings.TrimSpace(key[:dot])
+		name := strings.TrimSpace(key[dot+1:])
+		if step == "" || name == "" {
+			return nil, fmt.Errorf("invalid --output %q: expected <step>.<name>=<value>", key)
+		}
+		if _, exists := outputs[step][name]; exists {
+			return nil, fmt.Errorf("--output sets %q more than once", key)
+		}
+		if outputs[step] == nil {
+			outputs[step] = make(map[string]string)
+		}
+		outputs[step][name] = value
+	}
+	return outputs, nil
+}
+
 // runSelectedSteps starts a new run of dag in which only the selected steps
 // execute. The run is seeded as a queued attempt and executed through the
 // retry path, which leaves the seeded skipped steps alone.
@@ -109,7 +149,7 @@ func runSelectedSteps(ctx *Context, dag *ir.DAG, dagRunID, params string, opts r
 	if err != nil {
 		return err
 	}
-	nodes, reused, err := intake.SelectedStepNodes(dag, selection.steps, source, fromRuns, nil, nil)
+	nodes, reused, err := intake.SelectedStepNodes(dag, selection.steps, source, fromRuns, selection.outputs, nil)
 	if err != nil {
 		return err
 	}

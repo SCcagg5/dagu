@@ -270,15 +270,13 @@ func TestCheckOutputSources(t *testing.T) {
 			sources: map[string]intake.OutputSource{"login": from, "fetch": from},
 		},
 		{
-			name:    "MissingSource",
+			name:    "NoSources",
 			outputs: map[string]map[string]string{"login": values},
-			wantErr: "outputs for step login must name the run they come from (outputsSources)",
 		},
 		{
-			name:    "MissingForOneStep",
+			name:    "SourceForOneStep",
 			outputs: map[string]map[string]string{"login": values, "fetch": values},
 			sources: map[string]intake.OutputSource{"fetch": from},
-			wantErr: "outputs for step login must name the run they come from (outputsSources)",
 		},
 		{
 			name:    "SourceWithoutOutputs",
@@ -392,6 +390,19 @@ func TestSelectedStepNodesReusedInputs(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []ir.ReusedInput{
 			{Step: "Log in", RunID: "gone", Via: ir.ReusedInputViaCache},
+			{Step: "fetch", RunID: "source", CapturedAt: "2026-10-26T10:01:00Z", StartedAt: "2026-10-26T10:00:30Z", FinishedAt: "2026-10-26T10:01:00Z", Via: ir.ReusedInputViaRun},
+		}, reused)
+	})
+
+	// A supplied step without a source has no entry, also when the source run
+	// carries it.
+	t.Run("CacheWithoutSource", func(t *testing.T) {
+		t.Parallel()
+
+		outputs := map[string]map[string]string{"login": {"token": "new"}}
+		_, reused, err := intake.SelectedStepNodes(outputsDAG(), []string{"report"}, source, nil, outputs, nil)
+		require.NoError(t, err)
+		require.Equal(t, []ir.ReusedInput{
 			{Step: "fetch", RunID: "source", CapturedAt: "2026-10-26T10:01:00Z", StartedAt: "2026-10-26T10:00:30Z", FinishedAt: "2026-10-26T10:01:00Z", Via: ir.ReusedInputViaRun},
 		}, reused)
 	})

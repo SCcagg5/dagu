@@ -295,6 +295,10 @@ func remoteRunStart(ctx *Context, args []string) error {
 	if len(selection.outputFrom) > 0 {
 		outputsFromRuns = &selection.outputFrom
 	}
+	var outputs *map[string]map[string]string
+	if len(selection.outputs) > 0 {
+		outputs = &selection.outputs
+	}
 	workerSelector, err := remoteWorkerSelector(ctx)
 	if err != nil {
 		return err
@@ -308,6 +312,7 @@ func remoteRunStart(ctx *Context, args []string) error {
 		Steps:            steps,
 		OutputsFromRunId: stringPtrOrNil(selection.outputsFrom),
 		OutputsFromRuns:  outputsFromRuns,
+		Outputs:          outputs,
 		WorkerSelector:   workerSelector,
 	})
 	if err != nil {

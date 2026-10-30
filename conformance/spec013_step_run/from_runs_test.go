@@ -177,8 +177,19 @@ func TestOutputsFromRunsRejects(t *testing.T) {
 	assert.Contains(t, reject(map[string]string{"build": "bad/id"}),
 		"dag-run ID must only contain alphanumeric characters, dashes, and underscores")
 
-	// A step that is selected to run cannot be a key.
+	// A run that selected build records consume as skipped with nothing to
+	// carry, so it cannot give consume.
+	partial := startRun(t, server, path, map[string]any{"steps": []string{"build"}})
+	waitForStatus(t, server, name, partial, api.StatusSuccess)
 	body := server.Client().Post(path, map[string]any{
+		"steps":           []string{"build"},
+		"outputsFromRuns": map[string]string{"consume": partial},
+	}).ExpectStatus(http.StatusBadRequest).Send(t).Body
+	assert.Contains(t, body,
+		fmt.Sprintf("step consume cannot be reused from run %s: the step did not succeed there", partial))
+
+	// A step that is selected to run cannot be a key.
+	body = server.Client().Post(path, map[string]any{
 		"steps":           []string{"build"},
 		"outputsFromRuns": map[string]string{"build": good},
 	}).ExpectStatus(http.StatusBadRequest).Send(t).Body
