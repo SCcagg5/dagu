@@ -1,4 +1,4 @@
-# A scheduled chain: a backup every five minutes, a verification at the half hour.
+# A scheduled chain: backup, then verify, every five minutes and daily at 03:30.
 description: Back up, then verify. Two schedules, so the list shows the soonest and a +1 badge.
 type: chain
 schedule:

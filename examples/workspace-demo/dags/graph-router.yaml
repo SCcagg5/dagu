@@ -4,7 +4,7 @@ type: graph
 steps:
   - id: produce
     name: produce code
-    run: echo $((200 + RANDOM % 2 * 304))
+    run: echo $((200 + $(od -An -N1 -tu1 /dev/urandom) % 2 * 304))
     output:
       code:
         from: stdout

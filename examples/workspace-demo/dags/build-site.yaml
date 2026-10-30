@@ -1,7 +1,7 @@
 # A build workflow: steps are skipped when their inputs did not change.
 description: Minify the style sheet, render the page and bundle the site.
 type: build
-working_dir: /var/lib/dagu/demo-build
+working_dir: ../demo-build
 steps:
   - id: css
     name: css
