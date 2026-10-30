@@ -35,6 +35,6 @@ export default defineMessages({
     'Toggle logs': 'ログの表示を切り替え',
     'Open run log': '実行ログを開く',
     'Open {tab}': '{tab}を開く',
-    'Follow latest run': '最新の実行を追従',
+    'Follow latest run': '最新の実行に追従',
   },
 });
