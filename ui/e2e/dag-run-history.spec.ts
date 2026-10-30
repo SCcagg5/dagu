@@ -21,8 +21,10 @@ async function openNewestRunFromLane(page: Page, dagName: string) {
   await lane.press('Enter');
 }
 
-for (const view of ['grouped', 'activity'] as const) {
-  test(`preserves the selected tab during ${view} history navigation`, async ({
+// A row of a run list opens the run on its own page: no side panel. The link
+// names the run on the workflow page, which sends it to the run page.
+for (const view of ['list', 'grouped', 'activity'] as const) {
+  test(`opens a run on its page from the ${view} view`, async ({
     page,
     request,
   }) => {
@@ -33,90 +35,60 @@ for (const view of ['grouped', 'activity'] as const) {
       stack.auth.adminPassword
     );
     const dagName = uniqueName(`history-${view}`);
-    // Distinct start seconds make the history order deterministic.
     const fileName = await writeLocalDAG(
       dagName,
       `
 name: ${dagName}
 steps:
   - name: result
-    run: |
-      sleep 1
-      echo history-output
+    run: echo history-output
     output: RESULT
 `
     );
     await waitForDAGAvailable(request, token, fileName);
-    const olderRun = await startDAG(request, token, fileName);
-    await waitForRunStatus(request, token, dagName, olderRun, ['succeeded']);
-    const newerRun = await startDAG(request, token, fileName);
-    await waitForRunStatus(request, token, dagName, newerRun, ['succeeded']);
+    const runId = await startDAG(request, token, fileName);
+    await waitForRunStatus(request, token, dagName, runId, ['succeeded']);
     await loginViaUI(page, stack.auth.adminUsername, stack.auth.adminPassword);
 
-    if (view === 'grouped') {
-      await page.goto(`/dag-runs?name=${dagName}`);
-      await page.getByRole('button', { name: 'Grouped view' }).click();
-      await page.getByText(dagName, { exact: true }).click();
-      await page.getByText(newerRun, { exact: true }).click();
-    } else {
+    const runPage = `/dag-runs/${dagName}/${runId}`;
+
+    if (view === 'activity') {
       await page.goto('/dashboard');
       await page.getByLabel('Filter workflows').fill(dagName);
       await openNewestRunFromLane(page, dagName);
-    }
-
-    const modal = page.locator('.dagRun-modal-content');
-    await expect(modal).toBeVisible();
-    await expect(
-      modal.getByText(new RegExp(`${olderRun}|${newerRun}`)).first()
-    ).toBeVisible();
-    const openedNewer = await modal
-      .getByText(newerRun, { exact: true })
-      .isVisible();
-    const firstRun = openedNewer ? newerRun : olderRun;
-    const nextRun = openedNewer ? olderRun : newerRun;
-    const forwardKey = openedNewer ? 'ArrowDown' : 'ArrowUp';
-    const backwardKey = openedNewer ? 'ArrowUp' : 'ArrowDown';
-
-    await modal.getByRole('button', { name: 'Outputs', exact: true }).click();
-    await expect(
-      modal.getByText('history-output', { exact: true })
-    ).toBeVisible();
-    await page.keyboard.press(forwardKey);
-    await expect(modal.getByText(nextRun, { exact: true })).toBeVisible();
-    await expect(
-      modal.getByText('history-output', { exact: true })
-    ).toBeVisible();
-
-    if (view === 'grouped') {
-      await expect
-        .poll(() => new URL(page.url()).searchParams.get('selectedRunTab'))
-        .toBe('outputs');
-      await expect
-        .poll(() => new URL(page.url()).searchParams.get('name'))
-        .toBe(dagName);
-      await page.reload();
-      await expect(modal.getByText(nextRun, { exact: true })).toBeVisible();
-      await expect(
-        modal.getByText('history-output', { exact: true })
-      ).toBeVisible();
-    }
-
-    await page.keyboard.press(backwardKey);
-    await expect(modal.getByText(firstRun, { exact: true })).toBeVisible();
-    await expect(
-      modal.getByText('history-output', { exact: true })
-    ).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(modal).toHaveCount(0);
-
-    if (view === 'grouped') {
-      await page.getByText(dagName, { exact: true }).click();
-      await page.getByText(newerRun, { exact: true }).click();
     } else {
-      await openNewestRunFromLane(page, dagName);
+      await page.goto(`/dag-runs?name=${dagName}`);
+      if (view === 'grouped') {
+        await page.getByRole('button', { name: 'Grouped view' }).click();
+        await page.getByText(dagName, { exact: true }).click();
+        await page.getByText(runId, { exact: true }).click();
+      } else {
+        await page
+          .getByRole('row')
+          .filter({ hasText: dagName })
+          .first()
+          .click();
+      }
     }
-    await expect(
-      modal.getByRole('columnheader', { name: 'Step Name' })
-    ).toBeVisible();
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe(runPage);
+    await expect(page.locator('.dagRun-modal-content')).toHaveCount(0);
+
+    if (view === 'list') {
+      await page.goBack();
+      await expect(page).toHaveURL(/\/dag-runs\?/);
+      const [popup] = await Promise.all([
+        page.context().waitForEvent('page'),
+        page
+          .getByRole('row')
+          .filter({ hasText: dagName })
+          .first()
+          .click({ modifiers: ['ControlOrMeta'] }),
+      ]);
+      await expect.poll(() => new URL(popup.url()).pathname).toBe(runPage);
+      await popup.close();
+      // The list stays where it was.
+      expect(new URL(page.url()).pathname).toBe('/dag-runs');
+    }
   });
 }
