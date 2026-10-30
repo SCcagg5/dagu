@@ -21,7 +21,6 @@ import { formatDurationMs } from '@/lib/formatDuration';
 import { withoutWorkspaceLabels } from '@/lib/workspace';
 import { cn } from '@/lib/utils';
 import { runDisplayStatus } from '@/lib/runDisplayStatus';
-import { runStatusText } from '@/lib/status-utils';
 
 import { failureCause, queueWaitMs } from './recentRunFacts';
 
@@ -144,15 +143,7 @@ function RunHeader({ columns }: { columns: RunColumns }) {
       className="grid items-center gap-x-3 border-b border-border/40 px-1 pb-1 text-[11px] text-muted-foreground"
     >
       {head('Run ID')}
-      <span className="flex min-w-0 gap-1 truncate">
-        {head('Status')}
-        {columns.scheduled && (
-          <>
-            {'·'}
-            {head('Scheduled At')}
-          </>
-        )}
-      </span>
+      {head('Status')}
       {head('Trigger')}
       {columns.profile && head('Profile')}
       {head('Queued At')}
@@ -210,15 +201,7 @@ function RunLine({
           {run.dagRunId}
         </span>
         <span className="flex min-w-0 items-center gap-1.5">
-          <StatusDot
-            kind="run"
-            status={run.status}
-            healthy={healthy}
-            decorative
-          />
-          <span className="truncate text-foreground/80">
-            {healthy ? ts('Healthy') : ts(runStatusText(run.status))}
-          </span>
+          <StatusDot kind="run" status={run.status} healthy={healthy} />
           {columns.scheduled && run.scheduleTime && (
             <>
               <span className="text-muted-foreground">·</span>
