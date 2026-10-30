@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuery } from '@/hooks/api';
 import {
   noteTestRunStarted,
+  resetTestRunsStarted,
   TEST_RUN_POLL_MS,
   useRunHistory,
 } from '../useRunHistory';
@@ -41,6 +42,7 @@ function historyCalls() {
 }
 
 beforeEach(() => {
+  resetTestRunsStarted();
   h.GET.mockReset();
   h.historySSE.mockReset();
   h.historySSE.mockReturnValue(idleSSE);
@@ -237,6 +239,24 @@ describe('useRunHistory with the test runs', () => {
       const first = historyCalls().length;
       await poll(TEST_RUN_POLL_MS + 100);
       expect(historyCalls().length).toBeGreaterThan(first);
+    });
+
+    // A start that the list never shows (the run failed to start, or it
+    // ended and went) keeps the polling only for a while.
+    it('stops polling a while after the start when the list shows no test run', async () => {
+      renderWorkspace(() =>
+        useRunHistory({
+          enabled: true,
+          includeEphemeral: true,
+          pollTestRuns: true,
+        })
+      );
+      await waitFor(() => expect(historyCalls().length).toBeGreaterThan(0));
+      act(() => noteTestRunStarted(FILE_NAME));
+      await poll(60_000);
+      const settled = historyCalls().length;
+      await poll(TEST_RUN_POLL_MS * 2);
+      expect(historyCalls().length).toBe(settled);
     });
   });
 });

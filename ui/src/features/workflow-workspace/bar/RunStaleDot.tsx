@@ -47,8 +47,9 @@ function StaleButton({
   const specRef = useSpecRef(fileName, dag);
   const stale = useRunSpecStale(specRef);
   const diff = useRunSpecDiff(specRef);
-  const notOnCanvas = diff?.removedFromLive.size ?? 0;
   const showingRunDef = url.def === 'run';
+  // The canvas shows the run definition under ?def=run: no step is missing.
+  const notOnCanvas = showingRunDef ? 0 : (diff?.removedFromLive.size ?? 0);
   if (!stale) return null;
   const staleText =
     notOnCanvas === 0

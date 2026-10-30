@@ -96,10 +96,15 @@ export function SamplesChart({
     const element = wrapRef.current;
     if (!element) return;
     const onWheel = (event: WheelEvent) => {
+      // The ratio is over the plot, right of the latency labels.
       const rect = element.getBoundingClientRect();
-      if (rect.width <= 0) return;
+      const plot = rect.width - AXIS_PX;
+      if (plot <= 0) return;
       event.preventDefault();
-      const ratio = (event.clientX - rect.left) / rect.width;
+      const ratio = Math.min(
+        1,
+        Math.max(0, (event.clientX - rect.left - AXIS_PX) / plot)
+      );
       zoom.current(Math.exp(Math.sign(event.deltaY) * 0.25), ratio);
     };
     element.addEventListener('wheel', onWheel, { passive: false });
@@ -132,6 +137,11 @@ export function SamplesChart({
     const x = localX(event);
     const bar = barAt(model.bars, x);
     setHover(bar ? { bar, x } : null);
+  };
+  // The pointer left, or the browser took it (pointercancel): no drag, no hover.
+  const endDrag = () => {
+    drag.current = null;
+    setHover(null);
   };
   const onPointerUp = (event: PointerEvent<SVGSVGElement>) => {
     const state = drag.current;
@@ -185,10 +195,8 @@ export function SamplesChart({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerLeave={() => {
-          drag.current = null;
-          setHover(null);
-        }}
+        onPointerLeave={endDrag}
+        onPointerCancel={endDrag}
       >
         {model.ticks.map((tick) => (
           <line

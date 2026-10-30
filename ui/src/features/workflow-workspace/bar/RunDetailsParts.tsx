@@ -234,9 +234,15 @@ export function ReusedSection({
           { belowSecond: ts('<1s'), wholeSecond: true }
         ) ?? '');
   // The server stores labels in lower case, but run IDs are case sensitive:
-  // the history gives the real ID.
+  // the history or the record of the reused inputs gives the real ID.
   const inputsFrom =
-    labelled === null ? null : (links?.resolve(labelled) ?? labelled);
+    labelled === null
+      ? null
+      : (links?.resolve(labelled) ??
+        details.reusedInputs?.find(
+          (input) => input.runId.toLowerCase() === labelled.toLowerCase()
+        )?.runId ??
+        labelled);
   return (
     <DetailRow label={ts('Reused')} testId="ww-run-details-reused">
       {reusedMs !== null && (
