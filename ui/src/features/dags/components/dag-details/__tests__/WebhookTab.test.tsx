@@ -161,7 +161,9 @@ describe('WebhookTab', () => {
       '/api/v1/dags/deploy/webhook/regenerate?remoteNode=local',
       expect.objectContaining({ method: 'POST' })
     );
-    expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true);
+    await waitFor(() =>
+      expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true)
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false);
@@ -194,13 +196,17 @@ describe('WebhookTab', () => {
     const onSecretVisibleChange = renderTab();
 
     expect(await screen.findByText('No webhook yet')).toBeVisible();
-    expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false);
+    await waitFor(() =>
+      expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false)
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Create webhook' }));
 
     expect(await screen.findByText('created-token')).toBeVisible();
     expect(screen.getByText('Webhook Token')).toBeVisible();
     expect(calls('POST', `${BASE}?remoteNode=local`)).toHaveLength(1);
-    expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true);
+    await waitFor(() =>
+      expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true)
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false);
@@ -285,7 +291,9 @@ describe('WebhookTab', () => {
         body: { authMode: 'token_and_hmac', enforcementMode: 'strict' },
       }
     );
-    expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true);
+    await waitFor(() =>
+      expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true)
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false);
@@ -331,7 +339,9 @@ describe('WebhookTab', () => {
     let dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Regenerate' }));
     expect(await screen.findByText('rotated-secret')).toBeVisible();
-    expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true);
+    await waitFor(() =>
+      expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true)
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false);
 
@@ -359,7 +369,9 @@ describe('WebhookTab', () => {
     );
     expect(await screen.findByText('sender-secret')).toBeVisible();
     expect(screen.getByText('Signing Secret')).toBeVisible();
-    expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true);
+    await waitFor(() =>
+      expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true)
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false);
 
@@ -367,7 +379,9 @@ describe('WebhookTab', () => {
       await screen.findByRole('button', { name: 'create profile token' })
     );
     expect(await screen.findByText('profile-token')).toBeVisible();
-    expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true);
+    await waitFor(() =>
+      expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true)
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false);
   });
