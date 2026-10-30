@@ -43,12 +43,16 @@ steps:
   await waitForRunStatus(request, token, dagName, runId, ['succeeded']);
   await loginViaUI(page, stack.auth.adminUsername, stack.auth.adminPassword);
 
+  // The workflow page shows the run that an old link to it names.
   await page.goto(
     `/dags/${encodeURIComponent(fileName)}?dagRunId=${runId}&dagRunName=${dagName}`
   );
   await expect
-    .poll(() => new URL(page.url()).pathname)
-    .toBe(`/dag-runs/${dagName}/${runId}`);
+    .poll(() => {
+      const url = new URL(page.url());
+      return [url.pathname, url.searchParams.get('run')];
+    })
+    .toEqual([`/dags/${dagName}`, runId]);
 
   await page.goto(`/dag-runs/${dagName}/${runId}?step=publish`);
   await expect(page.getByRole('dialog', { name: 'publish' })).toBeVisible();
