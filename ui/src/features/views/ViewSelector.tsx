@@ -340,7 +340,7 @@ export function ViewSelector({
             {activeView && isActiveViewEdited && (
               <>
                 <DropdownMenuSeparator />
-                {canManageViews && (
+                {canManageViews && !onRenameView && (
                   <DropdownMenuItem
                     onSelect={() =>
                       void runMutation(onUpdateView).catch(() => undefined)
@@ -361,22 +361,13 @@ export function ViewSelector({
               </>
             )}
 
-            {canManageViews && (
+            {canManageViews && !onRenameView && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={openSaveDialog}>
                   <Save className="mr-2" />
                   <I18nText text={'Save current filters as view…'} />
                 </DropdownMenuItem>
-                {activeView && (
-                  <DropdownMenuItem
-                    onSelect={() => requestDelete(activeView, false)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2" />
-                    <I18nText text={'Delete view'} />
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem onSelect={() => setManageDialogOpen(true)}>
                   <Settings2 className="mr-2" />
                   <I18nText text={'Manage views…'} />
@@ -430,6 +421,20 @@ export function ViewSelector({
             >
               <Save aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
             </Button>
+            {activeView && (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="h-7 w-7 justify-center p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                title={ts('Delete view')}
+                aria-label={ts('Delete view')}
+                disabled={isMutating}
+                onClick={() => requestDelete(activeView, false)}
+              >
+                <Trash2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+              </Button>
+            )}
           </div>
         )}
       </div>
