@@ -3,6 +3,7 @@
 
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { issuesSample } from '../../testing/fixtures';
 import { ContinueOn, continueOnObject } from '../sections/flow/ContinueOn';
 import { runStep } from './fixtures';
 import { fieldOp, renderPart } from './flowHarness';
@@ -75,6 +76,41 @@ describe('ContinueOn', () => {
       screen.getByRole('switch', { name: 'Continue when skipped' })
     );
     expect(onEdit).toHaveBeenCalledWith(fieldOp(['continue_on'], undefined));
+  });
+
+  // The server reads `failed` in the map as `failure`.
+  it('reads the failed alias and removes it when the switch goes off', () => {
+    const { onEdit } = renderPart(ContinueOn, {
+      ...runStep,
+      value: { continue_on: { failed: true } },
+    });
+    const failure = screen.getByRole('switch', { name: 'Continue on failure' });
+    expect(failure).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(failure);
+    expect(onEdit.mock.calls).toEqual([
+      [fieldOp(['continue_on', 'failed'], undefined)],
+    ]);
+  });
+
+  it('replaces the failed alias when the switch goes on', () => {
+    const { onEdit } = renderPart(ContinueOn, {
+      ...runStep,
+      value: { continue_on: { failed: false } },
+    });
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Continue on failure' })
+    );
+    expect(onEdit.mock.calls).toEqual([
+      [fieldOp(['continue_on', 'failure'], true)],
+      [fieldOp(['continue_on', 'failed'], undefined)],
+    ]);
+  });
+
+  it('shows the issues of a nested key', () => {
+    renderPart(ContinueOn, runStep, {
+      fieldIssues: { 'continue_on.exit_code': [issuesSample[0]!] },
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('unknown dependency');
   });
 
   it('emits nothing when read-only', () => {

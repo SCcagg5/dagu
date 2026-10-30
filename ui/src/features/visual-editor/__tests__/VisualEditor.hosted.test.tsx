@@ -356,7 +356,19 @@ describe.skipIf(realSchema === null)('VisualEditor in a host', () => {
       const { update } = renderEditor(props);
       expect(onSelectedStepNameChange).not.toHaveBeenCalled();
 
-      update({ ...props, validation: { issues: [], dag: details('shape') } });
+      vi.useFakeTimers();
+      try {
+        update({
+          ...props,
+          text: yamlArraySteps.replace('name: transform', 'name: shape'),
+          validation: { issues: [], dag: details('shape') },
+        });
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
 
       expect(onSelectedStepNameChange).toHaveBeenLastCalledWith('shape');
       expect(isSelected('steps[1]')).toBe(true);

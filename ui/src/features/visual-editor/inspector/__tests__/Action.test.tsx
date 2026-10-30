@@ -75,6 +75,19 @@ describe('planActionChange', () => {
     });
   });
 
+  it('removes a classic command key when a step becomes an action', () => {
+    expect(
+      planActionChange({ ...runStep, value: { command: 'x' } }, httpEntry)
+    ).toEqual({
+      confirm: false,
+      ops: [
+        set('steps[2]', ['command'], undefined),
+        set('steps[2]', ['action'], 'http.request'),
+        set('steps[2]', ['with'], { method: 'GET', url: '' }),
+      ],
+    });
+  });
+
   it('turns an action into a command', () => {
     expect(planActionChange(httpStep, runEntry)).toEqual({
       confirm: true,

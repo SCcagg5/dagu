@@ -41,6 +41,7 @@ import { realSchema } from '@/features/visual-editor/inspector/__tests__/realSch
 import {
   scopeHttpJq,
   yamlArraySteps,
+  yamlHttpJq,
   yamlRouter,
   yamlShorthandSteps,
 } from '@/features/visual-editor/testing/fixtures';
@@ -1111,7 +1112,7 @@ describe.skipIf(realSchema === null)('RunSnapshotCanvas', () => {
   // the editor does for its saved text.
   it('lists the upstream data of the step in the INPUT column', async () => {
     h.post.mockResolvedValue({ data: { referenceScope: scopeHttpJq } });
-    h.runSpec = yamlArraySteps;
+    h.runSpec = yamlHttpJq;
     h.run = makeRun(
       runDetails(
         'run-1',
@@ -1133,7 +1134,7 @@ describe.skipIf(realSchema === null)('RunSnapshotCanvas', () => {
     expect(h.post).toHaveBeenCalledWith(
       '/dags/validate',
       expect.objectContaining({
-        body: { spec: yamlArraySteps, name: 'demo' },
+        body: { spec: yamlHttpJq, name: 'demo' },
       })
     );
   });

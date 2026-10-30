@@ -1652,10 +1652,7 @@ describe('opSetRouteTargets', () => {
 `;
     const result = done(set(text, 'steps[1]', 'b', ['twoid']), text, 1);
     expect(result.text).toBe(
-      text.replace(
-        '        a: [one]\n',
-        '        a: [one]\n        b: [twoid]\n'
-      )
+      text.replace('        a: [one]\n', '        a: [one]\n        b: [two]\n')
     );
   });
 
