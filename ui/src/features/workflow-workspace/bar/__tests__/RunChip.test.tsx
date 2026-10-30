@@ -844,6 +844,15 @@ describe('RunChip spec-differs dot', () => {
     expect(screen.getByRole('button', { name: plain })).toBeVisible();
   });
 
+  // Under ?def=run the canvas shows the run definition: no step of the run
+  // is missing from it.
+  it('names no count while ?def=run is set', () => {
+    staleMock.mockReturnValue(true);
+    diffMock.mockReturnValue(diff(['a', 'b']));
+    renderChip('/dags/demo?def=run');
+    expect(screen.getByRole('button', { name: plain })).toBeVisible();
+  });
+
   it('offers the way back in the tooltip while ?def=run is set', async () => {
     staleMock.mockReturnValue(true);
     renderChip('/dags/demo?def=run');
