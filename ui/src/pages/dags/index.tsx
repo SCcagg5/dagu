@@ -26,6 +26,7 @@ import {
   type DAGDeleteResult,
 } from '../../features/dags/components/dag-list';
 import { ACTIVITY_WINDOW_SECONDS } from '../../features/dags/components/dag-list/activityBars';
+import { useHideBreadcrumb } from '@/contexts/LayoutChromeContext';
 import DAGListHeader from '../../features/dags/components/dag-list/DAGListHeader';
 import type {
   WorkflowFilterSet,
@@ -248,6 +249,8 @@ function supportsIntersectionObserver(): boolean {
 }
 
 function DAGsContent() {
+  // The page has its own title row: no breadcrumb strip above it.
+  useHideBreadcrumb(true);
   const location = useLocation();
   const navigate = useNavigate();
   const { ts } = useI18n();
@@ -1102,7 +1105,10 @@ function DAGsContent() {
 
   return (
     <div>
-      <DAGListHeader onRefresh={refreshFn} />
+      <DAGListHeader
+        onRefresh={refreshFn}
+        resultCount={data?.pagination.totalRecords}
+      />
       {filtersReady && data ? (
         <>
           <DAGErrors
@@ -1145,7 +1151,6 @@ function DAGsContent() {
             onRenameDAG={handleRenameDAG}
             canPinDAG={canPinDAG}
             onSetDAGPinned={handleSetDAGPinned}
-            resultCount={data.pagination.totalRecords}
           />
           <div className="mt-3 flex flex-col items-center gap-2">
             {loadMoreError && (

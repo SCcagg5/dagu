@@ -23,7 +23,6 @@ import {
   ChevronRight,
   ChevronUp,
   PencilLine,
-  Pin,
   Search,
   Trash2,
 } from 'lucide-react';
@@ -48,6 +47,7 @@ import ActivityBars from './ActivityBars';
 import { DAGRecentRuns } from './DAGRecentRuns';
 import { LastRunCell, useIsHeartbeat } from './LastRunCell';
 import { ScheduleLine } from './ScheduleSummary';
+import { ActiveCell } from './ActiveCell';
 import PinToggle from '../common/PinToggle';
 
 // Import shadcn/ui components
@@ -399,7 +399,7 @@ function DAGCard({
   );
 }
 
-// Pinned DAGs lead the rows; the "Pinned" header and a divider frame them.
+// Pinned DAGs lead the rows; the card view puts a divider after them.
 function countLeadingPinnedRows(rows: Row<Data>[]): number {
   let count = 0;
   for (const row of rows) {
@@ -413,15 +413,6 @@ function countLeadingPinnedRows(rows: Row<Data>[]): number {
     count++;
   }
   return count;
-}
-
-function PinnedSectionLabel() {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-      <Pin className="h-3 w-3" aria-hidden="true" />
-      <I18nText text={'Pinned'} />
-    </span>
-  );
 }
 
 /**
@@ -503,8 +494,6 @@ type Props = {
   canPinDAG: (dag: components['schemas']['DAGFile']) => boolean;
   /** Pins or unpins a workflow for all users */
   onSetDAGPinned: (fileName: string, pinned: boolean) => Promise<void>;
-  /** Total workflows matching the server-side filters */
-  resultCount?: number;
 };
 
 export type DAGDeleteResult = {
@@ -564,13 +553,14 @@ const columnHelper = createColumnHelper<Data>();
 
 const deleteSelectionColumn = columnHelper.display({
   id: 'Select',
-  size: 40,
-  minSize: 40,
-  maxSize: 40,
+  size: 28,
+  minSize: 28,
+  maxSize: 28,
   header: ({ table }) => (
     <div className="flex h-8 items-center justify-center">
       <I18nProps>
         <Checkbox
+          className="size-3.5"
           aria-label="Select all loaded workflows"
           checked={table.options.meta?.getDeleteSelectionState?.() ?? false}
           onCheckedChange={(checked) =>
@@ -592,6 +582,7 @@ const deleteSelectionColumn = columnHelper.display({
         onClick={(event) => event.stopPropagation()}
       >
         <Checkbox
+          className="size-3.5"
           aria-label={`Select workflow ${data.dag.dag.name}`}
           checked={table.options.meta?.isDeleteSelected?.(fileName) ?? false}
           onCheckedChange={() =>
@@ -636,7 +627,7 @@ const defaultColumns = [
         )}
       </div>
     ),
-    cell: ({ row, table }) => {
+    cell: ({ row }) => {
       if (row.getCanExpand()) {
         return (
           <div
@@ -663,6 +654,23 @@ const defaultColumns = [
           </div>
         );
       }
+      return null;
+    },
+    size: 24,
+    minSize: 24,
+    maxSize: 24,
+  }),
+  columnHelper.display({
+    id: 'Pin',
+    size: 28,
+    minSize: 28,
+    maxSize: 28,
+    header: () => (
+      <span className="sr-only">
+        <I18nText text={'Pinned'} />
+      </span>
+    ),
+    cell: ({ row, table }) => {
       if (row.original.kind !== ItemKind.DAG) {
         return null;
       }
@@ -676,14 +684,12 @@ const defaultColumns = [
             canToggle={meta?.canPinDAG?.(dag) ?? false}
             pending={meta?.isPinPending?.(dag.fileName)}
             revealOnHover
+            className="size-5"
             onToggle={() => meta?.onTogglePin?.(dag)}
           />
         </div>
       );
     },
-    size: 32,
-    minSize: 32,
-    maxSize: 32,
   }),
   columnHelper.accessor('name', {
     id: 'Name',
@@ -882,12 +888,12 @@ const defaultColumns = [
     },
   }),
   columnHelper.accessor('kind', {
-    id: 'ScheduleAndNextRun',
+    id: 'Active',
     size: 220,
     minSize: 180,
     header: () => (
       <span className="text-xs">
-        <I18nText text={'Schedule'} />
+        <I18nText text={'Active'} />
       </span>
     ),
     cell: ({ row, table }) => {
@@ -895,23 +901,8 @@ const defaultColumns = [
       if (data.kind !== ItemKind.DAG) {
         return null;
       }
-
-      const hasSchedule = (data.dag.dag.schedule ?? []).length > 0;
       return (
-        <div className="flex min-w-0 items-center gap-1">
-          {hasSchedule && (
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="flex-shrink-0 p-0.5"
-            >
-              <LiveSwitch
-                dag={data.dag}
-                refresh={table.options.meta?.refreshFn}
-              />
-            </div>
-          )}
-          <ScheduleLine dag={data.dag} />
-        </div>
+        <ActiveCell dag={data.dag} refresh={table.options.meta?.refreshFn} />
       );
     },
   }),
@@ -1172,7 +1163,6 @@ function DAGTable({
   onRenameDAG,
   canPinDAG,
   onSetDAGPinned,
-  resultCount,
 }: Props) {
   const { ts } = useI18n();
   const remoteNode = useRemoteNode();
@@ -1765,14 +1755,6 @@ function DAGTable({
           </p>
         )}
 
-        {resultCount !== undefined && (
-          <div className="text-xs text-muted-foreground">
-            {ts(resultCount === 1 ? '{count} workflow' : '{count} workflows', {
-              count: resultCount.toLocaleString(),
-            })}
-          </div>
-        )}
-
         {useCardView && onSortChange && (
           <div className="flex flex-wrap items-center gap-2 pt-1 pl-1">
             <div className="flex flex-wrap items-center gap-2 min-w-0">
@@ -1854,8 +1836,9 @@ function DAGTable({
         >
           {/* Column widths: Select 40px, Expand 32px, Name 28%, LastRun 88px, Activity auto, Schedule 220px, Actions 160px */}
           <colgroup>
-            {canDeleteDAGs && <col style={{ width: '40px' }} />}
-            <col style={{ width: '32px' }} />
+            {canDeleteDAGs && <col style={{ width: '28px' }} />}
+            <col style={{ width: '24px' }} />
+            <col style={{ width: '28px' }} />
             <col style={{ width: '28%' }} />
             <col style={{ width: '88px' }} />
             <col className={activityColumn.col} />
@@ -1868,7 +1851,7 @@ function DAGTable({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={`py-1 text-muted-foreground text-xs overflow-hidden ${header.column.id === 'Select' || header.column.id === 'Expand' ? 'px-0' : 'px-2'} ${header.column.id === 'Activity' ? activityColumn.cell : ''}`}
+                    className={`py-1 text-muted-foreground text-xs overflow-hidden ${header.column.id === 'Select' || header.column.id === 'Expand' || header.column.id === 'Pin' ? 'px-0' : 'px-2'} ${header.column.id === 'Activity' ? activityColumn.cell : ''}`}
                   >
                     {header.isPlaceholder ? null : (
                       <div>
@@ -1904,20 +1887,10 @@ function DAGTable({
             ))}
           </TableHeader>
           <TableBody>
-            {pinnedRowCount > 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={columns.length} className="px-2 pb-1 pt-2">
-                  <PinnedSectionLabel />
-                </TableCell>
-              </TableRow>
-            )}
             {instance.getRowModel().rows.length ? (
-              instance.getRowModel().rows.map((row, index) => {
+              instance.getRowModel().rows.map((row) => {
                 // For DAG rows, make the entire row clickable
                 const isDAGRow = row.original?.kind === ItemKind.DAG;
-                const endsPinnedSection =
-                  index === pinnedRowCount - 1 &&
-                  index < instance.getRowModel().rows.length - 1;
                 const isDeleteSelected =
                   isDAGRow &&
                   'dag' in row.original &&
@@ -1939,7 +1912,7 @@ function DAGTable({
                         row.original?.kind === ItemKind.Group
                           ? 'bg-muted/50 font-semibold cursor-pointer hover:bg-muted/70'
                           : 'cursor-pointer hover:bg-muted/50'
-                      } ${isDAGRow && 'dag' in row.original && (row.original as DAGRow).dag.latestDAGRun?.status === Status.Running ? 'animate-running-row' : ''} ${isDAGRow ? 'group/row' : ''} ${endsPinnedSection ? 'border-b-2' : ''}`}
+                      } ${isDAGRow && 'dag' in row.original && (row.original as DAGRow).dag.latestDAGRun?.status === Status.Running ? 'animate-running-row' : ''} ${isDAGRow ? 'group/row' : ''}`}
                       onClick={(e) => {
                         // Handle group row clicks - toggle expanded state
                         if ((row.original as Data)?.kind === ItemKind.Group) {
@@ -1955,7 +1928,7 @@ function DAGTable({
                       {row.getVisibleCells().map((cell) => (
                         <TableCell
                           key={cell.id}
-                          className={`py-1 align-middle overflow-hidden truncate ${cell.column.id === 'Select' || cell.column.id === 'Expand' ? 'px-0' : 'px-2'} ${cell.column.id === 'Activity' ? activityColumn.cell : ''}`}
+                          className={`py-1 align-middle overflow-hidden truncate ${cell.column.id === 'Select' || cell.column.id === 'Expand' || cell.column.id === 'Pin' ? 'px-0' : 'px-2'} ${cell.column.id === 'Activity' ? activityColumn.cell : ''}`}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
@@ -2002,11 +1975,6 @@ function DAGTable({
         data-testid="workflow-card-view"
         className={`space-y-2 ${useCardView ? 'block' : 'md:hidden'}`}
       >
-        {pinnedRowCount > 0 && (
-          <div className="px-1">
-            <PinnedSectionLabel />
-          </div>
-        )}
         {instance.getRowModel().rows.length ? (
           instance.getRowModel().rows.map((row, index) => {
             // Render group rows with collapsible header

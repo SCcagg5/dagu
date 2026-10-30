@@ -24,4 +24,16 @@ describe('DAGListHeader', () => {
       screen.queryByRole('heading', { name: /dag definitions/i })
     ).toBeNull();
   });
+
+  it('shows the number of workflows next to the title', () => {
+    render(
+      <MemoryRouter>
+        <DAGListHeader resultCount={1234} />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('workflow-count')).toHaveTextContent(
+      /1,?234 workflows/
+    );
+  });
 });

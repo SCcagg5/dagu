@@ -554,7 +554,7 @@ describe('DAGTable', () => {
   });
 
   // A pinned workflow leaves its group so it stays visible at the top.
-  it('lists pinned workflows first in their own section', () => {
+  it('lists pinned workflows first, with no section label', () => {
     renderTable('', {
       dags: [
         workflow({ name: 'reports', group: 'nightly', pinned: true }),
@@ -567,8 +567,8 @@ describe('DAGTable', () => {
     const texts = bodyRowTexts(table);
     const position = (text: string) =>
       texts.findIndex((rowText) => rowText.includes(text));
-    expect(position('Pinned')).toBe(0);
-    expect(position('reports')).toBe(1);
+    expect(position('reports')).toBe(0);
+    expect(texts.some((text) => text.includes('Pinned'))).toBe(false);
     expect(position('nightly')).toBeGreaterThan(position('reports'));
     expect(position('alpha')).toBeGreaterThan(position('nightly'));
     expect(
@@ -576,12 +576,21 @@ describe('DAGTable', () => {
     ).toHaveLength(1);
   });
 
-  it('shows no pinned section when no visible workflow is pinned', () => {
-    renderTable();
+  it('shows the pin in its own column and no pinned row', () => {
+    renderTable('', {
+      dags: [
+        workflow({ name: 'reports', pinned: true }),
+        workflow({ name: 'alpha' }),
+      ],
+    });
+    const table = screen.getByRole('table');
 
     expect(
-      within(screen.getByRole('table')).queryByText('Pinned')
-    ).not.toBeInTheDocument();
+      within(table).getByRole('columnheader', { name: 'Pinned' })
+    ).toBeInTheDocument();
+    expect(bodyRowTexts(table).some((text) => text.includes('Pinned'))).toBe(
+      false
+    );
   });
 
   // Ascending status order alone would put the failed workflow first.
@@ -643,7 +652,7 @@ describe('DAGTable', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the pinned section and pin buttons in the card view', () => {
+  it('shows the pin buttons in the card view', () => {
     renderTable('', {
       panelWidth: 600,
       dags: [
@@ -653,7 +662,7 @@ describe('DAGTable', () => {
     });
     const cards = screen.getByTestId('workflow-card-view');
 
-    expect(within(cards).getByText('Pinned')).toBeInTheDocument();
+    expect(within(cards).queryByText('Pinned')).not.toBeInTheDocument();
     expect(
       within(cards).getByRole('button', { name: 'Pin workflow reports' })
     ).toHaveAttribute('aria-pressed', 'true');

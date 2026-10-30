@@ -314,7 +314,9 @@ function Content({ navbarColor, children }: LayoutProps) {
           <div
             className={cn(
               'min-h-0 flex-1 w-full',
-              bleed ? 'overflow-hidden' : 'overflow-auto p-4 md:p-6'
+              bleed
+                ? 'overflow-hidden'
+                : 'overflow-auto p-4 [scrollbar-gutter:stable] md:p-6'
             )}
           >
             <LayoutChromeProvider value={layoutChrome}>

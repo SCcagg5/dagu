@@ -18,6 +18,13 @@ export default defineMessages({
     'Could not load the recent runs': 'Could not load the recent runs',
     '{own} + {cached} cached': '{own} + {cached} cached',
     'queued {time}': 'queued {time}',
+    'in {time}': 'in {time}',
+    'Webhook of {name}': 'Webhook of {name}',
+    'Are you sure you want to {action} the webhook for "{name}"?':
+      'Are you sure you want to {action} the webhook for "{name}"?',
+    'Enable webhook': 'Enable webhook',
+    'Disable webhook': 'Disable webhook',
+    'Could not update the webhook': 'Could not update the webhook',
   },
   'zh-CN': {
     'Runs in the last 24 hours': '过去 24 小时内的运行',
@@ -31,6 +38,13 @@ export default defineMessages({
     'Could not load the recent runs': '无法加载最近的运行',
     '{own} + {cached} cached': '{own} + 缓存 {cached}',
     'queued {time}': '排队 {time}',
+    'in {time}': '{time}后',
+    'Webhook of {name}': '{name} 的 Webhook',
+    'Are you sure you want to {action} the webhook for "{name}"?':
+      '确定要{action} “{name}” 的 Webhook 吗？',
+    'Enable webhook': '启用 Webhook',
+    'Disable webhook': '停用 Webhook',
+    'Could not update the webhook': '无法更新 Webhook',
   },
   ja: {
     'Runs in the last 24 hours': '過去 24 時間の実行',
@@ -44,5 +58,12 @@ export default defineMessages({
     'Could not load the recent runs': '最近の実行を読み込めませんでした',
     '{own} + {cached} cached': '{own} + キャッシュ {cached}',
     'queued {time}': '待機 {time}',
+    'in {time}': '{time}後',
+    'Webhook of {name}': '{name} の Webhook',
+    'Are you sure you want to {action} the webhook for "{name}"?':
+      '「{name}」の Webhook を{action}しますか？',
+    'Enable webhook': 'Webhook を有効にする',
+    'Disable webhook': 'Webhook を無効にする',
+    'Could not update the webhook': 'Webhook を更新できませんでした',
   },
 });

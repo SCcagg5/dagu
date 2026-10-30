@@ -159,6 +159,8 @@ function ScheduleText({
       <RelativeTime
         timestamp={nextRun.toISOString()}
         absolute={formatAbsoluteTime(nextRun)}
+        compact
+        until
         className="text-foreground/80"
       />
     );
@@ -236,9 +238,12 @@ function ScheduleBody({ dag }: { dag: DAGFile }) {
 export function ScheduleLine({
   dag,
   emptyLabel = true,
+  indicator = true,
 }: {
   dag: DAGFile;
   emptyLabel?: boolean;
+  /** False leaves out the webhook marker, for a row that has its switch. */
+  indicator?: boolean;
 }) {
   const { ts } = useI18n();
   const hasSchedule = (dag.dag.schedule ?? []).length > 0;
@@ -254,7 +259,7 @@ export function ScheduleLine({
       ) : (
         emptyLabel && <span className="truncate">{ts('No schedule')}</span>
       )}
-      <WebhookIndicator fileName={dag.fileName} />
+      {indicator && <WebhookIndicator fileName={dag.fileName} />}
     </div>
   );
 }
