@@ -975,7 +975,14 @@ func TestRunner_ClampDependentStarts(t *testing.T) {
 		Status:    ir.NodeRunning,
 		StartedAt: base.Add(80 * time.Millisecond),
 	})
-	plan, err := NewPlanFromNodes(dep, early, late)
+	// A dependent that kept the times of an earlier run, as in a step retry
+	// without its downstream steps.
+	kept := NewNode(ir.Step{Name: "kept", Depends: []string{"dep"}}, NodeState{
+		Status:     ir.NodeSucceeded,
+		StartedAt:  base.Add(-time.Hour),
+		FinishedAt: base.Add(-59 * time.Minute),
+	})
+	plan, err := NewPlanFromNodes(dep, early, late, kept)
 	require.NoError(t, err)
 
 	New(&Config{}).clampDependentStarts(plan, plan.GetNodeByName("dep"))
@@ -984,4 +991,7 @@ func TestRunner_ClampDependentStarts(t *testing.T) {
 	assert.True(t, state.StartedAt.Equal(finished), "start %s", state.StartedAt)
 	assert.False(t, state.FinishedAt.Before(state.StartedAt), "finish before start")
 	assert.True(t, plan.GetNodeByName("late").State().StartedAt.Equal(base.Add(80*time.Millisecond)))
+	keptState := plan.GetNodeByName("kept").State()
+	assert.True(t, keptState.StartedAt.Equal(base.Add(-time.Hour)), "start %s", keptState.StartedAt)
+	assert.True(t, keptState.FinishedAt.Equal(base.Add(-59*time.Minute)), "finish %s", keptState.FinishedAt)
 }

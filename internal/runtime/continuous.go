@@ -54,6 +54,8 @@ type continuousStep struct {
 
 	rec      samples.Recorder
 	recState recorderState
+	// recordErrs counts the samples in a row that the store failed to record.
+	recordErrs uint64
 
 	// execStart is the start of the execution that is running.
 	execStart time.Time
@@ -176,7 +178,19 @@ func (c *continuousStep) record(ctx context.Context, s samples.Sample) {
 		return
 	}
 	if err := c.rec.Record(ctx, s); err != nil {
-		logger.Warn(ctx, "Failed to record sample", tag.Error(err))
+		// A store that fails, such as on a full disk, fails for each sample:
+		// warn once until it records again.
+		if c.recordErrs == 0 {
+			logger.Warn(ctx, "Failed to record sample", tag.Error(err))
+		} else {
+			logger.Debug(ctx, "Failed to record sample", tag.Error(err))
+		}
+		c.recordErrs++
+		return
+	}
+	if c.recordErrs > 0 {
+		logger.Info(ctx, "Samples are recorded again", slog.Uint64("failed-samples", c.recordErrs))
+		c.recordErrs = 0
 	}
 }
 

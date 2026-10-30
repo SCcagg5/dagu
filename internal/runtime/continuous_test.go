@@ -6,6 +6,7 @@ package runtime
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,11 +49,15 @@ type fakeRecorder struct {
 	closed    int
 	stopAfter int
 	stop      func()
+	err       error // returned by Record when set
 }
 
 func (f *fakeRecorder) Record(_ context.Context, s samples.Sample) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
 	f.samples = append(f.samples, s)
 	if f.stopAfter > 0 && len(f.samples) == f.stopAfter {
 		f.stop()
@@ -140,6 +145,46 @@ func TestContinuousStatusWritesAtOnceOnChange(t *testing.T) {
 
 	c.retried()
 	assert.True(t, c.reportDue(), "a retry writes")
+}
+
+// A failed execution is written before the wait for the next one, not after.
+func TestContinuousStatusWritesChangeBeforeTheWait(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	c := newContinuousStepForTest(clock)
+	observeSample(c, clock, 0)
+	require.True(t, c.reportDue())
+	clock.advance(time.Second)
+	observeSample(c, clock, 7)
+
+	node := NewNode(ir.Step{Name: "beat", RepeatPolicy: ir.RepeatPolicy{
+		RepeatMode: ir.RepeatModeWhile, Interval: 10 * time.Minute,
+	}}, NodeState{Status: ir.NodeFailed})
+	progressCh := make(chan ProgressUpdate, 1)
+	// The wait ends at once: only a write made before it is counted.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c.runner.prepareNodeForRepeat(ctx, node, progressCh, c)
+	assert.Len(t, progressCh, 1)
+}
+
+// A store that keeps failing, such as on a full disk, warns once, not for each
+// sample.
+func TestContinuousStepWarnsOnceWhileRecordsFail(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	c := newContinuousStepForTest(clock)
+	rec := &fakeRecorder{err: errors.New("no space left on device")}
+	c.rec, c.recState = rec, recorderOpen
+	logs := &syncBuffer{}
+	ctx := logger.WithLogger(context.Background(), logger.NewLogger(logger.WithWriter(logs)))
+
+	for range 5 {
+		c.record(ctx, samples.Sample{Time: clock.now()})
+	}
+	assert.Equal(t, 1, strings.Count(logs.String(), "Failed to record sample"))
+
+	rec.err = nil
+	c.record(ctx, samples.Sample{Time: clock.now()})
+	assert.Contains(t, logs.String(), "Samples are recorded again")
 }
 
 func TestContinuousStepDetection(t *testing.T) {
