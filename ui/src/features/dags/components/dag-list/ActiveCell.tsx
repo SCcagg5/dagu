@@ -114,7 +114,6 @@ function WebhookSwitch({
       onClick={(event) => event.stopPropagation()}
       className="flex shrink-0 items-center gap-1"
     >
-      <Webhook aria-hidden="true" className="size-3.5 text-muted-foreground" />
       <Switch
         data-testid="webhook-switch"
         checked={webhook.enabled}
@@ -122,6 +121,7 @@ function WebhookSwitch({
         onCheckedChange={canToggle ? (value) => setPending(value) : undefined}
         aria-label={ts('Webhook of {name}', { name })}
       />
+      <Webhook aria-hidden="true" className="size-3.5 text-muted-foreground" />
       <I18nProps>
         <ConfirmModal
           title={pending ? 'Enable webhook' : 'Disable webhook'}
