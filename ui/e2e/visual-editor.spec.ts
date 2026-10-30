@@ -71,20 +71,6 @@ async function writeSpec(
   ).toBeTruthy();
 }
 
-// Greedy subsequence match: every expected line must appear in order.
-function expectLinesInOrder(actual: string, expected: string[]): void {
-  const lines = actual.split('\n');
-  let from = 0;
-  for (const line of expected) {
-    const index = lines.indexOf(line, from);
-    expect(
-      index,
-      `line missing or out of order: ${JSON.stringify(line)}`
-    ).toBeGreaterThanOrEqual(0);
-    from = index + 1;
-  }
-}
-
 function canvasNode(page: Page, key: string): Locator {
   return page.getByTestId(`ve-canvas-node-${key}`);
 }
@@ -265,7 +251,19 @@ test.describe('visual editor', () => {
     await expect(saveButton(page)).toBeDisabled({ timeout: 30_000 });
 
     const spec = await readSpec(request, token, fileName);
-    expectLinesInOrder(spec, written.replace(/\n$/, '').split('\n'));
+    // The save inserts one block: the lines before it and after it are the
+    // lines of the file.
+    const before = written.split('\n');
+    const after = spec.split('\n');
+    let head = 0;
+    while (head < before.length && before[head] === after[head]) head++;
+    let tail = 0;
+    while (
+      tail < before.length - head &&
+      before[before.length - 1 - tail] === after[after.length - 1 - tail]
+    )
+      tail++;
+    expect(head + tail).toBe(before.length);
     expect(spec).toContain('action: http.request');
     expect(spec).toMatch(
       /url: ["']?https:\/\/example\.com\/\$\{params\.GREETING\}["']?/
@@ -286,6 +284,43 @@ test.describe('visual editor', () => {
   // Run step from the canvas: e2e/workspace/run-actions.spec.ts. The editor of
   // the workspace shows the definition only, with no run status on its nodes.
 
+  // An edited page learns of a change on disk from the live feed, and its
+  // edits wait for a decision.
+  test('shows a change on disk while the edits are unsaved', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(180_000);
+    const stack = await loadStack();
+    const token = await loginViaAPI(
+      request,
+      stack.auth.adminUsername,
+      stack.auth.adminPassword
+    );
+    const { fileName, written } = await createDAG(
+      request,
+      token,
+      'e2e-ve-live',
+      fixtureText('visual-params.yaml')
+    );
+
+    await openVisual(page, fileName);
+    await canvasNode(page, 'steps[0]').click();
+    await addStepFromPalette(page, 'http.request');
+    await expect(canvasNode(page, 'steps[1]')).toBeVisible({ timeout: 30_000 });
+    await expect(saveButton(page)).toBeEnabled({ timeout: 30_000 });
+
+    // Another writer changes the file after the page loaded it.
+    const external = `${written}# changed on disk by another writer\n`;
+    await writeSpec(request, token, fileName, external);
+
+    await expect(
+      page.getByRole('dialog', { name: 'External Changes Detected' })
+    ).toBeVisible({ timeout: 30_000 });
+    expect(await readSpec(request, token, fileName)).toBe(external);
+  });
+
+  // A save that reaches the server after a change on disk is refused.
   test('does not overwrite a file that changed on disk', async ({
     page,
     request,
@@ -310,32 +345,34 @@ test.describe('visual editor', () => {
     await expect(canvasNode(page, 'steps[1]')).toBeVisible({ timeout: 30_000 });
     await expect(saveButton(page)).toBeEnabled({ timeout: 30_000 });
 
-    // Another writer changes the file after the page loaded it.
+    // Another writer changes the file while the save is on its way, so the
+    // page cannot learn of the change before the server checks the save.
     const external = `${written}# changed on disk by another writer\n`;
-    await writeSpec(request, token, fileName, external);
-
-    // The page may show the external change before the save (live update) or
-    // when the save is rejected. Both stop the save. Retry the save steps
-    // until one of them shows.
-    const review = page.getByRole('dialog', { name: 'Review changes' });
-    const externalDialog = page.getByRole('dialog', {
-      name: 'External Changes Detected',
-    });
-    const conflictSeen = externalDialog
-      .or(page.getByText('The file changed on disk'))
-      .first();
-    await expect(async () => {
-      if (!(await conflictSeen.isVisible())) {
-        if (await review.isVisible()) {
-          await review
-            .getByRole('button', { name: 'Save', exact: true })
-            .click({ timeout: 3_000 });
-        } else if (await saveButton(page).isEnabled()) {
-          await saveButton(page).click({ timeout: 3_000 });
+    await page.route(
+      (url) => url.pathname.endsWith('/spec'),
+      async (route) => {
+        if (route.request().method() !== 'PUT') {
+          await route.fallback();
+          return;
         }
+        await writeSpec(request, token, fileName, external);
+        await route.continue();
       }
-      await expect(conflictSeen).toBeVisible({ timeout: 3_000 });
-    }).toPass({ timeout: 60_000, intervals: [500, 1_000, 2_000] });
+    );
+
+    const saved = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PUT' &&
+        new URL(response.url()).pathname.endsWith('/spec')
+    );
+    await saveButton(page).click();
+    const review = page.getByRole('dialog', { name: 'Review changes' });
+    await expect(review).toBeVisible({ timeout: 30_000 });
+    await review.getByRole('button', { name: 'Save', exact: true }).click();
+    expect((await saved).status()).toBe(409);
+    await expect(page.getByText('The file changed on disk')).toBeVisible({
+      timeout: 30_000,
+    });
 
     // No silent overwrite: the server keeps the external text.
     expect(await readSpec(request, token, fileName)).toBe(external);
