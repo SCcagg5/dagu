@@ -210,7 +210,7 @@ function DAGEditButtons({ fileName, workspace }: Props) {
     <div className="flex items-center gap-1">
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-sm"
         title={ts('Rename')}
         aria-label={ts('Rename')}
         onClick={openRename}
@@ -220,7 +220,7 @@ function DAGEditButtons({ fileName, workspace }: Props) {
 
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-sm"
         className="text-destructive hover:bg-destructive/10 hover:text-destructive"
         title={ts('Delete')}
         aria-label={ts('Delete')}

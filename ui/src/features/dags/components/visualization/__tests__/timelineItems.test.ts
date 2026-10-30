@@ -604,6 +604,21 @@ describe('buildTimeMarkers', () => {
     expect(new Set(years).size).toBeGreaterThan(1);
   });
 
+  // A gap shorter than a month or a year can put two ticks in one: 20 days
+  // from Jan 1 hits March twice, 365 days from Jan 1 2028 hits 2028 twice.
+  it('never repeats a month or a year label', () => {
+    const day = 86_400_000;
+    const months = buildTimeMarkers(start, start + 100 * day).map(
+      (m) => m.label
+    );
+    expect(new Set(months).size).toBe(6);
+    const leap = Date.parse('2028-01-01T12:00:00.000Z');
+    const years = buildTimeMarkers(leap, leap + 5 * 365 * day).map(
+      (m) => m.label
+    );
+    expect(new Set(years).size).toBe(6);
+  });
+
   it('adds milliseconds when the ticks are under 100 ms apart', () => {
     const labels = buildTimeMarkers(start, start + 300).map((m) => m.label);
     expect(labels[0]).toMatch(/\.\d{3}$/);

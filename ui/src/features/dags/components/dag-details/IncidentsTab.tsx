@@ -287,18 +287,21 @@ export default function IncidentsTab({
         </div>
       )}
 
-      <IncidentPolicyEditor
-        draft={visibleDraft}
-        providers={providers}
-        allowInherit
-        inheritTitle="DAG routing"
-        inheritDescription="Use inherited routing, turn incidents off for this DAG, or send this DAG to specific connections."
-        onChange={(next) => {
-          setLocalOverrideStarted(true);
-          setDirty(true);
-          setDraft(next);
-        }}
-      />
+      {/* A save or a reset replaces the draft when it ends: no edit until then. */}
+      <fieldset className="min-w-0" disabled={saving || resetting}>
+        <IncidentPolicyEditor
+          draft={visibleDraft}
+          providers={providers}
+          allowInherit
+          inheritTitle="DAG routing"
+          inheritDescription="Use inherited routing, turn incidents off for this DAG, or send this DAG to specific connections."
+          onChange={(next) => {
+            setLocalOverrideStarted(true);
+            setDirty(true);
+            setDraft(next);
+          }}
+        />
+      </fieldset>
 
       <I18nProps>
         <ConfirmModal

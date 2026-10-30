@@ -23,22 +23,21 @@ const NO_RUNS: ApiDAGRunDetails[] = [];
 const NO_GRID: DAGGridItem[] = [];
 
 /**
- * The test runs that this tab started, by workflow file. The timeline polls
- * the history while the set holds the workflow, as the SSE feed does not
- * carry test runs.
+ * When this tab last started a test run, in ms, by workflow file. The SSE
+ * feed does not carry test runs: the timeline polls the history for a while
+ * after a start, until the started run shows in it.
  */
-const startedTestRuns = new Set<string>();
+const startedTestRuns = new Map<string, number>();
 const startedListeners = new Set<() => void>();
 
 /** Records that this tab started a test run of the workflow. */
 export function noteTestRunStarted(fileName: string): void {
-  if (startedTestRuns.has(fileName)) return;
-  startedTestRuns.add(fileName);
+  startedTestRuns.set(fileName, Date.now());
   startedListeners.forEach((listener) => listener());
 }
 
-/** True when this tab started a test run of the workflow. */
-export function useTestRunStarted(fileName: string): boolean {
+/** When this tab last started a test run of the workflow, in ms. */
+export function useTestRunStartedAt(fileName: string): number | undefined {
   return useSyncExternalStore(
     (listener) => {
       startedListeners.add(listener);
@@ -46,13 +45,16 @@ export function useTestRunStarted(fileName: string): boolean {
         startedListeners.delete(listener);
       };
     },
-    () => startedTestRuns.has(fileName),
-    () => false
+    () => startedTestRuns.get(fileName),
+    () => undefined
   );
 }
 
 /** How often the history with test runs is read while a test run can change it. */
 export const TEST_RUN_POLL_MS = 5000;
+
+/** How long after a start the history is polled for a run it does not list yet. */
+const START_GRACE_MS = 30_000;
 
 /**
  * The run history of the workflow. Without `includeEphemeral` it has the SWR
@@ -60,9 +62,9 @@ export const TEST_RUN_POLL_MS = 5000;
  * server also lists the test runs (they leave no trace elsewhere): the query
  * has a key of its own and the SSE feed cannot fill it, so an event only
  * revalidates it. With `pollTestRuns`, the list is read again every
- * `TEST_RUN_POLL_MS` while it holds a test run or this tab started one, as
- * the server drops a test run without any event. Disabled, it makes no
- * request.
+ * `TEST_RUN_POLL_MS` while it holds a test run or this tab started one a
+ * moment ago, as the server drops a test run without any event. Disabled, it
+ * makes no request.
  */
 export function useRunHistory({
   enabled,
@@ -77,7 +79,7 @@ export function useRunHistory({
     useWorkspaceData('useRunHistory');
   const active = enabled && fileName !== '';
   const historySSE = useDAGHistorySSE(fileName, active, remoteNode);
-  const startedHere = useTestRunStarted(fileName);
+  const startedAt = useTestRunStartedAt(fileName);
   const base = sseFallbackOptions(historySSE);
   const { data, isLoading, mutate } = useQuery(
     '/dags/{fileName}/dag-runs',
@@ -94,7 +96,9 @@ export function useRunHistory({
       ...(includeEphemeral && pollTestRuns
         ? {
             refreshInterval: (latest?: { dagRuns?: ApiDAGRunDetails[] }) =>
-              startedHere || latest?.dagRuns?.some((run) => run.ephemeral)
+              (startedAt !== undefined &&
+                Date.now() - startedAt < START_GRACE_MS) ||
+              latest?.dagRuns?.some((run) => run.ephemeral)
                 ? TEST_RUN_POLL_MS
                 : base.refreshInterval,
           }

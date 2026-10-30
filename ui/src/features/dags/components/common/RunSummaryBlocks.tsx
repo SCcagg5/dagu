@@ -200,7 +200,9 @@ export function RunStatusMessage({
   return (
     <div className="flex items-center gap-1 text-xs text-muted-foreground">
       <Icon className={`h-3 w-3 ${config.iconClass}`} />
-      <span>{config.message}</span>
+      <span>
+        <I18nText text={config.message} />
+      </span>
     </div>
   );
 }

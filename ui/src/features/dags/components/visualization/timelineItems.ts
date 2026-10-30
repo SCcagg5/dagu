@@ -336,15 +336,7 @@ function buildStepRow(
     description: node.step.description,
     error: node.error,
     depth: 0,
-    dependsOn: handlerEvent
-      ? undefined
-      : [
-          ...new Set([
-            ...(node.step.depends ?? []),
-            ...(node.step.inferredDepends ?? []),
-            ...(routedFrom ?? []),
-          ]),
-        ],
+    dependsOn: handlerEvent ? undefined : waitsFor(node, routedFrom),
     node,
   };
 }
@@ -429,8 +421,9 @@ const AXIS_GAP_PX = 8;
  */
 function axisLabel(ms: number, stepMs: number, spanMs: number): string {
   const day = 86_400_000;
-  if (stepMs >= 365 * day) return dayjs(ms).format('YYYY');
-  if (stepMs >= 20 * day) return dayjs(ms).format('MMM YYYY');
+  // A gap longer than the longest month or year puts each tick in its own.
+  if (stepMs > 366 * day) return dayjs(ms).format('YYYY');
+  if (stepMs > 31 * day) return dayjs(ms).format('MMM YYYY');
   if (stepMs >= day) return dayjs(ms).format('MMM D');
   if (spanMs >= day) return dayjs(ms).format('MMM D HH:mm');
   // dayjs has no one-digit fraction token: cut the milliseconds to tenths.

@@ -171,6 +171,27 @@ describe('IncidentsTab', () => {
     expect(mutateMock).toHaveBeenCalled();
   });
 
+  // The draft is read when Save is pressed and replaced by the saved routing
+  // after it: an edit in between would be lost.
+  it('locks the editor until the save completes', async () => {
+    let finishPut: (value: unknown) => void = () => {};
+    putMock.mockReturnValue(new Promise((resolve) => (finishPut = resolve)));
+    const user = userEvent.setup();
+    renderTab();
+    await user.click(
+      screen.getByRole('button', { name: 'Configure workflow override' })
+    );
+    const modes = screen.getByRole('group', { name: 'Incident routing mode' });
+
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(within(modes).getByRole('button', { name: 'Off' })).toBeDisabled();
+
+    finishPut({ data: savedPolicySet });
+    await waitFor(() =>
+      expect(within(modes).getByRole('button', { name: 'Off' })).toBeEnabled()
+    );
+  });
+
   it('deletes a saved override after confirmation', async () => {
     state.policySet = savedPolicySet;
     const user = userEvent.setup();
