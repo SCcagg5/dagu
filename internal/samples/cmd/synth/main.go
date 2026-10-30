@@ -181,20 +181,7 @@ func createRun(ctx context.Context, home, name, dagFile, runID string, started t
 	if err := att.Open(ctx); err != nil {
 		return "", nil, nil, err
 	}
-	runDirs, err := filepath.Glob(filepath.Join(runsDir, name, "dag-runs", "*", "*", "*", "dag-run_*_"+runID, "*"))
-	if err != nil {
-		return "", nil, nil, err
-	}
-	var attemptDirs []string
-	for _, d := range runDirs {
-		if filedagrun.IsAttemptDirName(filepath.Base(d)) {
-			attemptDirs = append(attemptDirs, d)
-		}
-	}
-	if len(attemptDirs) != 1 {
-		return "", nil, nil, fmt.Errorf("cannot find the attempt directory of the run %s (%d matches)", runID, len(attemptDirs))
-	}
-	return attemptDirs[0], att, dag, nil
+	return att.Dir(), att, dag, nil
 }
 
 func writeStatus(ctx context.Context, att *filedagrun.Attempt, dag *ir.DAG, runID, status string, started, now time.Time, total int64) error {
@@ -207,11 +194,12 @@ func writeStatus(ctx context.Context, att *filedagrun.Attempt, dag *ir.DAG, runI
 		CreatedAt: started.UnixMilli(),
 	}
 	node := &ir.Node{
-		Step:      dag.Steps[0],
-		StartedAt: stringutil.FormatTime(started),
-		Status:    ir.NodeRunning,
-		DoneCount: int(total),
-		Repeated:  true,
+		Step:       dag.Steps[0],
+		StartedAt:  stringutil.FormatTime(started),
+		Status:     ir.NodeRunning,
+		DoneCount:  int(total),
+		Repeated:   true,
+		Continuous: true,
 	}
 	if status == "succeeded" {
 		st.Status = ir.Succeeded
