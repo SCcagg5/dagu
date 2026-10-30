@@ -166,6 +166,20 @@ describe('createOutputCache', () => {
     expect(again.entries(scope)['a']).toEqual(entry());
   });
 
+  it('keeps apart two scopes whose names join to the same text', () => {
+    const storage = memoryStorage();
+    createOutputCache(() => storage).put(
+      { remoteNode: 'a:b', fileName: 'c' },
+      'x',
+      entry()
+    );
+    const again = createOutputCache(() => storage);
+    expect(again.entries({ remoteNode: 'a', fileName: 'b:c' })).toEqual({});
+    expect(
+      Object.keys(again.entries({ remoteNode: 'a:b', fileName: 'c' }))
+    ).toEqual(['x']);
+  });
+
   it('works in memory when the storage is absent', () => {
     const cache = createOutputCache(() => null);
     expect(cache.put(scope, 'a', entry())).toBe(true);

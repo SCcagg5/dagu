@@ -33,6 +33,7 @@ import {
   clampPanToContent,
   createWheelStepper,
   stepZoom,
+  wheelDeltaUnit,
   zoomAt,
   type FitOptions,
   type PlacedHandle,
@@ -315,7 +316,7 @@ function FlowView<N extends FlowNode, E extends FlowEdge>({
       }
       event.preventDefault();
       const { store: s, onUserMove: moved, wheel: mode } = live.current;
-      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1;
+      const unit = wheelDeltaUnit(event.deltaMode);
       const view = pending ?? s.getViewport();
       if (mode === 'pan' && !event.ctrlKey && !event.metaKey) {
         // The content stays in reach: the wheel never scrolls it away.

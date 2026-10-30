@@ -69,7 +69,7 @@ function DAGAttributes({ dag }: Props) {
                 <Badge
                   key={label}
                   variant="outline"
-                  className="bg-muted text-foreground/90 px-2.5 py-1"
+                  className="h-auto max-w-full whitespace-normal break-all bg-muted text-foreground/90 px-2.5 py-1"
                 >
                   {label}
                 </Badge>
@@ -93,7 +93,7 @@ function DAGAttributes({ dag }: Props) {
                 <Badge
                   key={name}
                   variant="outline"
-                  className="bg-muted font-mono text-foreground/90 px-2.5 py-1 normal-case tracking-normal"
+                  className="h-auto max-w-full whitespace-normal break-all bg-muted font-mono text-foreground/90 px-2.5 py-1 normal-case tracking-normal"
                 >
                   {name}
                 </Badge>

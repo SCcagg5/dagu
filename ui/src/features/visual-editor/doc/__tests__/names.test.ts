@@ -74,6 +74,9 @@ describe('uniqueStepName', () => {
     ['', [], 'step'],
     ['...', ['step'], 'step_2'],
     ['étape.1', [], 'étape_1'],
+    // A combining mark stays with its letter.
+    ['\u0915\u093f.x', [], '\u0915\u093f_x'],
+    ['e\u0301tape', [], 'e\u0301tape'],
     ['ask_user', [], 'ask_user_2'],
     ['__agent__', [], 'agent'],
   ];

@@ -25,7 +25,7 @@ const TOKEN = new RegExp(
 );
 
 const PLAIN_PROPERTY =
-  /^\.(?:stdout|stderr|exit_code|exitCode|output|outputs)(?::\d+(?::\d+)?)?$/;
+  /^\.(?:stdout|stderr|exit_code|exitCode|output|outputs)(?::\d+(?::\d*)?)?$/;
 const PATH_PROPERTY = /^\.outputs?[.[]/;
 
 function isStepProperty(rest: string): boolean {
