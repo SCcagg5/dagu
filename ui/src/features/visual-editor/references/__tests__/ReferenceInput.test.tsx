@@ -167,6 +167,18 @@ describe('ReferenceInput', () => {
       expect(onValue).not.toHaveBeenCalled();
     });
 
+    it('puts the focus back in the field when the button closes the picker', () => {
+      render(<Controlled initial="x" />);
+      const button = screen.getByRole('button', { name: 'Insert reference' });
+      fireEvent.click(button);
+      expect(
+        screen.getByRole('textbox', { name: 'Search references' })
+      ).toHaveFocus();
+      fireEvent.click(button);
+      expect(screen.queryByRole('listbox')).toBeNull();
+      expect(field()).toHaveFocus();
+    });
+
     it('does not open the picker when disabled', () => {
       render(<Controlled initial="x" disabled />);
       const button = screen.getByRole('button', { name: 'Insert reference' });
@@ -211,6 +223,17 @@ describe('ReferenceInput', () => {
       expect(onValue).toHaveBeenLastCalledWith('x ${params.API_URL} tail');
       expect(screen.queryByRole('listbox')).toBeNull();
       expect(el.selectionStart).toBe('x ${params.API_URL}'.length);
+    });
+
+    it('replaces a closed reference through its closing brace', () => {
+      const onValue = vi.fn();
+      render(
+        <Controlled initial="curl ${params.API_URL}/x" onValue={onValue} />
+      );
+      focusAt(field(), 'curl ${params.API'.length);
+      fireEvent.click(screen.getByRole('option', { name: /API_URL/ }));
+      expect(onValue).toHaveBeenLastCalledWith('curl ${params.API_URL}/x');
+      expect(field().selectionStart).toBe('curl ${params.API_URL}'.length);
     });
 
     it('opens on a lone dollar and a click picks', () => {

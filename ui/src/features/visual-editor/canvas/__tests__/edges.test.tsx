@@ -246,6 +246,7 @@ describe('DependencyEdge', () => {
       makeActions(),
       makeAffordances()
     );
+    hoverEdge(route);
     expect(
       route.queryByRole('button', { name: 'Add a parallel step' })
     ).toBeNull();
@@ -253,6 +254,7 @@ describe('DependencyEdge', () => {
     const bare = renderEdge(
       <DependencyEdge {...edgeProps({}, { insertable: true })} />
     );
+    hoverEdge(bare);
     expect(
       bare.queryByRole('button', { name: 'Add a parallel step' })
     ).toBeNull();
@@ -348,8 +350,11 @@ describe('DependencyEdge', () => {
   });
 
   it('has no insert button when the edge is not insertable', () => {
-    const { queryByRole } = renderEdge(<DependencyEdge {...edgeProps({})} />);
-    expect(queryByRole('button', { name: 'Insert a step here' })).toBeNull();
+    const view = renderEdge(<DependencyEdge {...edgeProps({})} />);
+    hoverEdge(view);
+    expect(
+      view.queryByRole('button', { name: 'Insert a step here' })
+    ).toBeNull();
   });
 
   // parity:canvas-edge-insert
@@ -436,11 +441,14 @@ describe('DependencyEdge', () => {
   });
 
   it('hides the insert button when the canvas is not editable', () => {
-    const { queryByRole } = renderEdge(
+    const view = renderEdge(
       <DependencyEdge {...edgeProps({}, { insertable: true })} />,
       makeActions({ editable: false })
     );
-    expect(queryByRole('button', { name: 'Insert a step here' })).toBeNull();
+    hoverEdge(view);
+    expect(
+      view.queryByRole('button', { name: 'Insert a step here' })
+    ).toBeNull();
   });
 
   it('removes the link with the trash button shown on hover', () => {
@@ -485,6 +493,7 @@ describe('DependencyEdge', () => {
       makeActions(),
       makeAffordances()
     );
+    hoverEdge(locked);
     expect(
       locked.queryByRole('button', { name: 'Remove dependency' })
     ).toBeNull();
@@ -494,6 +503,7 @@ describe('DependencyEdge', () => {
       <DependencyEdge {...edgeProps({}, { insertable: true })} />,
       makeActions({ editable: false })
     );
+    hoverEdge(readOnly);
     expect(readOnly.queryAllByRole('button')).toHaveLength(0);
   });
 
@@ -804,10 +814,11 @@ describe('LockedEdge', () => {
   });
 
   it('has no insert button', () => {
-    const { queryByRole } = renderEdge(
+    const view = renderEdge(
       <LockedEdge {...edgeProps({ kind: 'order' }, { insertable: true })} />
     );
-    expect(queryByRole('button')).toBeNull();
+    hoverEdge(view);
+    expect(view.queryByRole('button')).toBeNull();
   });
 });
 

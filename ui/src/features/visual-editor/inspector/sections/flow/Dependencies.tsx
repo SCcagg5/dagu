@@ -5,6 +5,7 @@ import type { ReactElement } from 'react';
 import { useI18n } from '@/i18n/I18nProvider';
 import { I18nText } from '@/i18n/I18nText';
 import { FieldIssues } from '../../FieldIssues';
+import { issuesUnder } from '../../issues';
 import type { SectionProps } from '../../types';
 
 /** Read-only list of the dependencies of a step; the canvas edits them. */
@@ -23,7 +24,7 @@ export function Dependencies({
           {step.depends.map((name) => (
             <li
               key={name}
-              className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
+              className="max-w-full whitespace-normal break-words rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
             >
               {name}
             </li>
@@ -37,7 +38,7 @@ export function Dependencies({
       <p className="text-xs text-muted-foreground">
         <I18nText text="Edit dependencies on the canvas" />
       </p>
-      <FieldIssues issues={fieldIssues.depends} />
+      <FieldIssues issues={issuesUnder(fieldIssues, 'depends')} />
     </div>
   );
 }
