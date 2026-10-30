@@ -58,6 +58,12 @@ function fakeRun(details: ApiDAGRunDetails | null): WorkspaceRunValue {
 }
 
 const finished = run('r1', [node('a'), node('b')], Status.Success);
+// A run whose step 'ask' has the agent tab.
+const waitingAgent = run(
+  'r2',
+  [node('ask', NodeStatus.Waiting, { agentSession: { state: 'waiting' } })],
+  Status.Waiting
+);
 
 interface Probe {
   dock: DockController;
@@ -173,6 +179,14 @@ describe('DockProvider commands', () => {
     act(() => open('a', { keepTab: true }));
     expect(probe.dock.tab).toBe('log');
     expect(probe.commands.openStep).toBe(open);
+  });
+
+  it('keeps the tab in openStep with keepTab when the step has it', () => {
+    const probe = renderDock('/dags/demo?dock=agent', waitingAgent);
+    act(() => probe.commands.openStep('ask', { keepTab: true }));
+    expect(probe.dock.tab).toBe('agent');
+    expect(query(probe).get('dock')).toBe('agent');
+    expect(query(probe).get('step')).toBe('ask');
   });
 });
 
@@ -472,23 +486,14 @@ describe('DockProvider', () => {
 
   // parity:overview-tab-unavailable-fallback
   it('falls back to log when the tab disappears and writes no URL', () => {
-    const waiting = run(
-      'r2',
-      [
-        node('ask', NodeStatus.Waiting, {
-          agentSession: { state: 'waiting' },
-        }),
-      ],
-      Status.Waiting
-    );
-    const probe = renderDock('/dags/demo?dock=agent', waiting);
+    const probe = renderDock('/dags/demo?dock=agent', waitingAgent);
     expect(probe.dock.tab).toBe('agent');
 
     act(() => probe.setDetails(finished));
     expect(probe.dock.tab).toBe('log');
     expect(probe.location).toBe('/dags/demo?dock=agent');
 
-    act(() => probe.setDetails(waiting));
+    act(() => probe.setDetails(waitingAgent));
     expect(probe.dock.tab).toBe('agent');
   });
 

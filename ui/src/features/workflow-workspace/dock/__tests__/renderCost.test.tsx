@@ -11,42 +11,59 @@ import { node, run } from '../../data/__tests__/fixtures';
 import { propsEqual } from '../propsEqual';
 import { RunStepList } from '../RunStepList';
 import { RunTimelineView } from '../RunTimeline';
-import { Fragment, useContext } from 'react';
+import {
+  Fragment,
+  isValidElement,
+  useContext,
+  type ComponentProps,
+} from 'react';
 import { FreezeWhenHidden } from '../FreezeWhenHidden';
 import {
   WorkspaceDataContext,
   type WorkspaceDataValue,
 } from '../../data/context';
 
-// Counts of the renders of the memoized rows: a row calls these once for each
-// render of its own.
-const counts = vi.hoisted(() => ({ dots: 0, tones: 0 }));
+// Counts of the renders of the memoized rows. A row of the step list renders
+// one status dot, and a bar or an extent of the timeline one tooltip trigger
+// (counted by the test ID of its target), for each render of its own.
+const counts = vi.hoisted(() => ({ dots: 0, rows: new Map<string, number>() }));
 
 vi.mock('@/components/ui/status-dot', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/components/ui/status-dot')>();
   return {
     ...actual,
-    StatusDot: (props: Parameters<typeof actual.StatusDot>[0]) => {
+    StatusDot: (props: ComponentProps<typeof actual.StatusDot>) => {
       counts.dots++;
-      return actual.StatusDot(props);
+      return <actual.StatusDot {...props} />;
     },
   };
 });
-vi.mock('../runTimelineModel', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../runTimelineModel')>();
+vi.mock('@/components/ui/tooltip', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/components/ui/tooltip')>();
   return {
     ...actual,
-    barTone: (status: Parameters<typeof actual.barTone>[0]) => {
-      counts.tones++;
-      return actual.barTone(status);
+    TooltipTrigger: (props: ComponentProps<typeof actual.TooltipTrigger>) => {
+      const id = isValidElement<{ 'data-testid'?: string }>(props.children)
+        ? props.children.props['data-testid']
+        : undefined;
+      if (id) counts.rows.set(id, (counts.rows.get(id) ?? 0) + 1);
+      return <actual.TooltipTrigger {...props} />;
     },
   };
 });
 
+/** Renders of the timeline rows whose test ID starts with the prefix. */
+function rowRenders(prefix: string): number {
+  let total = 0;
+  for (const [id, n] of counts.rows) if (id.startsWith(prefix)) total += n;
+  return total;
+}
+
 afterEach(() => {
   counts.dots = 0;
-  counts.tones = 0;
+  counts.rows.clear();
   vi.useRealTimers();
 });
 
@@ -104,16 +121,14 @@ describe('RunTimelineView render cost', () => {
       </MemoryRouter>
     );
     const bar = screen.getByTestId('ww-run-bar-r1');
-    const before = counts.tones;
-    expect(before).toBeGreaterThan(0);
+    expect(rowRenders('ww-run-bar-')).toBeGreaterThan(0);
+    counts.rows.clear();
     await userEvent.setup().hover(bar);
     expect(screen.getByTestId('ww-run-timeline-cursor')).toBeTruthy();
     // The extents in focus change their look, so only the bars are pinned.
-    const barCalls = counts.tones - before;
-    expect(barCalls).toBeLessThanOrEqual(runs.length);
-    const mid = counts.tones;
+    expect(rowRenders('ww-run-bar-')).toBe(0);
     await userEvent.setup().unhover(bar);
-    expect(counts.tones - mid).toBeLessThanOrEqual(runs.length);
+    expect(rowRenders('ww-run-bar-')).toBe(0);
   });
 
   // A closed dock hides the timeline: the clock of a running run stops.
@@ -197,12 +212,15 @@ describe('RunTimelineView clock', () => {
     const gridBefore = grid();
     const heightBefore = fill('f0');
     expect(gridBefore.length).toBeGreaterThan(0);
-    counts.tones = 0;
+    counts.rows.clear();
     act(() => {
       vi.advanceTimersByTime(1000);
     });
-    // One bar and one extent (the running run): two calls, not eight.
-    expect(counts.tones).toBe(2);
+    // One bar and one extent (the running run): two renders, not eight.
+    expect(Object.fromEntries(counts.rows)).toEqual({
+      'ww-run-bar-live': 1,
+      'ww-run-extent-live': 1,
+    });
     expect(grid()).toEqual(gridBefore);
     expect(fill('f0')).toBe(heightBefore);
     // The running run reads the time: its label moved on.

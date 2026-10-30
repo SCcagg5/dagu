@@ -101,7 +101,7 @@ vi.mock('../canvas/WorkspaceCanvas', () => ({
           onClick={() =>
             void Promise.resolve(
               ctx.onEnqueue?.('p=1', 'chosen-id', true, undefined, undefined)
-            ).catch(() => undefined)
+            ).catch(startFailed)
           }
         >
           start now
@@ -110,7 +110,7 @@ vi.mock('../canvas/WorkspaceCanvas', () => ({
           type="button"
           onClick={() =>
             void Promise.resolve(ctx.onEnqueue?.('', undefined, false)).catch(
-              () => undefined
+              startFailed
             )
           }
         >
@@ -145,6 +145,8 @@ const onEnqueue = vi.fn();
 let pageEnqueue: typeof onEnqueue | undefined = onEnqueue;
 const ndvEvicted = vi.fn();
 const parentRefresh = vi.fn();
+// The Start dialog of the canvas shows the error of a failed start.
+const startFailed = vi.fn();
 
 const RUN_PATH = '/dag-runs/{name}/{dagRunId}';
 const HISTORY_PATH = '/dags/{fileName}/dag-runs';
@@ -228,6 +230,7 @@ beforeEach(() => {
   pageEnqueue = onEnqueue;
   parentRefresh.mockReset();
   ndvEvicted.mockReset();
+  startFailed.mockReset();
   // Every pinned run exists, so ?run stays in the URL.
   h.GET.mockImplementation(
     async (
@@ -465,6 +468,11 @@ describe('WorkflowWorkspace start', () => {
     renderAt('/dags/x');
     await clickStart('start now');
     expect(h.POST).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(startFailed).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'boom' })
+      )
+    );
     expect(screen.getByTestId('location')).toHaveTextContent(/^\/dags\/x$/);
   });
 });

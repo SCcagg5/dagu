@@ -1,7 +1,13 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NodeStatus, Status } from '@/api/v1/schema';
@@ -58,10 +64,13 @@ function renderNav(url = '/dags/demo/executions') {
   );
 }
 
+const list = () => screen.getByRole('list', { name: 'Run steps' });
+// A row is named by its title: the step name, or 'Run summary'.
+const row = (name: string) => within(list()).getByRole('listitem', { name });
 const rows = () =>
-  Array.from(document.querySelectorAll('li[data-step]')).map((li) =>
-    li.getAttribute('data-step')
-  );
+  within(list())
+    .getAllByRole('listitem')
+    .map((li) => li.title);
 
 beforeEach(() => {
   h.run = makeRun(
@@ -76,41 +85,33 @@ beforeEach(() => {
 describe('RunStepsNav', () => {
   it('lists the summary row and the steps of the selected run', () => {
     renderNav();
-    expect(screen.getByRole('list', { name: 'Run steps' })).toBeInTheDocument();
-    expect(rows()).toEqual(['a', 'b']);
-    expect(document.querySelector('li[data-summary]')).toHaveAttribute(
-      'data-selected',
-      'true'
-    );
+    expect(rows()).toEqual(['Run summary', 'a', 'b']);
+    expect(row('Run summary')).toHaveAttribute('aria-current', 'true');
   });
 
   it('selects the step of ?step', () => {
     renderNav('/dags/demo/executions?step=b');
-    expect(document.querySelector('li[data-step="b"]')).toHaveAttribute(
-      'data-selected',
-      'true'
-    );
+    expect(row('b')).toHaveAttribute('aria-current', 'true');
   });
 
   it('selects the step that the auto-open chose when ?step is empty', () => {
     h.dock.autoStep = { step: 'b', stream: 'stderr' };
     renderNav();
-    expect(document.querySelector('li[data-step="b"]')).toHaveAttribute(
-      'data-selected',
-      'true'
-    );
+    expect(row('b')).toHaveAttribute('aria-current', 'true');
   });
 
   it('opens the log of a picked step and selects it on the canvas', () => {
     renderNav();
-    fireEvent.click(document.querySelector('li[data-step="a"]')!);
+    fireEvent.click(within(row('a')).getByRole('button', { name: 'a' }));
     expect(h.dock.openStep).toHaveBeenCalledWith('a', { keepTab: true });
     expect(h.revealStep).toHaveBeenCalledWith('a');
   });
 
   it('opens the run log from the summary row', () => {
     renderNav('/dags/demo/executions?step=a');
-    fireEvent.click(document.querySelector('li[data-summary]')!);
+    fireEvent.click(
+      within(row('Run summary')).getByRole('button', { name: 'Run summary' })
+    );
     expect(h.dock.openRunLog).toHaveBeenCalled();
     expect(h.dock.openStep).not.toHaveBeenCalled();
   });
@@ -121,7 +122,7 @@ describe('RunStepsNav', () => {
     expect(screen.queryByRole('list')).toBeNull();
 
     h.run = { ...makeRun(run('r1')), details: null };
-    document.body.innerHTML = '';
+    cleanup();
     renderNav();
     expect(screen.getByText('Loading run...')).toBeInTheDocument();
   });
