@@ -71,8 +71,9 @@ func finishedRun(t *testing.T, server test.Server, name, spec string) string {
 		var details api.GetDAGRunDetails200JSONResponse
 		resp.Unmarshal(t, &details)
 		switch details.DagRunDetails.Status {
-		case api.StatusSuccess, api.StatusFailed, api.StatusAborted, api.StatusPartialSuccess:
+		case api.StatusSuccess, api.StatusFailed, api.StatusAborted, api.StatusPartialSuccess, api.StatusRejected:
 			return true
+		case api.StatusNotStarted, api.StatusQueued, api.StatusRunning, api.StatusWaiting:
 		}
 		return false
 	}, timeout, 200*time.Millisecond)

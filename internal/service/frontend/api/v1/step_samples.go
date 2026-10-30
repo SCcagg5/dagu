@@ -6,6 +6,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -142,8 +143,8 @@ func toStepSamples(series samples.Series, from, to time.Time) api.StepSamples {
 	for _, b := range series.Buckets {
 		buckets = append(buckets, api.SampleBucket{
 			Time:     b.Time.UTC(),
-			Count:    int64(b.Count),
-			Failures: int64(b.Failures),
+			Count:    countInt64(b.Count),
+			Failures: countInt64(b.Failures),
 			MinMs:    b.Min.Milliseconds(),
 			MaxMs:    b.Max.Milliseconds(),
 			P50Ms:    b.P50.Milliseconds(),
@@ -206,7 +207,7 @@ func toStepEvents(page samples.EventPage) api.StepEvents {
 			ev.Message = ptrOf(e.Message)
 		}
 		if e.FailedCount > 0 {
-			ev.FailedCount = ptrOf(int64(e.FailedCount))
+			ev.FailedCount = ptrOf(countInt64(e.FailedCount))
 		}
 		if e.Kind == samples.EventRecovered {
 			ev.OutageSeconds = ptrOf(int64(e.Outage / time.Second))
@@ -255,7 +256,7 @@ func toStepAvailability(av samples.Availability) api.StepAvailability {
 	windows := make([]api.AvailabilityWindow, 0, len(availabilityWindows))
 	for _, w := range availabilityWindows {
 		stat := stats[w.window]
-		out := api.AvailabilityWindow{Window: w.api, Count: int64(stat.Count), Failures: int64(stat.Failures)}
+		out := api.AvailabilityWindow{Window: w.api, Count: countInt64(stat.Count), Failures: countInt64(stat.Failures)}
 		if stat.Count > 0 {
 			out.Availability = ptrOf(float64(stat.Count-min(stat.Failures, stat.Count)) / float64(stat.Count))
 		}
@@ -263,11 +264,16 @@ func toStepAvailability(av samples.Availability) api.StepAvailability {
 	}
 	result := api.StepAvailability{
 		Windows:    windows,
-		Streak:     int64(av.Streak),
-		TotalCount: int64(av.TotalCount),
+		Streak:     countInt64(av.Streak),
+		TotalCount: countInt64(av.TotalCount),
 	}
 	if !av.LastFailureAt.IsZero() {
 		result.LastFailureAt = ptrOf(av.LastFailureAt.UTC())
 	}
 	return result
+}
+
+// countInt64 converts a sample count for the API, saturating at MaxInt64.
+func countInt64(n uint64) int64 {
+	return int64(min(n, math.MaxInt64)) // #nosec G115 -- clamped to MaxInt64
 }
