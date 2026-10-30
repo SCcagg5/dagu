@@ -108,8 +108,9 @@ interface RunColumns {
 }
 
 /**
- * The columns of the Executions page, in its order. Scheduled At and Profile
- * show only when a run fills them. The columns share the width in fractions:
+ * The columns of the Executions page, in its order. The status column also
+ * holds the scheduled time, when a run has one. Profile shows only when a run
+ * fills it. The columns share the width in fractions:
  * a wide list spreads them, not leaves a gap.
  */
 function runColumns(runs: readonly Run[]): RunColumns {
@@ -117,10 +118,9 @@ function runColumns(runs: readonly Run[]): RunColumns {
   const profile = runs.some((r) => !!r.profileName);
   const template = [
     'minmax(0,2fr)', // run id
-    '7rem', // status
+    scheduled ? 'minmax(0,1.6fr)' : '7rem', // status, and when it was scheduled
     'minmax(0,1fr)', // trigger
     profile && 'minmax(0,1fr)',
-    scheduled && 'minmax(0,1fr)',
     'minmax(0,1fr)', // queued
     'minmax(0,1fr)', // started
     'minmax(0,2fr)', // duration and its detail
@@ -144,10 +144,17 @@ function RunHeader({ columns }: { columns: RunColumns }) {
       className="grid items-center gap-x-3 border-b border-border/40 px-1 pb-1 text-[11px] text-muted-foreground"
     >
       {head('Run ID')}
-      {head('Status')}
+      <span className="flex min-w-0 gap-1 truncate">
+        {head('Status')}
+        {columns.scheduled && (
+          <>
+            {'·'}
+            {head('Scheduled At')}
+          </>
+        )}
+      </span>
       {head('Trigger')}
       {columns.profile && head('Profile')}
-      {columns.scheduled && head('Scheduled At')}
       {head('Queued At')}
       {head('Started At')}
       {head('Duration')}
@@ -212,6 +219,12 @@ function RunLine({
           <span className="truncate text-foreground/80">
             {healthy ? ts('Healthy') : ts(runStatusText(run.status))}
           </span>
+          {columns.scheduled && run.scheduleTime && (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <Moment at={run.scheduleTime} />
+            </>
+          )}
         </span>
         <span>
           {trigger && (
@@ -231,7 +244,6 @@ function RunLine({
             {run.profileName || '-'}
           </span>
         )}
-        {columns.scheduled && <Moment at={run.scheduleTime} />}
         <Moment at={run.queuedAt} />
         <span className="truncate text-foreground/80">
           <RelativeTime
