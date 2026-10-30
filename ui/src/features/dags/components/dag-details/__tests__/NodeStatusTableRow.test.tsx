@@ -79,7 +79,7 @@ const stepLogPath = '/dag-runs/{name}/{dagRunId}/steps/{stepName}/log';
 
 const NOW = '2026-07-22T01:05:00Z';
 const FIVE_MINUTES_AGO = '2026-07-22T01:00:00Z';
-const ABSOLUTE_FORMAT = 'YYYY-MM-DD HH:mm:ss Z';
+const ABSOLUTE_FORMAT = 'YYYY-MM-DD HH:mm:ss';
 
 const timedNode = {
   step: { name: 'build' },
@@ -201,7 +201,7 @@ describe('NodeStatusTableRow', () => {
     for (const link of links) {
       expect(link).toHaveAttribute(
         'href',
-        '/dag-runs/producer/run-2?remoteNode=worker-a'
+        '/dags/producer?remoteNode=worker-a&run=run-2'
       );
     }
   });
