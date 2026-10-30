@@ -379,9 +379,9 @@ export function ViewSelector({
           <div className="flex items-center gap-1">
             <Button
               type="button"
-              variant="outline"
-              size="icon"
-              className="h-9 w-9"
+              variant="primary"
+              size="xs"
+              className="h-7 w-7 justify-center p-0"
               title={
                 activeView
                   ? ts('Save the changes of “{name}”', {
@@ -399,7 +399,7 @@ export function ViewSelector({
                   : openSaveDialog()
               }
             >
-              <Save />
+              <Save aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
             </Button>
             {activeView && (
               <>
