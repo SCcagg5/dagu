@@ -39,7 +39,14 @@ export function CopyButton({
   const { copied, copy } = useCopyFeedback(2000, onCopied);
 
   const onClick = async () => {
-    await copy(typeof text === 'function' ? await text() : text);
+    let value: string;
+    try {
+      value = typeof text === 'function' ? await text() : text;
+    } catch {
+      // A text that cannot be read is a failed copy: the button stays idle.
+      return;
+    }
+    await copy(value);
   };
 
   return (
