@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { WorkspaceLoading } from '../../../features/workflow-workspace/WorkspaceLoading';
 import {
   Link,
+  Navigate,
   useLocation,
   useParams,
   useSearchParams,
@@ -134,6 +135,27 @@ function DAGDetails() {
   useEffect(() => {
     setTitle(dagTitle);
   }, [dagTitle, setTitle]);
+
+  // A run link names the workflow by the DAG name of the run, which finds no
+  // file when the DAG name differs from the file name. The run gives its file.
+  const linkedRunId = searchParams.get('run');
+  const lookUpRunFile = Boolean(linkedRunId) && isNotFoundQueryError(dagError);
+  const { data: linkedRun, error: linkedRunError } = useQuery(
+    '/dag-runs/{name}/{dagRunId}',
+    whenEnabled(lookUpRunFile, {
+      params: {
+        path: { name: fileName, dagRunId: linkedRunId || '' },
+        query: scopedQuery,
+      },
+    })
+  );
+  const linkedRunFile = linkedRun?.dagRunDetails?.sourceFileName;
+  const runFileRedirect =
+    lookUpRunFile && linkedRunFile && linkedRunFile !== fileName
+      ? `/dags/${encodeURIComponent(linkedRunFile)}?${searchParams.toString()}`
+      : null;
+  const resolvingRunFile =
+    lookUpRunFile && !linkedRunError && (!linkedRun || !!runFileRedirect);
 
   // Links from older versions and bookmarks redirect before a body mounts.
   const legacy = useLegacyRedirect(
@@ -293,8 +315,9 @@ function DAGDetails() {
               !showBody && !loadingFrame && 'overflow-auto p-4 md:p-6'
             )}
           >
+            {runFileRedirect && <Navigate replace to={runFileRedirect} />}
             {!dagData?.dag &&
-              (dagError ? (
+              (dagError && !resolvingRunFile ? (
                 isNotFoundQueryError(dagError) ? (
                   <NotFoundState
                     title={ts('Workflow not found')}
