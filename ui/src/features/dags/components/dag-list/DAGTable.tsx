@@ -39,7 +39,6 @@ import { DAGNameInputModal } from '@/components/DAGNameInputModal';
 import { components, Status } from '../../../../api/v1/schema';
 import RelativeTime from '@/components/ui/relative-time';
 import { RunStatusChip } from '@/features/dag-runs/components/common/RunStatusChip';
-import VisuallyHidden from '@/components/ui/visually-hidden';
 import { CreateDAGButton, DAGPagination } from '../common';
 import DAGActions from '../common/DAGActions';
 import LiveSwitch from '../common/LiveSwitch';
@@ -622,44 +621,23 @@ const defaultColumns = [
     },
   }),
   columnHelper.accessor('name', {
-    id: 'Expand',
-    header: ({ table }) => (
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={table.getToggleAllRowsExpandedHandler()}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            table.toggleAllRowsExpanded();
-          }
-        }}
-        className="flex items-center justify-center text-muted-foreground cursor-pointer h-6 w-[18px] focus:outline-none rounded"
-      >
-        {table.getIsAllRowsExpanded() ? (
-          <>
-            <VisuallyHidden>
-              <I18nText text={'Compress rows'} />
-            </VisuallyHidden>
-            <ChevronUp className="h-4 w-4" />
-          </>
-        ) : (
-          <>
-            <VisuallyHidden>
-              <I18nText text={'Expand rows'} />
-            </VisuallyHidden>
-            <ChevronDown className="h-4 w-4" />
-          </>
-        )}
-      </div>
+    id: 'Name',
+    header: () => (
+      <span className="text-xs">
+        <I18nText text={'Name'} />
+      </span>
     ),
-    cell: ({ row }) => {
-      if (row.getCanExpand()) {
+    cell: ({ row, getValue, table }) => {
+      const data = row.original!;
+
+      if (data.kind === ItemKind.Group) {
+        // The chevron that unfolds the group sits in the name cell of its row,
+        // so that the rows of the workflows give no width to it.
         return (
           <div
-            className="flex items-center justify-center min-h-[2.5rem] text-muted-foreground cursor-pointer focus:outline-none rounded"
             role="button"
             tabIndex={0}
+            aria-expanded={row.getIsExpanded()}
             onClick={(e) => {
               e.stopPropagation();
               row.toggleExpanded();
@@ -671,41 +649,14 @@ const defaultColumns = [
                 row.toggleExpanded();
               }
             }}
+            className="flex min-h-[2.5rem] cursor-pointer items-center gap-1 rounded text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {row.getIsExpanded() ? (
-              <ChevronUp className="h-4 w-4" />
+              <ChevronUp className="h-4 w-4 shrink-0" />
             ) : (
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4 shrink-0" />
             )}
-          </div>
-        );
-      }
-      return null;
-    },
-    size: 18,
-    minSize: 18,
-    maxSize: 18,
-  }),
-  columnHelper.accessor('name', {
-    id: 'Name',
-    header: () => (
-      <span className="text-xs">
-        <I18nText text={'Name'} />
-      </span>
-    ),
-    cell: ({ row, getValue, table }) => {
-      const data = row.original!;
-
-      if (data.kind === ItemKind.Group) {
-        // Group Row: Render group name directly with vertical centering
-        return (
-          <div
-            style={{ paddingLeft: `${row.depth * 1.5}rem` }}
-            className="flex items-center min-h-[2.5rem]"
-          >
-            <span className="font-normal text-muted-foreground">
-              {getValue()}
-            </span>
+            <span className="truncate font-normal">{getValue()}</span>
           </div>
         );
       } else {
@@ -1585,12 +1536,6 @@ function DAGTable({
     return hierarchicalData;
   }, [dags, clientSort, compareDags]);
 
-  // The chevron column unfolds the groups: without a group it has no use.
-  const hasGroups = useMemo(
-    () => data.some((row) => row.kind === ItemKind.Group),
-    [data]
-  );
-
   const instance = useReactTable<Data>({
     data,
     columns,
@@ -1609,7 +1554,6 @@ function DAGTable({
     state: {
       expanded,
       columnFilters,
-      columnVisibility: { Expand: hasGroups },
     },
     onExpandedChange: handleExpandedChange,
     meta: {
@@ -1884,7 +1828,6 @@ function DAGTable({
           <colgroup>
             {canDeleteDAGs && <col style={{ width: '24px' }} />}
             <col style={{ width: '24px' }} />
-            {hasGroups && <col style={{ width: '18px' }} />}
             <col style={{ width: '28%' }} />
             <col style={{ width: '88px' }} />
             <col className={activityColumn.col} />
@@ -1898,7 +1841,7 @@ function DAGTable({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={`py-1 text-muted-foreground text-xs overflow-hidden ${header.column.id === 'Select' || header.column.id === 'Expand' || header.column.id === 'Pin' ? 'px-0' : header.column.id === 'Name' ? 'pl-1 pr-2' : 'px-2'} ${header.column.id === 'Activity' ? activityColumn.cell : ''}`}
+                    className={`py-1 text-muted-foreground text-xs overflow-hidden ${header.column.id === 'Select' || header.column.id === 'Pin' ? 'px-0' : header.column.id === 'Name' ? 'pl-1 pr-2' : 'px-2'} ${header.column.id === 'Activity' ? activityColumn.cell : ''}`}
                   >
                     {header.isPlaceholder ? null : (
                       <div>
@@ -1975,7 +1918,7 @@ function DAGTable({
                       {row.getVisibleCells().map((cell) => (
                         <TableCell
                           key={cell.id}
-                          className={`py-1 align-middle overflow-hidden truncate ${cell.column.id === 'Select' || cell.column.id === 'Expand' || cell.column.id === 'Pin' ? 'px-0' : cell.column.id === 'Name' ? 'pl-1 pr-2' : 'px-2'} ${cell.column.id === 'Activity' ? activityColumn.cell : ''}`}
+                          className={`py-1 align-middle overflow-hidden truncate ${cell.column.id === 'Select' || cell.column.id === 'Pin' ? 'px-0' : cell.column.id === 'Name' ? 'pl-1 pr-2' : 'px-2'} ${cell.column.id === 'Activity' ? activityColumn.cell : ''}`}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
