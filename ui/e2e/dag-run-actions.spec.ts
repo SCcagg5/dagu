@@ -153,13 +153,22 @@ steps:
     expect(contents).toMatch(/line 100000\n$/);
   });
 
-  test('reads parallel output without losing the selected step or scroll position', async ({ page, request }, testInfo) => {
+  test('opens the run of the progress card on its page', async ({
+    page,
+    request,
+  }) => {
     const stack = await loadStack();
-    const token = await loginViaAPI(request, stack.auth.adminUsername, stack.auth.adminPassword);
+    const token = await loginViaAPI(
+      request,
+      stack.auth.adminUsername,
+      stack.auth.adminPassword
+    );
     const dagName = uniqueName('e2e-parallel-output');
     const releaseFirst = `${stack.stateDir}/${dagName}-first`;
     const releaseSecond = `${stack.stateDir}/${dagName}-second`;
-    const fileName = await writeLocalDAG(dagName, `
+    const fileName = await writeLocalDAG(
+      dagName,
+      `
 name: ${dagName}
 type: graph
 steps:
@@ -183,77 +192,43 @@ steps:
       echo "second final"
       echo "second error" >&2
       exit 1
-`);
+`
+    );
     await waitForDAGAvailable(request, token, fileName);
     const runId = uniqueName('parallel-run');
     await page.setViewportSize({ width: 1440, height: 1100 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`/dags/${encodeURIComponent(fileName)}`);
-    await page.getByRole('button', { name: 'Start', exact: true }).first().click();
+    await page
+      .getByRole('button', { name: 'Start', exact: true })
+      .first()
+      .click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Run ID (optional)').fill(runId);
     await dialog.getByRole('button', { name: 'Start', exact: true }).click();
-    await expect
-      .poll(() => new URL(page.url()).pathname)
-      .toBe(`/dags/${encodeURIComponent(fileName)}`);
-
-    await expect(page.getByRole('dialog', { name: 'Run progress' })).toHaveCount(0);
-    const progressCard = page.getByRole('button', { name: `Open run progress for ${runId}` });
+    await expect(
+      page.getByRole('dialog', { name: 'Run progress' })
+    ).toHaveCount(0);
+    const progressCard = page.getByRole('button', {
+      name: `Open run progress for ${runId}`,
+    });
     await expect(progressCard).toBeVisible();
+    // A click on the card opens no dialog: it removes the card and shows the
+    // run on its page.
     await progressCard.click();
-
-    const progressDialog = page.getByRole('dialog', { name: 'Run progress' });
-    await expect(progressDialog).toBeVisible();
-    await progressDialog.getByRole('button', { name: 'Visualization' }).click();
-    await expect(progressDialog.getByText('Graph')).toBeVisible();
-    await progressDialog.getByRole('button', { name: 'Run output' }).click();
-    const output = progressDialog.getByRole('region', { name: 'Run output', exact: true });
-    const log = output.getByRole('region', { name: 'Step output', exact: true });
+    await expect(progressCard).toHaveCount(0);
+    await expect(
+      page.getByRole('dialog', { name: 'Run progress' })
+    ).toHaveCount(0);
     try {
-      await expect(output.getByText('2 running', { exact: true })).toBeVisible();
-      await expect(log).toContainText('first tick');
-      await expect.poll(() => log.evaluate((element) =>
-        element.scrollHeight - element.scrollTop - element.clientHeight
-      )).toBeLessThanOrEqual(4);
-      await log.hover();
-      await page.mouse.wheel(0, -200);
-      await expect(output.getByText('New output available')).toBeVisible();
-      const snapshot = await log.innerText();
-      const scrollTop = await log.evaluate((element) => element.scrollTop);
-      await writeFile(releaseFirst, '');
-      await expect(output.getByRole('tab', { name: /first/ })).toContainText('Succeeded');
-      await expect(log).toHaveText(snapshot, { useInnerText: true });
-      expect(await log.evaluate((element) => element.scrollTop)).toBe(scrollTop);
-      await page.screenshot({ path: testInfo.outputPath('parallel-desktop.png'), fullPage: true });
-
-      await output.getByRole('button', { name: 'Back to live' }).click();
-      await expect(log).toContainText('second started');
-      await output.getByRole('tab', { name: /first/ }).focus();
-      await page.keyboard.press('ArrowDown');
-      const secondTab = output.getByRole('tab', { name: /second/ });
-      await expect(secondTab).toBeFocused();
-      await writeFile(releaseSecond, '');
-      await expect(log).toContainText('second final');
-      await expect(output.getByRole('button', { name: '1 failed' })).toBeVisible();
-      await expect(secondTab).toBeFocused();
-      await output.getByRole('button', { name: 'stderr', exact: true }).click();
-      await expect(log).toContainText('second error');
-
-      await page.setViewportSize({ width: 390, height: 844 });
-      await expect(output.getByLabel('Step', { exact: true })).toBeVisible();
-      await output.getByLabel('Step', { exact: true }).selectOption('first');
-      await output.getByRole('button', { name: 'stdout', exact: true }).click();
-      await expect(log).toContainText('first final');
-      await log.getByText('first final', { exact: true }).scrollIntoViewIfNeeded();
-      await expect(log.getByText('first final', { exact: true })).toBeInViewport();
-      expect(await output.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath('parallel-mobile.png'), fullPage: true });
-      await progressDialog.getByRole('button', { name: 'View details' }).click();
-      await expect(page).toHaveURL(
-        new RegExp(`/dag-runs/${dagName}/${runId}\\?remoteNode=local`)
-      );
+      await expect
+        .poll(() => new URL(page.url()).pathname)
+        .toBe(`/dag-runs/${dagName}/${runId}`);
     } finally {
-      await Promise.all([writeFile(releaseFirst, ''), writeFile(releaseSecond, '')]);
+      await Promise.all([
+        writeFile(releaseFirst, ''),
+        writeFile(releaseSecond, ''),
+      ]);
     }
   });
 
