@@ -2277,6 +2277,7 @@ const english = {
   'Link copied': 'Link copied',
   'Copy link to this workflow': 'Copy link to this workflow',
   'Copy link to this run': 'Copy link to this run',
+  'Copy link to the root run': 'Copy link to the root run',
   'This workspace currently inherits Global rules.':
     'This workspace currently inherits Global rules.',
   "Overrides Global for workflows in this workspace.": "Overrides Global for workflows in this workspace.",
@@ -4847,6 +4848,7 @@ const chinese = {
   'Link copied': '链接已复制',
   'Copy link to this workflow': '复制此工作流的链接',
   'Copy link to this run': '复制此次运行的链接',
+  'Copy link to the root run': '复制根运行的链接',
   'This workspace currently inherits Global rules.':
     '此工作区当前继承全局规则。',
   "Overrides Global for workflows in this workspace.": "覆盖此工作区中工作流的全局规则。",
@@ -7487,6 +7489,7 @@ const japanese = {
   'Link copied': 'リンクをコピーしました',
   'Copy link to this workflow': 'このワークフローへのリンクをコピー',
   'Copy link to this run': 'この実行へのリンクをコピー',
+  'Copy link to the root run': 'ルート実行へのリンクをコピー',
   'This workspace currently inherits Global rules.':
     'このワークスペースは現在グローバルルールを継承しています。',
   "Overrides Global for workflows in this workspace.": "このワークスペース内のワークフローについてグローバルルールを上書きします。",

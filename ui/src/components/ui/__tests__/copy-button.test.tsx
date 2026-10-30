@@ -28,6 +28,7 @@ describe('CopyButton', () => {
     render(<CopyButton text="abc" label="Copy id" />);
     const idle = screen.getByRole('button', { name: 'Copy id' });
     const idleIcon = idle.innerHTML;
+    const idleClass = idle.className;
 
     await click('Copy id');
     expect(copyText).toHaveBeenCalledWith('abc');
@@ -35,7 +36,7 @@ describe('CopyButton', () => {
     const copied = screen.getByRole('button', { name: 'Copied' });
     expect(copied.innerHTML).not.toBe(idleIcon);
     expect(copied.querySelector('svg')).toHaveClass('text-success');
-    expect(copied.className).toBe(idle.className);
+    expect(copied.className).toBe(idleClass);
 
     await act(async () => {
       vi.advanceTimersByTime(1999);

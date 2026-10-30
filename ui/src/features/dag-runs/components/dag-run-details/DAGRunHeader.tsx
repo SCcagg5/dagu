@@ -48,15 +48,23 @@ const DAGRunHeader: React.FC<DAGRunHeaderProps> = ({
     setLastCopy('link')
   );
 
+  // The workflow page has no address for a sub-run, so its link opens the root run.
+  const isSubRun = dagRun.dagRunId !== dagRun.rootDAGRunId;
+  const copyLinkLabel = ts(
+    linkCopied
+      ? 'Link copied'
+      : isSubRun
+        ? 'Copy link to the root run'
+        : 'Copy link to this run'
+  );
   const copyRunLink = () => {
     const basePrefix = config.basePath === '/' ? '' : (config.basePath ?? '');
     const runPath = buildDAGRunPageURL({
       rootDAGRunName: dagRun.rootDAGRunName,
       rootDAGRunId: dagRun.rootDAGRunId,
+      fileName: isSubRun ? undefined : dagRun.sourceFileName,
       remoteNode,
       workspace,
-      subDAGRunId:
-        dagRun.dagRunId !== dagRun.rootDAGRunId ? dagRun.dagRunId : undefined,
     });
     void copyLink(`${window.location.origin}${basePrefix}${runPath}`);
   };
@@ -203,10 +211,8 @@ const DAGRunHeader: React.FC<DAGRunHeaderProps> = ({
             type="button"
             onClick={copyRunLink}
             className={iconButton}
-            title={ts(linkCopied ? 'Link copied' : 'Copy link to this run')}
-            aria-label={ts(
-              linkCopied ? 'Link copied' : 'Copy link to this run'
-            )}
+            title={copyLinkLabel}
+            aria-label={copyLinkLabel}
           >
             {linkCopied ? (
               <Check className="h-3.5 w-3.5 text-success" />
@@ -222,6 +228,7 @@ const DAGRunHeader: React.FC<DAGRunHeaderProps> = ({
                 workspace,
               })}
               onClick={(e) => {
+                if (e.metaKey || e.ctrlKey) return;
                 e.preventDefault();
                 navigate(
                   buildDAGPageURL({
