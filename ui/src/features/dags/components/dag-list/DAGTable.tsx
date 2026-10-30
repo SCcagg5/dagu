@@ -488,6 +488,7 @@ type Props = {
   onSetDefaultWorkflowView: (viewId: string | undefined) => Promise<void>;
   onSetPinnedWorkflowView: (viewId: string, pinned: boolean) => Promise<void>;
   onDeleteWorkflowView: (viewId: string) => Promise<void>;
+  onRenameWorkflowView: (viewId: string, name: string) => Promise<void>;
   onDeleteDAGs: (fileNames: string[]) => Promise<DAGDeleteResult[]>;
   onRenameDAG: (fileName: string, newFileName: string) => Promise<void>;
   /** Whether the current user can pin a workflow for everyone */
@@ -1176,6 +1177,7 @@ function DAGTable({
   onSetDefaultWorkflowView,
   onSetPinnedWorkflowView,
   onDeleteWorkflowView,
+  onRenameWorkflowView,
   onDeleteDAGs,
   onRenameDAG,
   canPinDAG,
@@ -1691,6 +1693,7 @@ function DAGTable({
             onSetDefault={onSetDefaultWorkflowView}
             onSetPinned={onSetPinnedWorkflowView}
             onDeleteView={onDeleteWorkflowView}
+            onRenameView={onRenameWorkflowView}
           />
 
           {/* Search input */}

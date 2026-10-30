@@ -5,6 +5,7 @@ import {
   Bookmark,
   Check,
   ChevronDown,
+  PencilLine,
   RotateCcw,
   Save,
   Settings2,
@@ -36,6 +37,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { I18nText } from '@/i18n/I18nText';
 import { I18nProps } from '@/i18n/I18nProps';
+import { useI18n } from '@/i18n/I18nProvider';
 
 export type SavedViewItem = {
   id: string;
@@ -124,6 +126,11 @@ type Props = {
   onSetDefault: (viewId: string | undefined) => Promise<void>;
   onSetPinned: (viewId: string, pinned: boolean) => Promise<void>;
   onDeleteView: (viewId: string) => Promise<void>;
+  /**
+   * Renames a saved view. With it, the selector shows Save, Rename and Delete
+   * buttons for the active view, and shows no selector while no view is saved.
+   */
+  onRenameView?: (viewId: string, name: string) => Promise<void>;
 };
 
 export function ViewSelector({
@@ -143,6 +150,7 @@ export function ViewSelector({
   onSetDefault,
   onSetPinned,
   onDeleteView,
+  onRenameView,
 }: Props): React.ReactElement {
   const [saveDialogOpen, setSaveDialogOpen] = React.useState(false);
   const [manageDialogOpen, setManageDialogOpen] = React.useState(false);
@@ -152,12 +160,19 @@ export function ViewSelector({
   const [isMutating, setIsMutating] = React.useState(false);
   const [pendingDelete, setPendingDelete] =
     React.useState<SavedViewItem | null>(null);
+  const [deleteFromManage, setDeleteFromManage] = React.useState(true);
+  const [renameOpen, setRenameOpen] = React.useState(false);
+  const [renameName, setRenameName] = React.useState('');
 
+  const { ts } = useI18n();
   const copy = VIEW_COPY[kind];
   const activeView = views.find((view) => view.id === activeViewId);
   const isCustomView = !activeView && !isAllView;
   const selectedLabel =
     activeView?.name ?? (isCustomView ? 'Custom view' : copy.allItems);
+  // With the toolbar buttons, the selector shows once a view is saved: with
+  // only "All workflows" it has nothing to choose.
+  const showSelector = !onRenameView || views.length > 0 || !isAllView;
   const normalizedName = viewName.trim();
   const duplicateName = views.some(
     (view) => view.name.toLowerCase() === normalizedName.toLowerCase()
@@ -199,14 +214,41 @@ export function ViewSelector({
     }
   };
 
-  const requestDelete = (view: SavedViewItem) => {
+  const requestDelete = (view: SavedViewItem, fromManage = true) => {
+    setDeleteFromManage(fromManage);
     setManageDialogOpen(false);
     setPendingDelete(view);
   };
 
   const dismissDelete = () => {
     setPendingDelete(null);
-    setManageDialogOpen(true);
+    setManageDialogOpen(deleteFromManage);
+  };
+
+  const normalizedRename = renameName.trim();
+  const renameTaken = views.some(
+    (view) =>
+      view.id !== activeView?.id &&
+      view.name.toLowerCase() === normalizedRename.toLowerCase()
+  );
+  const canRename =
+    !!activeView &&
+    normalizedRename.length > 0 &&
+    normalizedRename !== activeView.name &&
+    !renameTaken &&
+    !isMutating;
+
+  const renameView = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canRename || !activeView || !onRenameView) {
+      return;
+    }
+    try {
+      await runMutation(() => onRenameView(activeView.id, normalizedRename));
+      setRenameOpen(false);
+    } catch {
+      // The page displays the server error alongside the view controls.
+    }
   };
 
   const confirmDelete = async () => {
@@ -216,7 +258,7 @@ export function ViewSelector({
     try {
       await runMutation(() => onDeleteView(pendingDelete.id));
       setPendingDelete(null);
-      setManageDialogOpen(true);
+      setManageDialogOpen(deleteFromManage);
     } catch {
       // Keep the confirmation open so the operation can be retried.
     }
@@ -225,115 +267,173 @@ export function ViewSelector({
   return (
     <>
       <div className="flex min-w-0 items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          <I18nText text={'View'} />
-        </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        {showSelector && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 min-w-[190px] max-w-[280px] justify-start px-3"
+                aria-label={copy.triggerAria(selectedLabel)}
+              >
+                {activeView?.pinned ? (
+                  <Star className="fill-current text-primary" />
+                ) : (
+                  <Bookmark />
+                )}
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {selectedLabel}
+                </span>
+                {activeViewId === defaultViewId && (
+                  <Badge variant="primary" className="hidden sm:inline-flex">
+                    <I18nText text={'Default'} />
+                  </Badge>
+                )}
+                {isActiveViewEdited && (
+                  <Badge variant="secondary">
+                    <I18nText text={'Edited'} />
+                  </Badge>
+                )}
+                <ChevronDown className="text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[280px]">
+              <DropdownMenuItem onSelect={onShowAll}>
+                <span className="mr-2 flex size-4 items-center justify-center">
+                  {isAllView && <Check />}
+                </span>
+                <I18nText text={copy.allItems} />
+              </DropdownMenuItem>
+
+              {views.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[11px] text-muted-foreground">
+                    <I18nText text={'Shared views'} />
+                  </DropdownMenuLabel>
+                  {views.map((view) => (
+                    <DropdownMenuItem
+                      key={view.id}
+                      onSelect={() => onSelectView(view.id)}
+                    >
+                      <span className="mr-2 flex size-4 items-center justify-center">
+                        {view.id === activeViewId && <Check />}
+                      </span>
+                      <span className="min-w-0 flex-1 whitespace-normal break-words">
+                        {view.name}
+                      </span>
+                      {view.pinned && (
+                        <Star className="fill-current text-primary" />
+                      )}
+                      {view.id === defaultViewId && (
+                        <Badge variant="primary">
+                          <I18nText text={'Default'} />
+                        </Badge>
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+
+              {activeView && isActiveViewEdited && (
+                <>
+                  <DropdownMenuSeparator />
+                  {canManageViews && (
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        void runMutation(onUpdateView).catch(() => undefined)
+                      }
+                      disabled={isMutating}
+                    >
+                      <Save className="mr-2" />
+                      <I18nText
+                        text="Update “{name}”"
+                        values={{ name: activeView.name }}
+                      />
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={onResetView}>
+                    <RotateCcw className="mr-2" />
+                    <I18nText text={'Reset changes'} />
+                  </DropdownMenuItem>
+                </>
+              )}
+
+              {canManageViews && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={openSaveDialog}>
+                    <Save className="mr-2" />
+                    <I18nText text={'Save current filters as view…'} />
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setManageDialogOpen(true)}>
+                    <Settings2 className="mr-2" />
+                    <I18nText text={'Manage views…'} />
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {onRenameView && canManageViews && (
+          <div className="flex items-center gap-1">
             <Button
               type="button"
               variant="outline"
-              className="h-9 min-w-[190px] max-w-[280px] justify-start px-3"
-              aria-label={copy.triggerAria(selectedLabel)}
+              size="icon"
+              className="h-9 w-9"
+              title={
+                activeView
+                  ? ts('Save the changes of “{name}”', {
+                      name: activeView.name,
+                    })
+                  : ts('Save current filters as view…')
+              }
+              aria-label={ts('Save view')}
+              disabled={
+                isMutating || (activeView ? !isActiveViewEdited : false)
+              }
+              onClick={() =>
+                activeView
+                  ? void runMutation(onUpdateView).catch(() => undefined)
+                  : openSaveDialog()
+              }
             >
-              {activeView?.pinned ? (
-                <Star className="fill-current text-primary" />
-              ) : (
-                <Bookmark />
-              )}
-              <span className="min-w-0 flex-1 truncate text-left">
-                {selectedLabel}
-              </span>
-              {activeViewId === defaultViewId && (
-                <Badge variant="primary" className="hidden sm:inline-flex">
-                  <I18nText text={'Default'} />
-                </Badge>
-              )}
-              {isActiveViewEdited && (
-                <Badge variant="secondary">
-                  <I18nText text={'Edited'} />
-                </Badge>
-              )}
-              <ChevronDown className="text-muted-foreground" />
+              <Save />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[280px]">
-            <DropdownMenuItem onSelect={onShowAll}>
-              <span className="mr-2 flex size-4 items-center justify-center">
-                {isAllView && <Check />}
-              </span>
-              <I18nText text={copy.allItems} />
-            </DropdownMenuItem>
-
-            {views.length > 0 && (
+            {activeView && (
               <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-[11px] text-muted-foreground">
-                  <I18nText text={'Shared views'} />
-                </DropdownMenuLabel>
-                {views.map((view) => (
-                  <DropdownMenuItem
-                    key={view.id}
-                    onSelect={() => onSelectView(view.id)}
-                  >
-                    <span className="mr-2 flex size-4 items-center justify-center">
-                      {view.id === activeViewId && <Check />}
-                    </span>
-                    <span className="min-w-0 flex-1 whitespace-normal break-words">
-                      {view.name}
-                    </span>
-                    {view.pinned && (
-                      <Star className="fill-current text-primary" />
-                    )}
-                    {view.id === defaultViewId && (
-                      <Badge variant="primary">
-                        <I18nText text={'Default'} />
-                      </Badge>
-                    )}
-                  </DropdownMenuItem>
-                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  title={ts('Rename view')}
+                  aria-label={ts('Rename view')}
+                  disabled={isMutating}
+                  onClick={() => {
+                    setRenameName(activeView.name);
+                    setRenameOpen(true);
+                  }}
+                >
+                  <PencilLine />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  title={ts('Delete view')}
+                  aria-label={ts('Delete view')}
+                  disabled={isMutating}
+                  onClick={() => requestDelete(activeView, false)}
+                >
+                  <Trash2 />
+                </Button>
               </>
             )}
-
-            {activeView && isActiveViewEdited && (
-              <>
-                <DropdownMenuSeparator />
-                {canManageViews && (
-                  <DropdownMenuItem
-                    onSelect={() =>
-                      void runMutation(onUpdateView).catch(() => undefined)
-                    }
-                    disabled={isMutating}
-                  >
-                    <Save className="mr-2" />
-                    <I18nText
-                      text="Update “{name}”"
-                      values={{ name: activeView.name }}
-                    />
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onSelect={onResetView}>
-                  <RotateCcw className="mr-2" />
-                  <I18nText text={'Reset changes'} />
-                </DropdownMenuItem>
-              </>
-            )}
-
-            {canManageViews && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={openSaveDialog}>
-                  <Save className="mr-2" />
-                  <I18nText text={'Save current filters as view…'} />
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setManageDialogOpen(true)}>
-                  <Settings2 className="mr-2" />
-                  <I18nText text={'Manage views…'} />
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </div>
+        )}
       </div>
 
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
@@ -408,6 +508,52 @@ export function ViewSelector({
               </Button>
               <Button type="submit" variant="primary" disabled={!canSave}>
                 <I18nText text={'Save view'} />
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="sm:max-w-[440px]">
+          <form onSubmit={renameView}>
+            <DialogHeader>
+              <DialogTitle>
+                <I18nText text={'Rename view'} />
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 py-5">
+              <Label htmlFor={`view-rename-${kind}`}>
+                <I18nText text={'Name'} />
+              </Label>
+              <Input
+                id={`view-rename-${kind}`}
+                value={renameName}
+                maxLength={80}
+                autoFocus
+                onChange={(event) => setRenameName(event.target.value)}
+              />
+              {renameTaken && (
+                <p className="text-xs text-destructive">
+                  <I18nText text={'A view with this name already exists.'} />
+                </p>
+              )}
+              {error && (
+                <p role="alert" className="text-xs text-destructive">
+                  {error}
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setRenameOpen(false)}
+              >
+                <I18nText text={'Cancel'} />
+              </Button>
+              <Button type="submit" variant="primary" disabled={!canRename}>
+                <I18nText text={'Rename'} />
               </Button>
             </DialogFooter>
           </form>

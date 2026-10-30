@@ -25,6 +25,8 @@ export default defineMessages({
     'Enable webhook': 'Enable webhook',
     'Disable webhook': 'Disable webhook',
     'Could not update the webhook': 'Could not update the webhook',
+    'Rename view': 'Rename view',
+    'Save the changes of “{name}”': 'Save the changes of “{name}”',
   },
   'zh-CN': {
     'Runs in the last 24 hours': '过去 24 小时内的运行',
@@ -45,6 +47,8 @@ export default defineMessages({
     'Enable webhook': '启用 Webhook',
     'Disable webhook': '停用 Webhook',
     'Could not update the webhook': '无法更新 Webhook',
+    'Rename view': '重命名视图',
+    'Save the changes of “{name}”': '保存“{name}”的更改',
   },
   ja: {
     'Runs in the last 24 hours': '過去 24 時間の実行',
@@ -65,5 +69,7 @@ export default defineMessages({
     'Enable webhook': 'Webhook を有効にする',
     'Disable webhook': 'Webhook を無効にする',
     'Could not update the webhook': 'Webhook を更新できませんでした',
+    'Rename view': 'ビューの名前を変更',
+    'Save the changes of “{name}”': '「{name}」の変更を保存',
   },
 });

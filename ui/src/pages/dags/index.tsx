@@ -963,6 +963,40 @@ function DAGsContent() {
     }
   };
 
+  const handleRenameWorkflowView = async (
+    viewId: string,
+    name: string
+  ): Promise<void> => {
+    const view = scopedWorkflowViews.find((item) => item.id === viewId);
+    if (!view) {
+      return;
+    }
+    // The saved filters stay as they are: a rename does not save the edits.
+    const saved = workflowViews.find((item) => item.id === viewId);
+    if (!saved) {
+      return;
+    }
+    setWorkflowViewError(null);
+    try {
+      await updateView(
+        viewId,
+        buildWorkflowViewSpec(
+          name,
+          cloneFilters(saved.filters),
+          view.isDefault ?? false,
+          view.pinned ?? false
+        )
+      );
+    } catch (error) {
+      setWorkflowViewError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to rename the workflow view'
+      );
+      throw error;
+    }
+  };
+
   const handleDeleteWorkflowView = async (viewId: string): Promise<void> => {
     const deletingActiveView = viewId === activeWorkflowViewId;
     setWorkflowViewError(null);
@@ -1147,6 +1181,7 @@ function DAGsContent() {
             onSetDefaultWorkflowView={handleSetDefaultWorkflowView}
             onSetPinnedWorkflowView={handleSetPinnedWorkflowView}
             onDeleteWorkflowView={handleDeleteWorkflowView}
+            onRenameWorkflowView={handleRenameWorkflowView}
             onDeleteDAGs={handleDeleteDAGs}
             onRenameDAG={handleRenameDAG}
             canPinDAG={canPinDAG}
