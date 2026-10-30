@@ -18,6 +18,12 @@ function plain(message: string): string {
   return message.replace(POSITION_PREFIX, '');
 }
 
+// Two messages with positions match only at the same position.
+function sameText(a: string, b: string): boolean {
+  if (POSITION_PREFIX.test(a) && POSITION_PREFIX.test(b)) return a === b;
+  return plain(a) === plain(b);
+}
+
 function rowsOf(
   severity: ValidationIssueSeverity,
   messages: string[],
@@ -27,7 +33,7 @@ function rowsOf(
   const used = new Set<ValidationIssue>();
   const rows: IssueRow[] = messages.map((message) => {
     const issue = own.find(
-      (item) => !used.has(item) && plain(item.message) === plain(message)
+      (item) => !used.has(item) && sameText(item.message, message)
     );
     if (issue) used.add(issue);
     return issue ? { message, issue } : { message };

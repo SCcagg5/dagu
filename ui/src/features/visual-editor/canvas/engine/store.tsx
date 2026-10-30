@@ -262,11 +262,12 @@ export function FlowProvider({
   );
   const placedHandles = useCallback((): PlacedHandle[] => {
     const placed: PlacedHandle[] = [];
+    const byId = new Map(nodesRef.current.map((n) => [n.id, n]));
     for (const rel of handlesRef.current.values()) {
       if (!rel.connectable) {
         continue;
       }
-      const node = nodesRef.current.find((n) => n.id === rel.nodeId);
+      const node = byId.get(rel.nodeId);
       if (node) {
         placed.push({
           nodeId: rel.nodeId,

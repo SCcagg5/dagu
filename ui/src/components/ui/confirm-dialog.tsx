@@ -127,8 +127,11 @@ function ConfirmDialog({
           const active = document.activeElement;
           returnTo.current = active instanceof HTMLElement ? active : null;
           event.preventDefault();
+          // A disabled button cannot take the focus.
           const target =
-            initialFocus === 'cancel' ? cancelButtonRef : submitButtonRef;
+            initialFocus === 'cancel' || submitDisabled
+              ? cancelButtonRef
+              : submitButtonRef;
           target.current?.focus();
         }}
         onCloseAutoFocus={(event) => {
