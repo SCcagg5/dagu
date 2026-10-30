@@ -812,7 +812,7 @@ function DAGSpec({
     const text = currentValue ?? serverSpec ?? '';
     const edit = minimalEdit(text, formatYaml(text));
     if (!edit) {
-      showToast(ts('The YAML is already formatted'));
+      showToast(ts('The YAML is already formatted'), { variant: 'info' });
       return;
     }
     applyTextChange(text, [edit], 'dagu-format');
@@ -1384,7 +1384,7 @@ function DAGSpec({
     if (!fresh) return;
     const edit = formatStepRange(text, fresh);
     if (!edit) {
-      showToast(ts('The step is already formatted'));
+      showToast(ts('The step is already formatted'), { variant: 'info' });
       return;
     }
     applyTextChange(text, [edit], 'dagu-format');
