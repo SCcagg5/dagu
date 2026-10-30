@@ -13,6 +13,9 @@ import (
 // change fills in.
 var ErrNotImplemented = errors.New("samples: not implemented")
 
+// ErrInvalidCursor reports an events cursor that the store did not make.
+var ErrInvalidCursor = errors.New("samples: invalid cursor")
+
 // Sample is the record of one execution of a continuous step.
 type Sample struct {
 	// Time is the start of the execution, in UTC. It has millisecond precision.
@@ -119,7 +122,8 @@ type Event struct {
 	ExitCode int
 	Message  string
 	// FailedCount is the count of failed samples of the outage, for a
-	// recovered event and for a repeated failed event.
+	// recovered event, for a repeated failed event, and for a stopped event
+	// during an outage, so that the next start continues the count.
 	FailedCount uint64
 	// Outage is the length of the outage, for a recovered event.
 	Outage time.Duration

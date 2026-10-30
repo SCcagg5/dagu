@@ -6,6 +6,7 @@ package samples
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"strconv"
@@ -106,6 +107,7 @@ func loadTracker(path string) (t tracker, lastEvent int64, err error) {
 	scanned := int64(0)
 	first := true
 	var earliest, newestFailed *Event
+	var failed uint64
 	err = scanLinesBackward(f, st.Size(), func(_ int64, line []byte) bool {
 		scanned += int64(len(line)) + 1
 		e, ok := parseEvent(line)
@@ -124,7 +126,14 @@ func loadTracker(path string) (t tracker, lastEvent int64, err error) {
 				newestFailed = &ev
 			}
 			earliest = &ev
-		case EventStarted, EventStopped:
+			if failed == 0 {
+				failed = e.FailedCount
+			}
+		case EventStopped:
+			if failed == 0 {
+				failed = e.FailedCount
+			}
+		case EventStarted:
 		}
 		return scanned < maxScan
 	})
@@ -134,7 +143,7 @@ func loadTracker(path string) (t tracker, lastEvent int64, err error) {
 	if earliest != nil {
 		t = tracker{
 			inOutage: true, outageStart: earliest.Time.UnixMilli(),
-			failed: newestFailed.FailedCount, lastFailed: newestFailed.Time.UnixMilli(),
+			failed: failed, lastFailed: newestFailed.Time.UnixMilli(),
 		}
 	}
 	return t, lastEvent, nil
@@ -147,11 +156,11 @@ func encodeCursor(off int64) string { return cursorPrefix + strconv.FormatInt(of
 func decodeCursor(c string) (int64, error) {
 	rest, ok := strings.CutPrefix(c, cursorPrefix)
 	if !ok {
-		return 0, errf("invalid cursor %q", c)
+		return 0, fmt.Errorf("%w %q", ErrInvalidCursor, c)
 	}
 	v, err := strconv.ParseInt(rest, 36, 64)
 	if err != nil || v < 0 {
-		return 0, errf("invalid cursor %q", c)
+		return 0, fmt.Errorf("%w %q", ErrInvalidCursor, c)
 	}
 	return v, nil
 }

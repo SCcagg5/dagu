@@ -80,6 +80,10 @@ A sample has:
   the standard error of a failed execution. It is empty for an execution that
   succeeded.
 
+When the clock steps back to a minute before the newest sample, a sample is
+stored at the start of that newest minute, so that the samples of a step stay
+in time order.
+
 The runner never holds more than one minute of samples in memory.
 
 ### Tiers
@@ -117,8 +121,13 @@ Rules:
 A continuous step records an event, at full resolution and with no expiry, when:
 
 - the step starts (`started`) and stops (`stopped`).
-- a sample fails after a sample that succeeded (`failed`).
-- a sample succeeds after a sample that failed (`recovered`).
+- a sample fails while no outage is open: the first sample of the step, or a
+  sample after one that succeeded (`failed`).
+- a sample succeeds while an outage is open (`recovered`).
+
+An outage that is open when the step stops goes on at the next start: the
+count of failed samples continues, and the next start records no `failed`
+event of its own. Event times never decrease.
 
 An event has: `time`, `kind`, `exitCode`, `message`, and, for `recovered`, the
 count of failed samples and the length of the outage.
@@ -220,6 +229,9 @@ message `step X is not a continuous step`.
   (`24h`, `7d`, `30d`, `365d`), `count`, `failures` and `availability` (a number
   from 0 to 1, absent when `count` is 0), and the current streak: the count of
   samples since the last failed sample and the time of the last failed sample.
+  Once the raw tier no longer holds that sample, the time is the start of the
+  aggregate bucket that holds it, and the count is a lower bound: it leaves out
+  the samples that succeeded after the failure in the same bucket.
 
 The run details give `continuous: true` on the node of a continuous step.
 
