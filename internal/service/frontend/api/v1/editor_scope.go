@@ -45,7 +45,7 @@ func scopeParams(dag *ir.DAG) []api.ReferenceScopeVariable {
 			v.Description = ptrOf(def.Description)
 		}
 		if def.Default != nil {
-			v.DefaultValue = ptrOf(fmt.Sprint(def.Default))
+			v.DefaultValue = new(fmt.Sprint(def.Default))
 		}
 		params = append(params, v)
 	}
