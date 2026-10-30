@@ -6,6 +6,11 @@ Partially implemented. This spec defines the behavior of a step that repeats
 without end, such as a heartbeat that checks a service every second for
 years.
 
+Covered: which steps are continuous, the samples and events of a step run by
+the local runner, the tiers and their retention, the three API queries and
+their errors, the status writes and the compaction of the status file, and the
+bounded step log. `conformance/spec083_continuous_runs` checks this behavior.
+
 Not covered yet: runs that a distributed worker executes, the status writes of
 a continuous sub-DAG step, a retry of a run (it starts a new store), and the
 time range of the step log.
@@ -260,6 +265,32 @@ one element for each sample.
   samples.
 - An API request of this spec answers in 500 ms at most for a run of three
   years at one sample each second, on the reference machine of the tests.
+
+## Errors
+
+- A query parameter out of its range, `from` after `to`, or a `before` cursor
+  that the server did not give gets `400`.
+- A request for a run or a step that does not exist, or for a step that is not
+  continuous, gets `404`.
+- A store that cannot open does not stop the step: the step keeps running and
+  records no sample.
+
+## Examples
+
+A step that repeats until a file exists is a continuous step:
+
+```yaml
+steps:
+  - id: beat
+    run: sh beat.sh
+    repeat_policy:
+      repeat: until
+      condition: test -f done
+      interval_sec: 0
+```
+
+The same step with `limit` is a repeated step, not a continuous one. The
+fixtures in `conformance/spec083_continuous_runs/testdata` give both.
 
 ## Test Scenarios
 

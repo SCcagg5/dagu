@@ -5,8 +5,8 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -31,6 +31,7 @@ type fakeSamplesReader struct {
 	sampleQuery samples.SampleQuery
 	eventQuery  samples.EventQuery
 	dir         string
+	eventsErr   error // returned by Events when set
 }
 
 func (f *fakeSamplesReader) Samples(_ context.Context, q samples.SampleQuery) (samples.Series, error) {
@@ -40,7 +41,7 @@ func (f *fakeSamplesReader) Samples(_ context.Context, q samples.SampleQuery) (s
 
 func (f *fakeSamplesReader) Events(_ context.Context, q samples.EventQuery) (samples.EventPage, error) {
 	f.eventQuery = q
-	return f.page, nil
+	return f.page, f.eventsErr
 }
 
 func (f *fakeSamplesReader) Availability(_ context.Context, _ time.Time) (samples.Availability, error) {
@@ -256,6 +257,10 @@ func TestEvents(t *testing.T) {
 			{Time: t0.Add(3 * time.Minute), Kind: samples.EventRecovered, FailedCount: 120, Outage: 2 * time.Minute},
 			{Time: t0, Kind: samples.EventFailed, ExitCode: 7, Message: "boom"},
 			{Time: t0.Add(-time.Hour), Kind: samples.EventStarted},
+			// A stop during an outage keeps its count for the next start only.
+			{Time: t0.Add(-2 * time.Hour), Kind: samples.EventStopped, FailedCount: 3},
+			// An outage shorter than a second still has a length.
+			{Time: t0.Add(-3 * time.Hour), Kind: samples.EventRecovered, FailedCount: 1, Outage: 500 * time.Millisecond},
 		},
 	}}
 	a, _ := newSamplesAPI(t, fake, nil, continuousNode("beat"))
@@ -271,7 +276,7 @@ func TestEvents(t *testing.T) {
 	assert.Equal(t, samples.EventQuery{Limit: 500, Before: "c1"}, fake.eventQuery)
 	require.NotNil(t, got.NextCursor)
 	assert.Equal(t, "c2", *got.NextCursor)
-	require.Len(t, got.Events, 3)
+	require.Len(t, got.Events, 5)
 
 	rec, failed, started := got.Events[0], got.Events[1], got.Events[2]
 	assert.Equal(t, openapiv1.StepEventKindRecovered, rec.Kind)
@@ -292,6 +297,10 @@ func TestEvents(t *testing.T) {
 	assert.Nil(t, started.ExitCode)
 	assert.Nil(t, started.Message)
 	assert.Nil(t, started.FailedCount)
+
+	assert.Nil(t, got.Events[3].FailedCount)
+	require.NotNil(t, got.Events[4].OutageSeconds)
+	assert.Equal(t, int64(0), *got.Events[4].OutageSeconds)
 }
 
 func TestEventsDefaultsAndBadParams(t *testing.T) {
@@ -316,6 +325,11 @@ func TestEventsDefaultsAndBadParams(t *testing.T) {
 	to := from.Add(-time.Hour)
 	_, err = call(openapiv1.GetDAGRunStepEventsParams{From: &from, To: &to})
 	requireBadRequest(t, err)
+
+	fake.eventsErr = fmt.Errorf("decode: %w", samples.ErrInvalidCursor)
+	bad := "x"
+	_, err = call(openapiv1.GetDAGRunStepEventsParams{Before: &bad})
+	requireBadRequest(t, err)
 }
 
 func TestAvailability(t *testing.T) {
@@ -326,6 +340,8 @@ func TestAvailability(t *testing.T) {
 			{Window: samples.Window30d, Count: 1000, Failures: 10},
 			{Window: samples.Window24h, Count: 100, Failures: 0},
 			{Window: samples.Window7d, Count: 0},
+			// Every sample failed: the availability is zero, not absent.
+			{Window: samples.Window365d, Count: 5, Failures: 5},
 		},
 		Streak: 42, LastFailureAt: last, TotalCount: 5_000_000_000,
 	}}
@@ -350,7 +366,8 @@ func TestAvailability(t *testing.T) {
 	assert.InDelta(t, 0.99, *got.Windows[2].Availability, 1e-9)
 	assert.Equal(t, int64(1000), got.Windows[2].Count)
 	assert.Equal(t, int64(10), got.Windows[2].Failures)
-	assert.Nil(t, got.Windows[3].Availability)
+	require.NotNil(t, got.Windows[3].Availability)
+	assert.Zero(t, *got.Windows[3].Availability)
 	assert.Equal(t, int64(42), got.Streak)
 	assert.Equal(t, int64(5_000_000_000), got.TotalCount)
 	require.NotNil(t, got.LastFailureAt)
@@ -388,5 +405,5 @@ func TestSamplesStoreDir(t *testing.T) {
 	fake := &fakeSamplesReader{}
 	a, attemptDir := newSamplesAPI(t, fake, nil, continuousNode("my beat"))
 	getSamples(t, a, "my beat", openapiv1.GetDAGRunStepSamplesParams{})
-	assert.Equal(t, filepath.Join(attemptDir, "samples", "my_beat"), fake.dir)
+	assert.Equal(t, samples.Dir(attemptDir, "my beat"), fake.dir)
 }
