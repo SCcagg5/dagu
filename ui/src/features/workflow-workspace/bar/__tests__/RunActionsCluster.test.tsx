@@ -184,24 +184,28 @@ function Where() {
   return <output data-testid="where">{pathname + search}</output>;
 }
 
-function setup(
-  selected: ApiDAGRunDetails | null,
-  url = '/dags/etl.yaml?run=run-1'
-) {
-  const run = runValue(selected);
+function tree(run: WorkspaceRunValue, url: string) {
   const cluster = (
     <DataProvider run={run}>
       <Where />
       <RunActionsCluster fileName={FILE} dag={dag} workspaceName={null} />
     </DataProvider>
   );
-  render(
+  return (
     <MemoryRouter initialEntries={[url]}>
       <Routes>
         <Route path="/dags/:fileName/:tab?" element={cluster} />
       </Routes>
     </MemoryRouter>
   );
+}
+
+function setup(
+  selected: ApiDAGRunDetails | null,
+  url = '/dags/etl.yaml?run=run-1'
+) {
+  const run = runValue(selected);
+  render(tree(run, url));
   return run;
 }
 
@@ -501,6 +505,22 @@ describe('RunActionsCluster', () => {
       expect(h.editor.handle!.replaceBuffer).not.toHaveBeenCalled();
       fireEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
       expect(h.editor.handle!.replaceBuffer).toHaveBeenCalledTimes(1);
+    });
+
+    // The parser can freeze the editor while the question is open.
+    it('replaces nothing when the editor froze during the question', async () => {
+      h.editor.state = { dirty: true, editable: true, loaded: true };
+      const run = runValue(details('failed'));
+      const url = '/dags/etl.yaml?run=run-1';
+      const view = render(tree(run, url));
+      fireEvent.click(screen.getByRole('button', { name: COPY }));
+      const dialog = await screen.findByRole('dialog');
+
+      h.editor = { ...h.editor, state: { ...h.editor.state, frozen: true } };
+      view.rerender(tree(run, url));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+
+      expect(h.editor.handle!.replaceBuffer).not.toHaveBeenCalled();
     });
 
     it.each([

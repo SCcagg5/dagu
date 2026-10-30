@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActivityLine } from '../ActivityLine';
@@ -463,7 +463,7 @@ describe('StepLog', () => {
 describe('ExecutionLog line count', () => {
   // No line of text under the Activity and Raw switch: the count is only
   // for screen readers.
-  it('keeps the line count in a status for screen readers only', () => {
+  it('keeps the line count for screen readers only', () => {
     logs.data = {
       content: 'one\ntwo\nthree',
       totalLines: 3,
@@ -479,7 +479,9 @@ describe('ExecutionLog line count', () => {
       { wrapper: UserPreferencesProvider }
     );
     const count = screen.getByText('3 lines');
-    expect(count.closest('[role="status"]')).toHaveClass('sr-only');
+    expect(count.closest('.sr-only')).toBeInTheDocument();
+    // A live run changes the count often: it is no live region.
+    expect(count.closest('[role="status"]')).toBeNull();
   });
 });
 
@@ -1133,5 +1135,54 @@ describe('log order toggle', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New to old' }));
     expect(region.scrollTop).toBe(800);
+  });
+
+  // A new line shifts every row of the newest-first view down by one.
+  it('keeps the open details with their line when a new line arrives', () => {
+    const line = (msg: string, code: number) =>
+      JSON.stringify({
+        time: '2026-08-06T12:00:00Z',
+        level: 'INFO',
+        msg,
+        code,
+      });
+    const runningRun = {
+      name: 'example',
+      dagRunId: 'run',
+      status: Status.Running,
+    } as never;
+    logs.data = {
+      content: [line('first', 1), line('second', 2)].join('\n'),
+      totalLines: 2,
+      lineCount: 2,
+      hasMore: false,
+    };
+    const { rerender } = render(
+      <ExecutionLog name="example" dagRunId="run" dagRun={runningRun} />,
+      { wrapper: UserPreferencesProvider }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Old to new' }));
+    const row = (msg: string) =>
+      screen.getByText(msg).closest<HTMLElement>('[data-line-number]')!;
+    fireEvent.click(
+      within(row('first')).getByRole('button', { name: 'Details' })
+    );
+    expect(screen.getByText('code=1')).toBeVisible();
+
+    logs.data = {
+      content: [line('first', 1), line('second', 2), line('third', 3)].join(
+        '\n'
+      ),
+      totalLines: 3,
+      lineCount: 3,
+      hasMore: false,
+    };
+    rerender(
+      <ExecutionLog name="example" dagRunId="run" dagRun={runningRun} />
+    );
+
+    expect(screen.getByText('third')).toBeInTheDocument();
+    expect(within(row('first')).getByText('code=1')).toBeVisible();
+    expect(screen.queryByText('code=2')).toBeNull();
   });
 });

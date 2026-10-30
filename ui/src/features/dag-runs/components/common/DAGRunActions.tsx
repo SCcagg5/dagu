@@ -359,7 +359,7 @@ function DAGRunActions({
             onSubmit={async () => {
               setIsStopModal(false);
               if (stopAll && stopsAll) {
-                const { error } = await client.POST(
+                const { data, error } = await client.POST(
                   '/dags/{fileName}/stop-all',
                   {
                     params: {
@@ -379,7 +379,19 @@ function DAGRunActions({
                   return;
                 }
                 setStopAllRunning(false);
-                showToast(ts('Stop signal sent to all running instances'));
+                // A 200 lists the runs that did not stop.
+                if (data?.errors?.length) {
+                  showError(
+                    ts('Failed to stop all DAG instances'),
+                    ts(
+                      'Some instances may have already completed or the worker is unavailable.'
+                    ),
+                    undefined,
+                    data.errors
+                  );
+                } else {
+                  showToast(ts('Stop signal sent to all running instances'));
+                }
                 reloadData();
                 return;
               }

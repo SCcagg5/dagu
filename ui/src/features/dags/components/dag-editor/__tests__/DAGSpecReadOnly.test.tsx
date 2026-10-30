@@ -324,6 +324,21 @@ describe('DAGSpecReadOnly with the canvas preview', () => {
     );
   });
 
+  // The DAG name of the run can differ from the name of its file.
+  it('opens the new run on the page of the source file', async () => {
+    await openCanvasPreview({ sourceFileName: 'example-v2' });
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /create new run/i })
+    );
+
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith(
+        '/dags/example-v2?remoteNode=local&run=run-2'
+      )
+    );
+  });
+
   it('hides the retry when DAG runs are disabled', async () => {
     mocks.runDags = false;
     mocks.useQuery.mockReturnValue({
