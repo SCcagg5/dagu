@@ -63,4 +63,24 @@ describe('ToolFilter', () => {
     expect(onChange).toHaveBeenCalledWith('');
     expect(onKey).not.toHaveBeenCalled();
   });
+
+  // Enter and Escape during an IME composition belong to the IME.
+  it('ignores Enter and Escape while a composition is active', () => {
+    const onChange = vi.fn();
+    const onStep = vi.fn();
+    render(
+      <ToolFilter
+        value="x"
+        onChange={onChange}
+        matches={1}
+        total={3}
+        onStep={onStep}
+      />
+    );
+    const box = screen.getByRole('searchbox');
+    fireEvent.keyDown(box, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(box, { key: 'Escape', isComposing: true });
+    expect(onStep).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

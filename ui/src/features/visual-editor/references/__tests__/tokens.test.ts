@@ -207,6 +207,7 @@ describe('findOpenReference', () => {
     expect(at('${a} ')).toBeNull();
     expect(at('${a}')).toBeNull();
     expect(at('${a} ${b')).toEqual({ from: 5, query: 'b' });
+    expect(at('${a} $')).toEqual({ from: 5, query: '' });
   });
 
   it('ignores an escaped dollar', () => {

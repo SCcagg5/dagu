@@ -51,6 +51,15 @@ describe('ConfirmDialog', () => {
     );
   });
 
+  it('focuses Cancel while the confirm button is disabled', async () => {
+    const user = userEvent.setup();
+    render(<Host submitDisabled />);
+    await user.click(screen.getByRole('button', { name: 'Opener' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    );
+  });
+
   it('gives the focus back to the opener with restoreFocus', async () => {
     const user = userEvent.setup();
     render(<Host initialFocus="cancel" restoreFocus />);

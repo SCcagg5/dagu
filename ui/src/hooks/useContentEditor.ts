@@ -198,8 +198,8 @@ export function useContentEditor({
       lastServerContent !== null &&
       currentValue !== null &&
       currentValue !== lastServerContent &&
-      !isSameRef.current(currentValue, lastServerContent),
-    [currentValue, lastServerContent]
+      !isSame(currentValue, lastServerContent),
+    [currentValue, lastServerContent, isSame]
   );
 
   return {

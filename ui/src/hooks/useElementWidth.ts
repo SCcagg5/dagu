@@ -13,14 +13,18 @@ export function useElementWidth(
   const [width, setWidth] = useState<number | null>(null);
   useLayoutEffect(() => {
     const element = ref.current;
-    if (!element) return;
-    const read = (next: number) => setWidth(next > 0 ? next : null);
-    read(element.getBoundingClientRect().width);
+    if (!element) {
+      setWidth(null);
+      return;
+    }
+    // The border box, on the first measure and on each resize alike.
+    const read = () => {
+      const next = element.getBoundingClientRect().width;
+      setWidth(next > 0 ? next : null);
+    };
+    read();
     if (typeof ResizeObserver !== 'function') return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[entries.length - 1];
-      read(entry ? entry.contentRect.width : element.clientWidth);
-    });
+    const observer = new ResizeObserver(read);
     observer.observe(element);
     return () => observer.disconnect();
   }, [ref]);
