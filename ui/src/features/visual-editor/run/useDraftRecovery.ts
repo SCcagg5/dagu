@@ -12,6 +12,8 @@ interface DraftRecoveryInput {
   serverText?: string;
   currentText?: string;
   isDirty: boolean;
+  /** Hash of the server version that the edits start from, stored with them. */
+  baseSha256?: string;
   /** Tells if two texts are the same content; default strict equality. */
   isSame?(a: string, b: string): boolean;
 }
@@ -37,14 +39,15 @@ interface DraftRecovery {
 }
 
 /**
- * Keeps unsaved editor text in browser storage and offers it back after a
- * reload. The stored draft has no `baseSha256`: the hook gets no hash.
+ * Keeps unsaved editor text in browser storage, with `baseSha256`, and offers
+ * it back after a reload.
  */
 export function useDraftRecovery({
   storageKey,
   serverText,
   currentText,
   isDirty,
+  baseSha256,
   isSame = strictlyEqual,
 }: DraftRecoveryInput): DraftRecovery {
   const [state, setState] = useState(() => initialState(storageKey));
@@ -87,27 +90,39 @@ export function useDraftRecovery({
   }, [storageKey, serverText, currentText, isDirty, isSame]);
 
   // Text not yet written, for the flush on page hide and on unmount.
-  const pending = useRef<{ key: string; text: string } | null>(null);
+  const pending = useRef<{
+    key: string;
+    text: string;
+    baseSha256?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!isDirty || currentText === undefined) {
       pending.current = null;
       return;
     }
-    pending.current = { key: storageKey, text: currentText };
+    pending.current = { key: storageKey, text: currentText, baseSha256 };
     const timer = setTimeout(() => {
       pending.current = null;
-      writeDraft(storageKey, { text: currentText, savedAt: Date.now() });
+      writeDraft(storageKey, {
+        text: currentText,
+        savedAt: Date.now(),
+        baseSha256,
+      });
     }, STORE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [storageKey, currentText, isDirty]);
+  }, [storageKey, currentText, isDirty, baseSha256]);
 
   useEffect(() => {
     const flush = () => {
       const next = pending.current;
       if (next === null) return;
       pending.current = null;
-      writeDraft(next.key, { text: next.text, savedAt: Date.now() });
+      writeDraft(next.key, {
+        text: next.text,
+        savedAt: Date.now(),
+        baseSha256: next.baseSha256,
+      });
     };
     window.addEventListener('pagehide', flush);
     return () => {

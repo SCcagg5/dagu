@@ -46,6 +46,36 @@ describe('useDraftRecovery', () => {
       expect(readDraft(KEY)).toEqual({ text: 'b', savedAt: 6000 });
     });
 
+    it('stores the base hash with the text, also on pagehide', () => {
+      const { rerender } = setup({
+        storageKey: KEY,
+        serverText: 'a',
+        currentText: 'b',
+        isDirty: true,
+        baseSha256: 'h1',
+      });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(readDraft(KEY)).toEqual({
+        text: 'b',
+        savedAt: 6000,
+        baseSha256: 'h1',
+      });
+
+      rerender({
+        storageKey: KEY,
+        serverText: 'a',
+        currentText: 'bc',
+        isDirty: true,
+        baseSha256: 'h2',
+      });
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      expect(readDraft(KEY)?.baseSha256).toBe('h2');
+    });
+
     it('restarts the timer on each change', () => {
       const { rerender } = setup({
         storageKey: KEY,
