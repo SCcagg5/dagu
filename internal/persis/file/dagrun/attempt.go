@@ -222,6 +222,11 @@ func (att *Attempt) Write(ctx context.Context, status ir.DAGRunStatus) error {
 	if att.writer == nil {
 		return fmt.Errorf("status file not open: %w", ErrStatusFileNotOpen)
 	}
+	if !att.writer.IsOpen() {
+		if err := att.writer.Open(); err != nil {
+			return fmt.Errorf("%w: reopen status file: %w", ErrWriteFailed, err)
+		}
+	}
 
 	ir.NormalizeDAGRunConditions(&status)
 
@@ -372,6 +377,9 @@ func (att *Attempt) compactStatusLocked(ctx context.Context, last *ir.DAGRunStat
 			return fmt.Errorf("failed to close writer before compaction: %w", err)
 		}
 		defer func() {
+			// The writer stays set even when it cannot open, so that the next
+			// Write opens it again.
+			att.writer = reopenWriter
 			if err := reopenWriter.Open(); err != nil {
 				reopenErr := fmt.Errorf("failed to reopen writer after compaction: %w", err)
 				if retErr != nil {
@@ -379,9 +387,7 @@ func (att *Attempt) compactStatusLocked(ctx context.Context, last *ir.DAGRunStat
 					return
 				}
 				retErr = reopenErr
-				return
 			}
-			att.writer = reopenWriter
 		}()
 	}
 
@@ -451,6 +457,11 @@ func (att *Attempt) compactStatusLocked(ctx context.Context, last *ir.DAGRunStat
 
 	att.appended = 0
 	success = true
+	// A running attempt keeps appending to the new file, whose directory
+	// entry must therefore survive a crash.
+	if err := fileutil.SyncDir(filepath.Dir(att.file)); err != nil {
+		return fmt.Errorf("failed to sync status directory: %w", err)
+	}
 	return nil
 }
 
