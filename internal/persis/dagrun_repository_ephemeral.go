@@ -32,13 +32,25 @@ func (r *DAGRunRepository) createStore(
 	dagRunID string,
 	options DAGRunCreateAttemptOptions,
 ) (DAGRunStore, bool, error) {
+	newRoot := !options.Retry && options.RootDAGRun.Zero()
 	if options.Ephemeral {
 		if r.ephemeral == nil {
 			return nil, false, ErrEphemeralUnsupported
 		}
+		if newRoot && dag != nil {
+			if err := rejectExistingRun(ctx, r.store, ir.NewDAGRunRef(dag.Name, dagRunID)); err != nil {
+				return nil, false, err
+			}
+		}
 		return r.ephemeral, true, nil
 	}
-	if r.ephemeral == nil || dag == nil || (!options.Retry && options.RootDAGRun.Zero()) {
+	if r.ephemeral == nil || dag == nil {
+		return r.store, false, nil
+	}
+	if newRoot {
+		if err := rejectExistingRun(ctx, r.ephemeral, ir.NewDAGRunRef(dag.Name, dagRunID)); err != nil {
+			return nil, false, err
+		}
 		return r.store, false, nil
 	}
 	root := options.RootDAGRun
@@ -47,6 +59,16 @@ func (r *DAGRunRepository) createStore(
 	}
 	store, ephemeral := r.storeHolding(ctx, root)
 	return store, ephemeral, nil
+}
+
+// rejectExistingRun fails when store holds the run, so that a run ID names one
+// run across the history and ephemeral stores.
+func rejectExistingRun(ctx context.Context, store DAGRunStore, ref ir.DAGRunRef) error {
+	_, err := store.FindAttempt(ctx, ref)
+	if err == nil || errors.Is(err, dagrun.ErrNoStatusData) {
+		return fmt.Errorf("%w: %s", dagrun.ErrDAGRunAlreadyExists, ref.ID)
+	}
+	return nil
 }
 
 // storeHolding returns the store that holds the root run, and whether that
@@ -87,7 +109,7 @@ func (r *DAGRunRepository) RemoveEndedEphemeralRuns(ctx context.Context, ttl tim
 	removed := 0
 	var errs []error
 	for _, status := range statuses {
-		if status == nil || status.Status.IsActive() {
+		if status == nil || status.Status.IsActive() || status.Status == ir.NotStarted {
 			continue
 		}
 		if endedAt(status).After(cutoff) {
@@ -136,6 +158,7 @@ func (r *DAGRunRepository) RecentStatusesWithOptions(
 	limit int,
 	options RecentStatusesOptions,
 ) ([]ir.DAGRunStatus, error) {
+	limit = recentLimit(ctx, limit)
 	statuses, err := r.RecentStatuses(ctx, name, limit)
 	if err != nil || !options.IncludeEphemeral || r.ephemeral == nil {
 		return statuses, err
