@@ -91,9 +91,12 @@ steps:
           .first()
           .click({ modifiers: ['ControlOrMeta'] }),
       ]);
-      await popup.waitForLoadState();
-      expect(new URL(popup.url()).pathname).toBe(`/dags/${dagName}`);
-      expect(new URL(popup.url()).searchParams.get('run')).toBe(runId);
+      await expect
+        .poll(() => {
+          const url = new URL(popup.url());
+          return { path: url.pathname, run: url.searchParams.get('run') };
+        })
+        .toEqual({ path: `/dags/${dagName}`, run: runId });
       await popup.close();
       // The list stays where it was.
       expect(new URL(page.url()).pathname).toBe('/dag-runs');

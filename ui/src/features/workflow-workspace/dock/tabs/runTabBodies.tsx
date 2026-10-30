@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { NodeStatus, Status, type components } from '@/api/v1/schema';
 import { useRemoteNode } from '@/contexts/RemoteNodeContext';
+import { useClock } from '@/hooks/useClock';
 import DAGRunOutputs from '@/features/dag-runs/components/dag-run-details/DAGRunOutputs';
 import { buildDAGRunPageURL } from '@/features/dag-runs/lib/dagRunUrls';
 import { AgentTimeline } from '@/features/dags/components/agent/AgentTimeline';
@@ -156,11 +157,16 @@ function TimelineBody({ details }: RunTabProps) {
   );
 }
 
-/** True while the run is active and for 15 s after it ended. */
-function endedRecently(details: RunTabProps['details']): boolean {
-  if (isRunActive(details)) return true;
+/**
+ * True while the run is active and for 15 s after it ended. The shared clock
+ * ticks inside that window only, so the value turns false when it closes.
+ */
+function useEndedRecently(details: RunTabProps['details']): boolean {
+  const active = isRunActive(details);
   const finished = Date.parse(details.finishedAt ?? '');
-  return Number.isFinite(finished) && Date.now() - finished < 15_000;
+  const recent = (now: number) =>
+    active || (Number.isFinite(finished) && now - finished < 15_000);
+  return useClock(active || !recent(Date.now()) ? null : 1000, recent);
 }
 
 /**
@@ -246,6 +252,7 @@ function StepOutputsBody({
 }
 
 function RunOutputsList({ details }: { details: RunTabProps['details'] }) {
+  const pollWhileEmpty = useEndedRecently(details);
   return (
     <>
       {/* The outputs load once: they load again when the status changes,
@@ -257,7 +264,7 @@ function RunOutputsList({ details }: { details: RunTabProps['details'] }) {
         padded={false}
         bare
         prettyValues
-        pollWhileEmpty={endedRecently(details)}
+        pollWhileEmpty={pollWhileEmpty}
       />
     </>
   );

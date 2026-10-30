@@ -26,6 +26,7 @@ const BASE: WorkspaceUrlState = {
   mode: 'workspace',
   popout: null,
   run: null,
+  subRun: null,
   def: null,
   step: null,
   ndv: null,
@@ -108,6 +109,13 @@ describe('parseWorkspaceUrl', () => {
       [undefined, 'item=a%2Fb', { item: 'a/b' }],
       [undefined, 'body=inner', { body: 'inner' }],
       [undefined, 'sub=child-1', { sub: 'child-1' }],
+      // The step of a sub-run link is a step of that sub-run, not of the run.
+      [
+        undefined,
+        'run=r1&subRun=c1&step=deploy',
+        { run: 'r1', subRun: { id: 'c1', step: 'deploy' } },
+      ],
+      [undefined, 'subRun=c1', { subRun: { id: 'c1', step: null } }],
       // The List and Grid views are gone: their ?view is ignored.
       ['executions', 'view=grid', {}],
       // The Steps and Spec tabs are gone: their links show the default tab.
@@ -313,6 +321,11 @@ describe('round trip', () => {
       { ...BASE, mode: 'popout', popout: { kind: 'run' } },
       '/dags/my%20dag/dagRun-log',
     ],
+    [
+      'a sub-run link with its step',
+      { ...BASE, run: 'r1', subRun: { id: 'c1', step: 'deploy' } },
+      '/dags/my%20dag?run=r1&subRun=c1&step=deploy',
+    ],
   ] as Array<[string, WorkspaceUrlState, string]>)(
     'round-trips %s',
     (_, state, url) => {
@@ -437,6 +450,19 @@ describe('useWorkspaceUrl', () => {
     });
     update({ def: null });
     expect(last()).toStrictEqual({ url: '/dags/x?run=r1', action: 'PUSH' });
+  });
+
+  it('clears a sub-run link together with its step', () => {
+    const { update, last } = renderHook('/dags/x?run=r1&subRun=c1&step=s');
+    update({ subRun: null });
+    expect(last()).toStrictEqual({ url: '/dags/x?run=r1', action: 'REPLACE' });
+  });
+
+  // The user picked a step of the run before the sub-run opened.
+  it('drops a sub-run link when a step of the run is selected', () => {
+    const { update, last } = renderHook('/dags/x?run=r1&subRun=c1&step=s');
+    update({ step: 'a' });
+    expect(last().url).toBe('/dags/x?run=r1&step=a');
   });
 
   it('keeps query keys that it does not own', () => {

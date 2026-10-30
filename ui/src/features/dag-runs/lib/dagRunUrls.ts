@@ -12,11 +12,9 @@ type DAGRunPageURLInput = {
   remoteNode: string;
   /** Workspace scope (?workspace) to keep on the target page. */
   workspace?: string;
-  /**
-   * Accepted for the callers that hold a sub-run. The workflow page has no
-   * address for a sub-run, so the link opens its root run.
-   */
+  /** A sub-run of the root run, which opens on the sub-run stack (?subRun). */
   subDAGRunId?: string;
+  /** A step of the sub-run when subDAGRunId is set, else of the root run. */
   step?: string;
   /** Dock tab, for example 'artifacts'. */
   dock?: string;
@@ -43,6 +41,8 @@ type WorkspaceDAGPageURLInput = {
   remoteNode: string;
   workspace?: string;
   run?: string;
+  /** A sub-run of the run to open on the sub-run stack. ?step is then its step. */
+  subRun?: string;
   step?: string;
   /** Dock tab, for example 'log'. */
   dock?: string;
@@ -61,8 +61,9 @@ function appendQuery(path: string, params: URLSearchParams): string {
 }
 
 /**
- * The URL of a run: the workflow page of the root run with ?run. Callers that
- * hold only a run list row pass its name and id as the root.
+ * The URL of a run: the workflow page of the root run with ?run, and with
+ * ?subRun for a sub-run. Callers that hold only a run list row pass its name
+ * and id as the root.
  */
 export function buildDAGRunPageURL({
   rootDAGRunName,
@@ -70,6 +71,7 @@ export function buildDAGRunPageURL({
   fileName,
   remoteNode,
   workspace,
+  subDAGRunId,
   step,
   dock,
 }: DAGRunPageURLInput): string {
@@ -78,6 +80,8 @@ export function buildDAGRunPageURL({
     remoteNode,
     workspace,
     run: rootDAGRunId,
+    subRun:
+      subDAGRunId && subDAGRunId !== rootDAGRunId ? subDAGRunId : undefined,
     step,
     dock,
   });
@@ -130,6 +134,7 @@ function buildWorkspaceDAGPageURL({
   remoteNode,
   workspace,
   run,
+  subRun,
   step,
   dock,
 }: WorkspaceDAGPageURLInput): string {
@@ -140,6 +145,9 @@ function buildWorkspaceDAGPageURL({
   }
   if (run) {
     params.set('run', run);
+  }
+  if (subRun) {
+    params.set('subRun', subRun);
   }
   if (step) {
     params.set('step', step);

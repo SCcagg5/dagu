@@ -85,14 +85,15 @@ export function StepSubRuns({
       detail: detailById.get(child.dagRunId),
     }));
     if (detailById.size === 0) return indexed;
-    // Newest first, as SubDAGRunsList, once timings are known.
-    return indexed
-      .filter((row) => row.detail)
-      .sort(
-        (a, b) =>
-          new Date(b.detail!.startedAt).getTime() -
-          new Date(a.detail!.startedAt).getTime()
-      );
+    // Newest first, as SubDAGRunsList, once timings are known. A child that
+    // is not listed yet, or has no start time, comes last in its own order.
+    const startOf = (row: (typeof indexed)[number]) => {
+      const t = Date.parse(row.detail?.startedAt ?? '');
+      return Number.isFinite(t) ? t : -Infinity;
+    };
+    return [...indexed].sort(
+      (a, b) => startOf(b) - startOf(a) || a.index - b.index
+    );
   }, [children, detailById]);
 
   const filters = useMemo(() => {

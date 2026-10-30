@@ -305,6 +305,7 @@ function ErrorCards({ node }: { node: ApiNode }) {
 
 /** The stdout a log step wrote, shown in place of its configured message. */
 function useLogStepOutput(holder: ApiDAGRunDetails, node: ApiNode) {
+  const { ts } = useI18n();
   const remoteNode = useRemoteNode();
   const configured = getLogStepMessage(node.step);
   const enabled = configured !== null && !!node.stdout && !!holder.dagRunId;
@@ -345,7 +346,7 @@ function useLogStepOutput(holder: ApiDAGRunDetails, node: ApiNode) {
   const query = sub ? subQuery : rootQuery;
   const content = query.data?.content;
   if (typeof content === 'string') return formatLogStepOutput(content);
-  if (enabled && !query.error) return 'Loading log output...';
+  if (enabled && !query.error) return ts('Loading log output...');
   return configured;
 }
 
