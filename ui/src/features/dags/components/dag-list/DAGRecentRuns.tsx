@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { components } from '@/api/v1/schema';
 import RelativeTime from '@/components/ui/relative-time';
-import StatusChip from '@/components/ui/status-chip';
+import { StatusDot } from '@/components/ui/status-dot';
 import { useRemoteNode } from '@/contexts/RemoteNodeContext';
 import { buildDAGPageURL } from '@/features/dag-runs/lib/dagRunUrls';
 import { useOpenPage } from '@/features/dag-runs/lib/useOpenPage';
@@ -102,37 +102,33 @@ export function DAGRecentRuns({ fileName }: { fileName: string }) {
 /** The columns of the runs of a workflow: those of the Executions page. */
 interface RunColumns {
   scheduled: boolean;
-  queued: boolean;
   profile: boolean;
-  worker: boolean;
   /** The CSS grid template that the header and every line share. */
   template: string;
 }
 
 /**
- * The columns that at least one run fills, so that no column stays empty.
- * They share the width in fractions: a wide list spreads them, not leaves a
- * gap.
+ * The columns of the Executions page, in its order. Scheduled At and Profile
+ * show only when a run fills them. The columns share the width in fractions:
+ * a wide list spreads them, not leaves a gap.
  */
 function runColumns(runs: readonly Run[]): RunColumns {
   const scheduled = runs.some((r) => !!r.scheduleTime);
-  const queued = runs.some((r) => !!r.queuedAt);
   const profile = runs.some((r) => !!r.profileName);
-  const worker = runs.some((r) => !!r.workerId);
   const template = [
+    'minmax(0,2fr)', // run id
     '7rem', // status
+    'minmax(0,1fr)', // trigger
+    profile && 'minmax(0,1fr)',
+    scheduled && 'minmax(0,1fr)',
+    'minmax(0,1fr)', // queued
     'minmax(0,1fr)', // started
     'minmax(0,2fr)', // duration and its detail
-    'minmax(0,1fr)', // trigger
-    scheduled && 'minmax(0,1fr)',
-    queued && 'minmax(0,1fr)',
-    profile && 'minmax(0,1fr)',
-    worker && 'minmax(0,1fr)',
-    'minmax(0,2fr)', // run id
+    'minmax(0,1fr)', // worker
   ]
     .filter(Boolean)
     .join(' ');
-  return { scheduled, queued, profile, worker, template };
+  return { scheduled, profile, template };
 }
 
 function RunHeader({ columns }: { columns: RunColumns }) {
@@ -147,15 +143,15 @@ function RunHeader({ columns }: { columns: RunColumns }) {
       style={{ gridTemplateColumns: columns.template }}
       className="grid items-center gap-x-3 border-b border-border/40 px-1 pb-1 text-[11px] text-muted-foreground"
     >
+      {head('Run ID')}
       {head('Status')}
+      {head('Trigger')}
+      {columns.profile && head('Profile')}
+      {columns.scheduled && head('Scheduled At')}
+      {head('Queued At')}
       {head('Started At')}
       {head('Duration')}
-      {head('Trigger')}
-      {columns.scheduled && head('Scheduled At')}
-      {columns.queued && head('Queued At')}
-      {columns.profile && head('Profile')}
-      {columns.worker && head('Worker')}
-      {head('Run ID')}
+      {head('Worker')}
     </div>
   );
 }
@@ -190,6 +186,7 @@ function RunLine({
   const params = (run.params ?? '').trim();
   const labels = withoutWorkspaceLabels(run.labels ?? run.tags ?? []);
   const shownLabels = labels.slice(0, MAX_LABELS_SHOWN);
+  const healthy = runDisplayStatus(run).healthy;
   const trigger = run.triggerType ? triggerTypeLabels[run.triggerType] : null;
   return (
     <li>
@@ -202,15 +199,40 @@ function RunLine({
         style={{ gridTemplateColumns: columns.template }}
         className="grid w-full items-center gap-x-3 gap-y-0.5 rounded-sm px-1 py-1 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span>
-          <StatusChip
-            status={run.status}
-            healthy={runDisplayStatus(run).healthy}
-            size="xs"
-          >
-            {ts(runStatusText(run.status))}
-          </StatusChip>
+        <span className="truncate font-mono text-muted-foreground">
+          {run.dagRunId}
         </span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <StatusDot
+            kind="run"
+            status={run.status}
+            healthy={healthy}
+            decorative
+          />
+          <span className="truncate text-foreground/80">
+            {healthy ? ts('Healthy') : ts(runStatusText(run.status))}
+          </span>
+        </span>
+        <span>
+          {trigger && (
+            <span
+              title={run.triggerActor || undefined}
+              className="inline-block max-w-full truncate rounded border border-border/60 px-1.5 text-[11px] leading-4 text-muted-foreground"
+            >
+              {ts(trigger)}
+            </span>
+          )}
+        </span>
+        {columns.profile && (
+          <span
+            title={run.profileName}
+            className="truncate font-mono text-muted-foreground"
+          >
+            {run.profileName || '-'}
+          </span>
+        )}
+        {columns.scheduled && <Moment at={run.scheduleTime} />}
+        <Moment at={run.queuedAt} />
         <span className="truncate text-foreground/80">
           <RelativeTime
             timestamp={run.startedAt}
@@ -236,62 +258,11 @@ function RunLine({
           </span>
           {timeDetail.length > 0 && <> · {timeDetail.join(' · ')}</>}
         </span>
-        <span>
-          {trigger && (
-            <span
-              title={run.triggerActor || undefined}
-              className="inline-block max-w-full truncate rounded border border-border/60 px-1.5 text-[11px] leading-4 text-muted-foreground"
-            >
-              {ts(trigger)}
-            </span>
-          )}
-        </span>
-        {columns.scheduled && (
-          <span className="truncate text-muted-foreground">
-            {run.scheduleTime ? (
-              <RelativeTime
-                timestamp={run.scheduleTime}
-                absolute={run.scheduleTime}
-                compact
-                ago
-              />
-            ) : (
-              '-'
-            )}
-          </span>
-        )}
-        {columns.queued && (
-          <span className="truncate text-muted-foreground">
-            {run.queuedAt ? (
-              <RelativeTime
-                timestamp={run.queuedAt}
-                absolute={run.queuedAt}
-                compact
-                ago
-              />
-            ) : (
-              '-'
-            )}
-          </span>
-        )}
-        {columns.profile && (
-          <span
-            title={run.profileName}
-            className="truncate font-mono text-muted-foreground"
-          >
-            {run.profileName || '-'}
-          </span>
-        )}
-        {columns.worker && (
-          <span
-            title={run.workerId ? `${ts('Worker')} ${run.workerId}` : undefined}
-            className="truncate font-mono text-muted-foreground"
-          >
-            {run.workerId || '-'}
-          </span>
-        )}
-        <span className="truncate font-mono text-muted-foreground">
-          {run.dagRunId}
+        <span
+          title={run.workerId ? `${ts('Worker')} ${run.workerId}` : undefined}
+          className="truncate font-mono text-muted-foreground"
+        >
+          {run.workerId || '-'}
         </span>
         {(cause || params || labels.length > 0) && (
           <span className="col-span-full flex min-w-0 items-center gap-2 pl-1">
@@ -328,5 +299,14 @@ function RunLine({
         )}
       </button>
     </li>
+  );
+}
+
+/** A time of a run in the compact form ("5m ago"), or a dash. */
+function Moment({ at }: { at?: string }) {
+  return (
+    <span className="truncate text-muted-foreground">
+      {at ? <RelativeTime timestamp={at} absolute={at} compact ago /> : '-'}
+    </span>
   );
 }
