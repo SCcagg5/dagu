@@ -24,7 +24,7 @@ func binOf(us int64) uint16 {
 		return 0
 	}
 	i := 1 + int(math.Floor(binsPerOctave*math.Log2(float64(us))))
-	return uint16(min(i, maxBin))
+	return uint16(min(i, maxBin)) // #nosec G115 -- 1 <= i <= maxBin
 }
 
 // binMiddle returns the geometric middle of a bin, in microseconds.
