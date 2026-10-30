@@ -236,7 +236,7 @@ function WikiPageEditor({
       });
       if (error) {
         cancelSave();
-        showToast('Failed to save Wiki page');
+        showToast('Failed to save Wiki page', { variant: 'error' });
       } else {
         const hasNewerEdits = currentValueRef.current !== valueAtSaveStart;
         if (!hasNewerEdits) {
@@ -253,7 +253,7 @@ function WikiPageEditor({
       }
     } catch {
       cancelSave();
-      showToast('Failed to save Wiki page');
+      showToast('Failed to save Wiki page', { variant: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -321,7 +321,9 @@ function WikiPageEditor({
           headers: { 'Content-Type': 'application/octet-stream' },
         });
         if (error || !data) {
-          showToast(error?.message || 'Failed to upload attachment');
+          showToast(error?.message || 'Failed to upload attachment', {
+            variant: 'error',
+          });
           return;
         }
         const isImage = file.type.startsWith('image/');
@@ -340,7 +342,7 @@ function WikiPageEditor({
         }
         showToast(`Attached ${data.name}`);
       } catch {
-        showToast('Failed to upload attachment');
+        showToast('Failed to upload attachment', { variant: 'error' });
       }
     },
     [
