@@ -153,6 +153,7 @@ steps:
 
 // createRun creates the run and its attempt, and returns the directory of the
 // attempt. The caller writes the status later, with the node count.
+// nolint:revive
 func createRun(ctx context.Context, home, name, dagFile, runID string, started time.Time, interval time.Duration) (string, *filedagrun.Attempt, *ir.DAG, error) {
 	dag := &ir.DAG{
 		Name:     name,
@@ -234,7 +235,7 @@ type generator struct {
 }
 
 func newGenerator(seed uint64, from, to time.Time) *generator {
-	g := &generator{rng: rand.New(rand.NewPCG(seed, 0x5eed))}
+	g := &generator{rng: rand.New(rand.NewPCG(seed, 0x5eed))} //nolint:gosec // seeded synthetic data, not cryptographic
 	for m := range g.rhythm {
 		// Slowest in the afternoon, fastest at night.
 		g.rhythm[m] = 1 + 0.25*math.Sin(2*math.Pi*(float64(m)/1440-14.0/24+0.25))
