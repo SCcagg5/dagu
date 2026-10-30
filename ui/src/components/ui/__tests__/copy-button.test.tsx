@@ -70,4 +70,14 @@ describe('CopyButton', () => {
     await click('Copy');
     expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
   });
+
+  it('stays idle when the text function rejects', async () => {
+    const text = vi.fn(async (): Promise<string> => {
+      throw new Error('no link');
+    });
+    render(<CopyButton text={text} label="Copy" />);
+    await click('Copy');
+    expect(copyText).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+  });
 });
