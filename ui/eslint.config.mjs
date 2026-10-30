@@ -66,7 +66,9 @@ const sharedPrimitiveImports = [
 // owns. Each message names the module to use. A flat config block replaces
 // the rule options, so this list is shared by the blocks below.
 const NON_ARRAY_FROM =
-  '(Array|Buffer|Object|Int8Array|Uint8Array|Uint8ClampedArray|Int16Array|Uint16Array|Int32Array|Uint32Array|Float32Array|Float64Array|BigInt64Array|BigUint64Array)';
+  '(Array|Buffer|Object|Iterator|YAMLMap|YAMLSeq|Int8Array|Uint8Array|Uint8ClampedArray|Int16Array|Uint16Array|Int32Array|Uint32Array|Float32Array|Float64Array|BigInt64Array|BigUint64Array)';
+const SHOW_MESSAGE_CALL =
+  ':matches(CallExpression[callee.name=/^show(Error|Toast)$/], CallExpression[callee.property.name=/^show(Error|Toast)$/])';
 const sharedSyntaxRules = [
   {
     selector:
@@ -83,7 +85,12 @@ const sharedSyntaxRules = [
   },
   {
     selector:
-      ":matches(MemberExpression[object.name='navigator'], MemberExpression[object.property.name='navigator'])[property.name='clipboard']",
+      ":matches(MemberExpression[object.name='navigator'], MemberExpression[object.property.name='navigator']):matches([property.name='clipboard'], [property.value='clipboard'])",
+    message: 'Use copyText or readClipboardText from @/lib/clipboard.',
+  },
+  {
+    selector:
+      "VariableDeclarator:matches([init.name='navigator'], [init.property.name='navigator']) > ObjectPattern > Property[key.name='clipboard']",
     message: 'Use copyText or readClipboardText from @/lib/clipboard.',
   },
   {
@@ -91,8 +98,11 @@ const sharedSyntaxRules = [
     message: 'Use formatAbsoluteTime from @/lib/dagRunTiming.',
   },
   {
-    selector:
-      ':matches(CallExpression[callee.name=/^show(Error|Toast)$/], CallExpression[callee.property.name=/^show(Error|Toast)$/]) > :matches(Literal, TemplateLiteral).arguments',
+    selector: `${SHOW_MESSAGE_CALL} > :matches(Literal, TemplateLiteral).arguments`,
+    message: 'Pass ts() with the text.',
+  },
+  {
+    selector: `${SHOW_MESSAGE_CALL} > ConditionalExpression.arguments > :matches(Literal[value=/./], TemplateLiteral):matches(.consequent, .alternate)`,
     message: 'Pass ts() with the text.',
   },
   {

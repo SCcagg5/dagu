@@ -407,7 +407,7 @@ describe('clipboard edits in the edit session', () => {
       setText,
       names: { byKey: {}, byName: {} },
     });
-    return { text, setText, session };
+    return { text, session };
   }
 
   it('reverts a duplicate and then a paste with one undo each', () => {
@@ -416,7 +416,9 @@ describe('clipboard edits in the edit session', () => {
       'steps[0]',
     ]);
     if (!duplicated.ok) throw new Error(duplicated.message);
-    act(() => result.current.setText(duplicated.text));
+    act(() => {
+      result.current.session.applyWith(() => duplicated);
+    });
     act(() => result.current.session.undo());
     expect(result.current.text).toBe(yamlArraySteps);
     act(() => result.current.session.redo());
@@ -428,7 +430,9 @@ describe('clipboard edits in the edit session', () => {
       null
     );
     if (!pasted.ok) throw new Error(pasted.message);
-    act(() => result.current.setText(pasted.text));
+    act(() => {
+      result.current.session.applyWith(() => pasted);
+    });
     act(() => result.current.session.undo());
     expect(result.current.text).toBe(duplicated.text);
     act(() => result.current.session.undo());
