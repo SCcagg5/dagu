@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/dagucloud/dagu/v2/internal/cmn/logger"
@@ -373,6 +374,10 @@ func (r *DAGRunRepository) RemoveDAGRun(ctx context.Context, ref ir.DAGRunRef, o
 // PruneArtifacts removes artifact directories and index records that no
 // surviving DAG run points to.
 func (r *DAGRunRepository) PruneArtifacts(ctx context.Context, request ArtifactPruneRequest) (*ArtifactPruneResult, error) {
+	if r.ephemeral != nil {
+		// Ephemeral runs write to the same artifact root as the history.
+		request.SharedStores = append(slices.Clip(request.SharedStores), r.ephemeral)
+	}
 	return r.store.PruneArtifacts(ctx, request)
 }
 

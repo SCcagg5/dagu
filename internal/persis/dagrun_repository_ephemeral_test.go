@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dagucloud/dagu/v2/internal/cmn/artifactpath"
 	"github.com/dagucloud/dagu/v2/internal/dagrun"
 	"github.com/dagucloud/dagu/v2/internal/ir"
 	"github.com/dagucloud/dagu/v2/internal/persis"
@@ -243,4 +244,33 @@ func TestFindAttemptReportsHiddenEphemeralRun(t *testing.T) {
 
 	_, err = repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, "hidden"))
 	require.ErrorIs(t, err, dagrun.ErrNoStatusData)
+}
+
+// An artifact sweep keeps the artifacts of an ephemeral run: the run shares
+// the artifact root with the history.
+func TestPruneArtifactsKeepsEphemeralRuns(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	dag, err := spec.LoadYAML(ctx, []byte("name: eph\nsteps:\n  - run: echo hi\n"))
+	require.NoError(t, err)
+	root := t.TempDir()
+	repo := testutil.NewFileDAGRunRepositoryWithEphemeral(
+		filepath.Join(root, "dag-runs"),
+		filepath.Join(root, "dag-runs-ephemeral"),
+		persis.DAGRunRepositoryOptions{},
+	)
+	writeTestRun(t, repo, dag, "eph-run", ir.Running, time.Time{}, true)
+
+	old := time.Now().Add(-72 * time.Hour)
+	artifacts := filepath.Join(root, "artifacts")
+	live, err := artifactpath.NewRunDir(ctx, artifacts, "", dag.Name, "eph-run", old)
+	require.NoError(t, err)
+	gone, err := artifactpath.NewRunDir(ctx, artifacts, "", dag.Name, "gone-run", old)
+	require.NoError(t, err)
+
+	_, err = repo.PruneArtifacts(ctx, persis.ArtifactPruneRequest{OlderThan: persis.NewUTC(time.Now().Add(-24 * time.Hour))})
+	require.NoError(t, err)
+	require.DirExists(t, live)
+	require.NoDirExists(t, gone)
 }
