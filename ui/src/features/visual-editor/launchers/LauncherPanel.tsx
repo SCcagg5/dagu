@@ -4,6 +4,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { useConfig } from '@/contexts/ConfigContext';
 import WebhookTab from '@/features/dags/components/dag-details/WebhookTab';
 import {
   PANEL_BODY_CLASS,
@@ -106,8 +107,9 @@ function ExpressionRow({
   onRemove(): void;
 }): ReactElement {
   const { ts } = useI18n();
+  const { tz } = useConfig();
   const [draft, setDraft] = useState(expression);
-  const runs = nextRuns(draft.trim());
+  const runs = nextRuns(draft.trim(), 3, new Date(), tz);
   const commit = () => {
     const next = draft.trim();
     if (next === expression) return;
