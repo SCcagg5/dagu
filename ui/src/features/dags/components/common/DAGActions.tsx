@@ -94,6 +94,11 @@ type Props = {
    * A host that draws a feedback icon over the button sets it.
    */
   startIconHidden?: boolean;
+  /**
+   * The Retry button takes the place of the Stop button while the workflow has
+   * nothing to stop, and Stop takes it back when a run is in progress.
+   */
+  retryInPlaceOfStop?: boolean;
 };
 
 /**
@@ -109,6 +114,7 @@ function DAGActions({
   markActions = false,
   startIconOnly = false,
   startIconHidden = false,
+  retryInPlaceOfStop = false,
 }: Props) {
   const shows = (action: 'start' | 'stop' | 'retry') =>
     !only || only.includes(action);
@@ -321,6 +327,8 @@ function DAGActions({
       !isWaiting,
   };
 
+  const stopApplies = buttonState.terminate || buttonState.reject;
+
   if (!dag || !config.permissions.runDags) {
     return <></>;
   }
@@ -371,6 +379,7 @@ function DAGActions({
 
         {/* Stop / Reject Button */}
         {shows('stop') &&
+          !(retryInPlaceOfStop && !stopApplies) &&
           (buttonState.reject ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -419,7 +428,9 @@ function DAGActions({
           ))}
 
         {/* Retry Button */}
-        {shows('retry') && !isSubDAGRun && (
+        {shows('retry') &&
+          !isSubDAGRun &&
+          !(retryInPlaceOfStop && stopApplies) && (
           <Tooltip>
             <TooltipTrigger asChild>
               <ActionButton

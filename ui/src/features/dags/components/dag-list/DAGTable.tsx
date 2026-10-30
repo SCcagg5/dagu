@@ -135,7 +135,6 @@ interface DAGCardProps {
   onToggleDeleteSelection: (fileName: string) => void;
   canRenameDAGs: boolean;
   onRenameDAG: (dag: components['schemas']['DAGFile']) => void;
-  onDeleteDAG: (dag: components['schemas']['DAGFile']) => void;
   canPin: boolean;
   isPinPending: boolean;
   onTogglePin: (dag: components['schemas']['DAGFile']) => void;
@@ -160,30 +159,6 @@ function RenameDAGButton({
         onClick={() => onRename(dag)}
       >
         <PencilLine className="h-4 w-4" />
-      </Button>
-    </I18nProps>
-  );
-}
-
-function DeleteDAGButton({
-  dag,
-  onDelete,
-}: {
-  dag: components['schemas']['DAGFile'];
-  onDelete: (dag: components['schemas']['DAGFile']) => void;
-}) {
-  return (
-    <I18nProps>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className="hover:bg-destructive/10 hover:text-destructive focus-visible:text-destructive"
-        aria-label={`Delete workflow ${dag.dag.name}`}
-        title="Delete workflow"
-        onClick={() => onDelete(dag)}
-      >
-        <Trash2 className="h-4 w-4" />
       </Button>
     </I18nProps>
   );
@@ -250,7 +225,6 @@ function DAGCard({
   onToggleDeleteSelection,
   canRenameDAGs,
   onRenameDAG,
-  onDeleteDAG,
   canPin,
   isPinPending,
   onTogglePin,
@@ -386,12 +360,10 @@ function DAGCard({
             fileName={fileName}
             label={false}
             refresh={refreshFn}
+            retryInPlaceOfStop
           />
           {canRenameDAGs && (
             <RenameDAGButton dag={dag} onRename={onRenameDAG} />
-          )}
-          {canDeleteDAGs && (
-            <DeleteDAGButton dag={dag} onDelete={onDeleteDAG} />
           )}
         </div>
       </div>
@@ -535,7 +507,6 @@ declare module '@tanstack/react-table' {
     canRenameDAGs?: boolean;
     onOpenRenameDAG?: (dag: components['schemas']['DAGFile']) => void;
     canDeleteDAGs?: boolean;
-    onOpenDeleteDAG?: (dag: components['schemas']['DAGFile']) => void;
     canPinDAG?: (dag: components['schemas']['DAGFile']) => boolean;
     isPinPending?: (fileName: string) => boolean;
     onTogglePin?: (dag: components['schemas']['DAGFile']) => void;
@@ -953,17 +924,12 @@ const defaultColumns = [
             fileName={data.dag.fileName}
             label={false}
             refresh={table.options.meta?.refreshFn}
+            retryInPlaceOfStop
           />
           {table.options.meta?.canRenameDAGs && (
             <RenameDAGButton
               dag={data.dag}
               onRename={(dag) => table.options.meta?.onOpenRenameDAG?.(dag)}
-            />
-          )}
-          {table.options.meta?.canDeleteDAGs && (
-            <DeleteDAGButton
-              dag={data.dag}
-              onDelete={(dag) => table.options.meta?.onOpenDeleteDAG?.(dag)}
             />
           )}
         </div>
@@ -1384,12 +1350,6 @@ function DAGTable({
     }
   }, [deleteTargets, onDeleteDAGs]);
 
-  const openDeleteDAG = useCallback((dag: components['schemas']['DAGFile']) => {
-    setDeleteError(null);
-    setDeleteFailures({});
-    setDeleteTargets([dag]);
-  }, []);
-
   const openRenameDAG = useCallback((dag: components['schemas']['DAGFile']) => {
     setRenameError(null);
     setRenameTarget(dag);
@@ -1598,7 +1558,6 @@ function DAGTable({
       canRenameDAGs,
       onOpenRenameDAG: openRenameDAG,
       canDeleteDAGs,
-      onOpenDeleteDAG: openDeleteDAG,
       canPinDAG,
       isPinPending: (fileName) => pendingPins.has(fileName),
       onTogglePin: (dag) => void togglePin(dag),
@@ -2056,7 +2015,6 @@ function DAGTable({
                               onToggleDeleteSelection={toggleDeleteSelection}
                               canRenameDAGs={canRenameDAGs}
                               onRenameDAG={openRenameDAG}
-                              onDeleteDAG={openDeleteDAG}
                               canPin={canPinDAG(dagRow.dag)}
                               isPinPending={pendingPins.has(
                                 dagRow.dag.fileName
@@ -2098,7 +2056,6 @@ function DAGTable({
                     onToggleDeleteSelection={toggleDeleteSelection}
                     canRenameDAGs={canRenameDAGs}
                     onRenameDAG={openRenameDAG}
-                    onDeleteDAG={openDeleteDAG}
                     canPin={canPinDAG(dagRow.dag)}
                     isPinPending={pendingPins.has(dagRow.dag.fileName)}
                     onTogglePin={(dag) => void togglePin(dag)}
