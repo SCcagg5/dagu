@@ -80,6 +80,21 @@ describe('buildIssueMarkers', () => {
     ]);
   });
 
+  it('keeps the severity of an issue without a location', () => {
+    const markers = buildIssueMarkers(
+      text,
+      [
+        issue({
+          severity: ValidationIssueSeverity.warning,
+          message: '[3:5] deprecated field',
+        }),
+      ],
+      []
+    );
+
+    expect(markers[0]).toMatchObject({ startLineNumber: 3, severity: 4 });
+  });
+
   it('marks the error strings when there are no issues', () => {
     const markers = buildIssueMarkers(text, [], ['[4:1] bad', 'no position']);
 

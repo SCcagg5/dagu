@@ -8,7 +8,7 @@ import {
   isMap,
   isScalar,
   isSeq,
-  parseDocument,
+  parseAllDocuments,
 } from 'yaml';
 import type { Document, YAMLMap } from 'yaml';
 import type { DagEditOp, EditResult } from '../../contracts';
@@ -67,8 +67,10 @@ function readEntries(node: unknown): Omit<ScheduleView, 'present'> {
  */
 export function readSchedule(text: string): ScheduleView {
   try {
-    const doc = parseDocument(text);
-    if (doc.errors.length > 0 || !isMap(doc.contents)) return NO_SCHEDULE;
+    const doc = parseAllDocuments(text)[0];
+    if (!doc || doc.errors.length > 0 || !isMap(doc.contents)) {
+      return NO_SCHEDULE;
+    }
     const node = doc.contents.get('schedule', true);
     if (node === undefined || node === null) return NO_SCHEDULE;
     if (isMap(node)) {
@@ -112,6 +114,13 @@ function keepOthers(node: unknown): unknown[] {
     : [];
 }
 
+/** Drops the plain strings of a start list. False when nothing is left. */
+function clearExpressions(node: unknown): boolean {
+  if (!isSeq(node)) return false;
+  node.items = keepOthers(node);
+  return node.items.length > 0;
+}
+
 function setSchedule(doc: Document, expressions: string[]): MutateOutcome {
   if (!isMap(doc.contents)) {
     return {
@@ -123,8 +132,15 @@ function setSchedule(doc: Document, expressions: string[]): MutateOutcome {
   const root: YAMLMap = doc.contents;
   const existing = root.get('schedule', true);
   if (expressions.length === 0) {
-    // An empty list removes the whole key, the other entries too.
-    root.delete('schedule');
+    // Entries that are not plain strings stay, and so do `stop` and `restart`.
+    if (isMap(existing)) {
+      if (!clearExpressions(existing.get('start', true))) {
+        existing.delete('start');
+      }
+      if (existing.items.length === 0) root.delete('schedule');
+    } else if (!clearExpressions(existing)) {
+      root.delete('schedule');
+    }
     return;
   }
   if (isMap(existing)) {
@@ -151,9 +167,10 @@ function setSchedule(doc: Document, expressions: string[]): MutateOutcome {
 }
 
 /**
- * Sets the start expressions of the `schedule` key. An empty list removes
- * the key. With expressions, entries that are not plain strings stay. The
- * other lines of the text do not change.
+ * Sets the start expressions of the `schedule` key. Entries that are not
+ * plain strings, and the `stop` and `restart` of the map form, stay. An empty
+ * list removes the key when nothing else is left. The other lines of the
+ * text do not change.
  */
 export function opSetSchedule(
   text: string,

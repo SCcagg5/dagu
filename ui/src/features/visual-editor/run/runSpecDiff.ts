@@ -16,8 +16,9 @@ export function normalizeSpec(spec: string): string {
  */
 export interface RunSpecDiff {
   /**
-   * A top-level key other than `steps` and the handlers differs, or a text
-   * cannot be read. Then every step can behave differently.
+   * A top-level key other than `steps` and the handlers differs, a later
+   * document (a local sub-DAG) differs, or a text cannot be read. Then every
+   * step can behave differently.
    */
   headChanged: boolean;
   /** Steps in both definitions whose parsed definition differs. */
@@ -57,24 +58,31 @@ export function canonical(value: unknown): string {
   return JSON.stringify(sorted(value)) ?? 'undefined';
 }
 
+function headValue(js: unknown): unknown {
+  if (js === null || js === undefined) return {};
+  if (typeof js !== 'object' || Array.isArray(js)) return js;
+  return Object.fromEntries(
+    Object.entries(js as Record<string, unknown>).filter(
+      ([key]) => !NON_HEAD_KEYS.has(key)
+    )
+  );
+}
+
 /**
- * The parsed top-level keys without the steps and the handlers. Null when the
- * text cannot be read.
+ * The parsed top-level keys without the steps and the handlers, with the
+ * later documents: they define the local sub-DAGs that steps can call. Null
+ * when the text cannot be read.
  */
 export function headOf(model: DagDocModel): string | null {
   try {
-    const doc = parseAllDocuments(model.sanitizedText ?? model.text)[0];
-    if (!doc || doc.errors.length > 0) return null;
-    const js: unknown = doc.toJS();
-    if (js === null || js === undefined) return canonical({});
-    if (typeof js !== 'object' || Array.isArray(js)) return canonical(js);
-    return canonical(
-      Object.fromEntries(
-        Object.entries(js as Record<string, unknown>).filter(
-          ([key]) => !NON_HEAD_KEYS.has(key)
-        )
-      )
+    const [doc, ...later] = parseAllDocuments(
+      model.sanitizedText ?? model.text
     );
+    if (!doc || doc.errors.length > 0) return null;
+    const head = headValue(doc.toJS());
+    if (later.length === 0) return canonical(head);
+    if (later.some((d) => d.errors.length > 0)) return null;
+    return canonical([head, ...later.map((d) => d.toJS())]);
   } catch {
     return null;
   }

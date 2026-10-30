@@ -230,6 +230,14 @@ describe('missingIn', () => {
     expect(missingIn(run, ['a', 'b', 'c'])).toEqual(['b', 'c']);
     expect(missingIn(null, ['a'])).toEqual([]);
   });
+
+  // The server reuses a partially succeeded node, for example a call step.
+  it('counts a partially succeeded node as reusable', () => {
+    const run = runOf('r', Status.PartialSuccess, [
+      node('a', NodeStatus.PartialSuccess),
+    ]);
+    expect(missingIn(run, ['a'])).toEqual([]);
+  });
 });
 
 describe('planRun', () => {

@@ -643,14 +643,15 @@ export function editDocumentDetailed(
 
   const end = documentZeroEnd(text, docs);
   const region = text.slice(0, end);
-  const choice = chooseEmitOptions(doc, region);
-  const before = choice.text;
 
   // The document comes from the parse above, so the mutation can run in place.
   const edited = doc;
+  let choice: EmitChoice;
   let select: StepKey | undefined;
   let after: string;
   try {
+    // The emit throws for a text that parses, such as an alias before its anchor.
+    choice = chooseEmitOptions(doc, region);
     const outcome = mutate(edited);
     if (outcome && !outcome.ok) {
       return failure(outcome.code, outcome.message);
@@ -661,6 +662,7 @@ export function editDocumentDetailed(
     const reason = error instanceof Error ? error.message : String(error);
     return failure('invalidYaml', `The edit gives invalid YAML: ${reason}`);
   }
+  const before = choice.text;
   if (after === before)
     return failure('noop', 'The edit does not change the document.');
 

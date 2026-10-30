@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { describe, expect, it } from 'vitest';
-import { parseDagDoc } from '../parse';
+import { parseDagDoc, resolveStepNames } from '../parse';
 
 // Expected keys come from `spec.LoadYAML` on the same texts (Go
 // `buildStepsFromMap` sorts by byte order; `buildStepsFromArray` flattens
@@ -31,5 +31,24 @@ describe('StepKey numbering against the server', () => {
       ['steps[2]', 'parallelGroup', 'g2'],
       ['steps[3]', 'block', 'last'],
     ]);
+  });
+});
+
+describe('resolveStepNames against older details', () => {
+  // The details of the saved DAG while a draft swaps two steps: an explicit
+  // name wins over the position.
+  it('matches a step by its explicit name when the position disagrees', () => {
+    const model = parseDagDoc(
+      'steps:\n  - name: b\n    run: echo b\n  - name: a\n    run: echo a\n  - echo c\n'
+    );
+    const details = {
+      name: 'demo',
+      steps: [{ name: 'a' }, { name: 'b' }, { name: 'cmd_3' }],
+    } as never;
+    expect(resolveStepNames(model, details).byKey).toEqual({
+      'steps[0]': 'b',
+      'steps[1]': 'a',
+      'steps[2]': 'cmd_3',
+    });
   });
 });

@@ -44,7 +44,9 @@ export function buildIssueMarkers(
   for (const issue of issues) {
     const range = locateIssue(model, issue, names);
     if (!range) {
-      markers.push(...parseValidationMarkers([issue.message]).markers);
+      for (const marker of parseValidationMarkers([issue.message]).markers) {
+        markers.push({ ...marker, severity: SEVERITY[issue.severity] });
+      }
       continue;
     }
     markers.push({

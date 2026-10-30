@@ -53,6 +53,11 @@ describe('readSchedule', () => {
   it('does not throw on a broken text', () => {
     expect(readSchedule('a: [\n').present).toBe(false);
   });
+
+  it('reads document 0 of a file with a sub-DAG', () => {
+    const text = `schedule: "0 9 * * *"\n${BASE}---\nname: sub\nsteps:\n  - echo sub\n`;
+    expect(readSchedule(text).expressions).toEqual(['0 9 * * *']);
+  });
 });
 
 describe('setSchedule', () => {
@@ -99,6 +104,20 @@ steps:
   it('removes the key with an empty list', () => {
     const next = set(`${BASE}schedule: "5 * * * *"\n`, []);
     expect(next).toBe(BASE);
+  });
+
+  it('keeps the other entries with an empty list', () => {
+    const list = set(
+      'schedule:\n  - "0 * * * *"\n  - at: 2030-01-01T00:00:00Z\n',
+      []
+    );
+    expect(list).toBe('schedule:\n  - at: 2030-01-01T00:00:00Z\n');
+
+    const map = set(
+      'schedule:\n  start: "0 8 * * *"\n  stop: "0 18 * * *"\n',
+      []
+    );
+    expect(map).toBe('schedule:\n  stop: "0 18 * * *"\n');
   });
 
   it('refuses a change that changes nothing', () => {

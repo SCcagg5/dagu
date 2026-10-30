@@ -71,6 +71,17 @@ steps:
     ).toBe(true);
   });
 
+  // A step can call a local sub-DAG of a later document.
+  it('counts a later document as the head', () => {
+    const withChild = (run: string) =>
+      `${BASE}---\nname: child\nsteps:\n  - name: work\n    run: ${run}\n`;
+    const child = withChild('echo a');
+    expect(diffRunSpec(child, child).headChanged).toBe(false);
+    expect(diffRunSpec(child, withChild('echo b')).headChanged).toBe(true);
+    expect(diffRunSpec(BASE, child).headChanged).toBe(true);
+    expect(diffRunSpec(child, `${BASE}---\nname: [\n`).headChanged).toBe(true);
+  });
+
   it('does not count a handler as the head', () => {
     const withHandler = `${BASE}handler_on:
   failure:
