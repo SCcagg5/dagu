@@ -20,11 +20,10 @@ import { ScheduleLine, WebhookIndicator } from './ScheduleSummary';
 type DAGFile = components['schemas']['DAGFile'];
 
 /**
- * The triggers of a workflow that its row can switch off: the schedule (the
- * suspension of the workflow) and the webhook. Each trigger has its switch;
- * a workflow with neither shows a dash.
+ * The schedule of a workflow with its switch (the suspension of the workflow)
+ * and the next run; a dash without a schedule.
  */
-export function ActiveCell({
+export function ScheduleCell({
   dag,
   refresh,
 }: {
@@ -32,21 +31,33 @@ export function ActiveCell({
   refresh?: () => void;
 }) {
   const hasSchedule = (dag.dag.schedule ?? []).length > 0;
+  if (!hasSchedule) {
+    return (
+      <span
+        data-testid="schedule-cell"
+        className="text-xs text-muted-foreground"
+      >
+        -
+      </span>
+    );
+  }
   return (
-    <div
-      data-testid="active-cell"
-      className="flex min-w-0 items-center gap-2 text-xs"
+    <span
+      data-testid="schedule-cell"
+      onClick={(event) => event.stopPropagation()}
+      className="flex min-w-0 items-center gap-1 text-xs"
     >
-      {hasSchedule && (
-        <span
-          onClick={(event) => event.stopPropagation()}
-          className="flex min-w-0 items-center gap-1"
-        >
-          <LiveSwitch dag={dag} refresh={refresh} />
-          <ScheduleLine dag={dag} emptyLabel={false} indicator={false} />
-        </span>
-      )}
-      <WebhookSwitch dag={dag} showEmptyDash={!hasSchedule} />
+      <LiveSwitch dag={dag} refresh={refresh} />
+      <ScheduleLine dag={dag} emptyLabel={false} indicator={false} />
+    </span>
+  );
+}
+
+/** The webhook of a workflow with its switch; a dash without a webhook. */
+export function WebhookCell({ dag }: { dag: DAGFile }) {
+  return (
+    <div data-testid="webhook-cell" className="flex items-center text-xs">
+      <WebhookSwitch dag={dag} />
     </div>
   );
 }
@@ -56,13 +67,7 @@ export function ActiveCell({
  * the right to manage webhooks on the local server; a reader sees the marker
  * of the webhook without a switch.
  */
-function WebhookSwitch({
-  dag,
-  showEmptyDash,
-}: {
-  dag: DAGFile;
-  showEmptyDash: boolean;
-}) {
+function WebhookSwitch({ dag }: { dag: DAGFile }) {
   const { ts } = useI18n();
   const config = useConfig();
   const client = useClient();
@@ -101,10 +106,10 @@ function WebhookSwitch({
   }, [client, dag.fileName, mutate, pending, remoteNode, showError, ts]);
 
   if (!enabled || !webhook) {
-    return showEmptyDash && !webhook ? (
-      <span className="text-muted-foreground">-</span>
-    ) : (
+    return webhook ? (
       <WebhookIndicator fileName={dag.fileName} />
+    ) : (
+      <span className="text-muted-foreground">-</span>
     );
   }
   const name = dag.dag.name;

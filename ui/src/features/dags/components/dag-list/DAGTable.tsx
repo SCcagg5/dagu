@@ -47,7 +47,7 @@ import ActivityBars from './ActivityBars';
 import { DAGRecentRuns } from './DAGRecentRuns';
 import { LastRunCell, useIsHeartbeat } from './LastRunCell';
 import { ScheduleLine } from './ScheduleSummary';
-import { ActiveCell } from './ActiveCell';
+import { ScheduleCell, WebhookCell } from './ActiveCell';
 import PinToggle from '../common/PinToggle';
 
 // Import shadcn/ui components
@@ -888,12 +888,12 @@ const defaultColumns = [
     },
   }),
   columnHelper.accessor('kind', {
-    id: 'Active',
-    size: 280,
-    minSize: 240,
+    id: 'Schedule',
+    size: 220,
+    minSize: 180,
     header: () => (
       <span className="text-xs">
-        <I18nText text={'Active'} />
+        <I18nText text={'Schedule'} />
       </span>
     ),
     cell: ({ row, table }) => {
@@ -902,8 +902,25 @@ const defaultColumns = [
         return null;
       }
       return (
-        <ActiveCell dag={data.dag} refresh={table.options.meta?.refreshFn} />
+        <ScheduleCell dag={data.dag} refresh={table.options.meta?.refreshFn} />
       );
+    },
+  }),
+  columnHelper.accessor('kind', {
+    id: 'Webhook',
+    size: 88,
+    minSize: 88,
+    header: () => (
+      <span className="text-xs">
+        <I18nText text={'Webhook'} />
+      </span>
+    ),
+    cell: ({ row }) => {
+      const data = row.original!;
+      if (data.kind !== ItemKind.DAG) {
+        return null;
+      }
+      return <WebhookCell dag={data.dag} />;
     },
   }),
   columnHelper.display({
@@ -1842,7 +1859,8 @@ function DAGTable({
             <col style={{ width: '28%' }} />
             <col style={{ width: '88px' }} />
             <col className={activityColumn.col} />
-            <col style={{ width: '280px' }} />
+            <col style={{ width: '220px' }} />
+            <col style={{ width: '88px' }} />
             <col style={{ width: '160px' }} />
           </colgroup>
           <TableHeader>

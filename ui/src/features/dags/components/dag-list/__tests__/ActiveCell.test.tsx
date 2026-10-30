@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScheduleKind, type components } from '@/api/v1/schema';
 import { UserPreferencesProvider } from '@/contexts/UserPreference';
 import { I18nProvider } from '@/i18n/I18nProvider';
-import { ActiveCell } from '../ActiveCell';
+import { ScheduleCell, WebhookCell } from '../ActiveCell';
 
 type DAGFile = components['schemas']['DAGFile'];
 
@@ -55,7 +55,8 @@ function renderCell(dag: DAGFile) {
   return render(
     <UserPreferencesProvider>
       <I18nProvider>
-        <ActiveCell dag={dag} />
+        <ScheduleCell dag={dag} />
+        <WebhookCell dag={dag} />
       </I18nProvider>
     </UserPreferencesProvider>
   );
@@ -71,7 +72,7 @@ beforeEach(() => {
   mocks.mutate.mockReset();
 });
 
-describe('ActiveCell', () => {
+describe('ScheduleCell and WebhookCell', () => {
   it('shows the schedule switch and no webhook switch for a scheduled workflow', () => {
     renderCell(dagFile(cron));
     expect(
@@ -80,9 +81,10 @@ describe('ActiveCell', () => {
     expect(screen.queryByTestId('webhook-switch')).toBeNull();
   });
 
-  it('shows a dash for a workflow that has neither a schedule nor a webhook', () => {
+  it('shows a dash in each column for a workflow that has neither', () => {
     renderCell(dagFile([]));
-    expect(screen.getByTestId('active-cell').textContent).toBe('-');
+    expect(screen.getByTestId('schedule-cell').textContent).toBe('-');
+    expect(screen.getByTestId('webhook-cell').textContent).toBe('-');
   });
 
   it('switches a webhook off after a confirmation', async () => {
