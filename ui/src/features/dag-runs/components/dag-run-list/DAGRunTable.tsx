@@ -50,7 +50,7 @@ function isInteractiveEventTarget(target: EventTarget | null): boolean {
 
   return Boolean(
     target.closest(
-      'input, textarea, select, button, a, [role="button"], [role="combobox"], [role="textbox"], [contenteditable="true"]'
+      'input, textarea, select, button, a, [role="button"], [role="combobox"], [role="textbox"], [role="option"], [role="menuitem"], [contenteditable="true"]'
     )
   );
 }
@@ -108,7 +108,8 @@ function DAGRunTable({
   // Keyboard navigation: arrows move the highlighted row, Enter opens its run.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isInteractiveEventTarget(event.target)) {
+      // A popup item or another control took the key.
+      if (event.defaultPrevented || isInteractiveEventTarget(event.target)) {
         return;
       }
       if (event.metaKey || event.ctrlKey || event.altKey) {
@@ -323,7 +324,7 @@ function DAGRunTable({
               <div className="flex items-start gap-2">
                 <DAGRunArtifactsButton
                   dagRun={dagRun}
-                  onClick={(e) => openPage(runURL(dagRun, 'artifacts'), e)}
+                  to={runURL(dagRun, 'artifacts')}
                 />
                 <StepDetailsTooltip dagRun={dagRun}>
                   <div className="flex flex-col items-end gap-1">
@@ -554,7 +555,7 @@ function DAGRunTable({
                   </Link>
                   <DAGRunArtifactsButton
                     dagRun={dagRun}
-                    onClick={(e) => openPage(runURL(dagRun, 'artifacts'), e)}
+                    to={runURL(dagRun, 'artifacts')}
                   />
                 </div>
               </TableCell>

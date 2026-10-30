@@ -124,14 +124,16 @@ function useGuardController(): SettingsLeaveGuard {
   const anyRisk = isAnyRisk(risk);
 
   // A risk can go while the question is open, for example when browser Back
-  // unmounts the section. Then there is nothing left to ask about.
+  // unmounts the section. Then there is nothing left to ask about. The
+  // question of guard() does not cover the editor draft.
+  const promptRisk = prompt?.leave ? anyRisk : atRisk;
   useEffect(() => {
-    if (!anyRisk) {
+    if (!promptRisk) {
       setPrompt((current) =>
         current?.open ? { ...current, open: false } : current
       );
     }
-  }, [anyRisk]);
+  }, [promptRisk]);
 
   useEffect(() => {
     if (!anyRisk) return;

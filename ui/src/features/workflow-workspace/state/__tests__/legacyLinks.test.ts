@@ -38,13 +38,14 @@ const ROWS: Row[] = [
     url: '/status?dagRunId=X',
     expected: { kind: 'runPage', path: '/dags/flow.yaml', query: { run: 'X' } },
   },
+  // The root run opens: the step of the sub-run is not one of its steps.
   {
     rule: 'R1',
     url: '?dagRunId=X&dagRunName=root&subDAGRunId=Y&step=s',
     expected: {
       kind: 'runPage',
       path: '/dags/root',
-      query: { run: 'X', step: 's' },
+      query: { run: 'X' },
     },
   },
   {

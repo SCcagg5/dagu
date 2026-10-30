@@ -120,9 +120,10 @@ export default function CommandPaletteDialog({
       navigate(to);
     };
 
-    // available() reads the page each time the palette opens.
+    // available() reads the page each time the palette opens. The ids carry
+    // the registration, apart from the built-in ids.
     const registered: CommandItem[] = open
-      ? groups.flatMap(({ group, commands }) =>
+      ? groups.flatMap(({ group, commands }, registration) =>
           commands
             .filter(
               (command) =>
@@ -130,7 +131,7 @@ export default function CommandPaletteDialog({
                 matches(command, trimmedQuery)
             )
             .map((command) => ({
-              id: `${group.id}:${command.id}`,
+              id: `registered-${registration}:${command.id}`,
               group: group.id,
               groupLabel: group.label,
               label: command.label,

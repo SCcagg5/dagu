@@ -230,7 +230,7 @@ export function StepRetryDialog({
           <Button
             size="sm"
             onClick={handleRetry}
-            disabled={loading || disabled}
+            disabled={loading || disabled || !config.permissions.runDags}
           >
             {loading ? (
               <Spinner className="size-4" />

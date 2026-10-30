@@ -162,6 +162,43 @@ describe('usePaletteCommands', () => {
     ).toBeInTheDocument();
   });
 
+  // The active option is named by its DOM id: a workflow whose file name is
+  // a command id, or a second registration, must not share it.
+  it('gives every option its own id', async () => {
+    useQueryMock.mockReturnValue({
+      data: { dags: [{ fileName: 'save', dag: { name: 'save' } }] },
+      isLoading: false,
+    });
+    render(
+      <UserPreferencesProvider>
+        <I18nProvider>
+          <MemoryRouter initialEntries={['/dags/x']}>
+            <AppBarContext.Provider
+              value={
+                {
+                  selectedRemoteNode: 'local',
+                  workspaceSelection: { kind: WorkspaceKind.all },
+                } as never
+              }
+            >
+              <CommandPaletteProvider>
+                <Registrar commands={[command('save')]} />
+                <Registrar commands={[command('save')]} />
+              </CommandPaletteProvider>
+            </AppBarContext.Provider>
+          </MemoryRouter>
+        </I18nProvider>
+      </UserPreferencesProvider>
+    );
+    await openPalette();
+
+    const ids = screen
+      .getAllByRole('option', { name: /save/ })
+      .map((option) => option.id);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(3);
+  });
+
   it('shows the shortcut text of a command', async () => {
     renderPalette([command('refresh', { shortcut: 'R' })]);
     await openPalette();

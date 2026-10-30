@@ -32,7 +32,9 @@ export function useEscInStepYaml({
   closeView(): void;
 }): void {
   const closeRef = useRef(closeView);
-  closeRef.current = closeView;
+  useEffect(() => {
+    closeRef.current = closeView;
+  });
   useEffect(() => {
     if (!active || !viewOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
