@@ -149,15 +149,18 @@ test.describe('workspace keyboard', () => {
     // canvas.
     await page.keyboard.press('Escape');
     await expect(ndv).toBeHidden();
-    const focusedInCanvas = await canvas.evaluate((element) => {
-      const active = document.activeElement;
-      return (
-        active instanceof HTMLElement &&
-        element.contains(active) &&
-        active.matches(':focus-visible')
-      );
-    });
-    expect(focusedInCanvas).toBe(true);
+    await expect
+      .poll(() =>
+        canvas.evaluate((element) => {
+          const active = document.activeElement;
+          return (
+            active instanceof HTMLElement &&
+            element.contains(active) &&
+            active.matches(':focus-visible')
+          );
+        })
+      )
+      .toBe(true);
 
     // Tab reaches the hover toolbar of the selected step: its Run step button
     // asks to confirm.

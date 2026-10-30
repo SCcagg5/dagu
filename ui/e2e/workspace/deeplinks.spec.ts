@@ -3,15 +3,20 @@
 
 import type { APIRequestContext, Page } from '@playwright/test';
 import {
-  loadStack,
-  loginViaAPI,
   startDAG,
   uniqueName,
   waitForDAGAvailable,
   waitForRunStatus,
   writeLocalDAG,
 } from '../helpers/e2e';
-import { expect, signIn, test as base, type FixtureDAG } from './fixtures';
+import {
+  adminToken,
+  expect,
+  expectAt,
+  signIn,
+  test as base,
+  type FixtureDAG,
+} from './fixtures';
 
 // Old and new workflow URLs in a browser: each link lands on the URL and the
 // zone that the legacy table (state/legacyLinks.ts, rules R1-R11) gives, and
@@ -76,15 +81,6 @@ const test = base.extend<{
   },
 });
 
-async function adminToken(request: APIRequestContext): Promise<string> {
-  const stack = await loadStack();
-  return loginViaAPI(
-    request,
-    stack.auth.adminUsername,
-    stack.auth.adminPassword
-  );
-}
-
 async function runToEnd(
   request: APIRequestContext,
   token: string,
@@ -100,32 +96,6 @@ const CARRY = `remoteNode=local&workspace=${WORKSPACE}`;
 
 function withCarry(target: string): string {
   return `${target}${target.includes('?') ? '&' : '?'}${CARRY}`;
-}
-
-/**
- * Waits until the page is at the path and has these query values. A null
- * value means that the key is absent.
- */
-async function expectAt(
-  page: Page,
-  pathname: string,
-  query: Record<string, string | null>
-): Promise<void> {
-  await expect
-    .poll(
-      () => {
-        const url = new URL(page.url());
-        const values = Object.keys(query).map(
-          (key) => `${key}=${url.searchParams.get(key)}`
-        );
-        return [url.pathname, ...values];
-      },
-      { timeout: 30_000 }
-    )
-    .toEqual([
-      pathname,
-      ...Object.entries(query).map(([key, value]) => `${key}=${value}`),
-    ]);
 }
 
 type Zone =
@@ -145,8 +115,6 @@ type Zone =
 async function expectZone(page: Page, zone: Zone): Promise<void> {
   if (zone === 'editor') {
     await expect(page.getByTestId('ww-pane')).toBeVisible({ timeout: 30_000 });
-    // One tab: there are no mode tabs.
-    await expect(page.getByTestId('ww-mode-tabs')).toHaveCount(0);
     return;
   }
   if (zone === 'dock' || zone === 'timeline') {

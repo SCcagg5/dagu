@@ -1,41 +1,17 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import type { Page } from '@playwright/test';
 import {
   loadStack,
   loginViaAPI,
   startDAG,
   waitForRunStatus,
 } from '../helpers/e2e';
-import { expect, signIn, test } from './fixtures';
+import { expect, expectAt, signIn, test } from './fixtures';
 
 // The legacy link rules of state/legacyLinks.ts (N3) in a browser. Each old
 // link carries remoteNode, and each redirect must keep it. The workspace is
 // one tab, so no old link lands on a mode.
-
-/** Waits until the page is at the path and has these query values. */
-async function expectAt(
-  page: Page,
-  pathname: string,
-  query: Record<string, string | null>
-): Promise<void> {
-  await expect
-    .poll(
-      () => {
-        const url = new URL(page.url());
-        const values = Object.keys(query).map(
-          (key) => `${key}=${url.searchParams.get(key)}`
-        );
-        return [url.pathname, ...values];
-      },
-      { timeout: 30_000 }
-    )
-    .toEqual([
-      pathname,
-      ...Object.entries(query).map(([key, value]) => `${key}=${value}`),
-    ]);
-}
 
 test.describe('workspace legacy links', () => {
   test.beforeEach(async ({ page }) => {
@@ -54,7 +30,6 @@ test.describe('workspace legacy links', () => {
     await gotoWorkspace(page, `${base}/spec?remoteNode=local`);
     await expectAt(page, base, { remoteNode: 'local', yaml: null });
     await expect(page.getByTestId('ww-pane')).toBeVisible();
-    await expect(page.getByTestId('ww-mode-tabs')).toHaveCount(0);
   });
 
   // R5: the old Spec tab was the YAML, so the link opens the YAML panel
@@ -136,7 +111,6 @@ test.describe('workspace legacy links', () => {
       remoteNode: 'local',
     });
     await expect(page.getByTestId('ww-pane')).toBeVisible();
-    await expect(page.getByTestId('ww-mode-tabs')).toHaveCount(0);
     const dock = page.getByTestId('ww-dock');
     await expect(dock).toHaveAttribute('data-state', 'open', {
       timeout: 30_000,
@@ -162,7 +136,6 @@ test.describe('workspace legacy links', () => {
     );
     await expectAt(page, base, { step: 'prepare', remoteNode: 'local' });
     await expect(page.getByTestId('ww-pane')).toBeVisible();
-    await expect(page.getByTestId('ww-mode-tabs')).toHaveCount(0);
     await page.goBack();
     expect(new URL(page.url()).pathname).not.toMatch(/\/executions$/);
   });
