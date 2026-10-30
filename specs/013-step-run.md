@@ -324,7 +324,7 @@ Shell selection order is:
 
 `dagu start --only <step>` runs only the named steps, as the `steps` field does. Repeat `--only` to select more than one step.
 
-- `--outputs-from <run-id>` is the command line form of `outputsFromRunId`. It carries the outputs of every skipped step, and the work directory, from one finished run.
+- `--outputs-from <run-id>` is the command line form of `outputsFromRunId`. It carries the work directory, and the outputs of the skipped steps that the selected steps depend on, from one finished run.
 
 - `--output-from <step>=<run-id>` is the command line form of `outputsFromRuns`. It names the run that gives the outputs of one skipped step. Repeat the flag for more than one step. The step is a step name or ID. It requires `--only`.
 
@@ -388,7 +388,7 @@ A selected-steps run records where the carried outputs of its skipped steps come
 
 - The run is listed nowhere by default: not in the run lists, the DAG history (unless the request sets `includeEphemeral`), the latest run of a DAG, the queues, the dashboard and system counters, the artifact listing, or the events feed. It does not count in history retention.
 
-- The run produces no event, so notification rules and incident policies do not see it. The `handler_on` lifecycle handlers of the DAG still run, because they belong to the definition.
+- The run produces no event, so notification rules and incident policies do not see it. Being ephemeral does not change which `handler_on` handlers run: they belong to the definition and follow the rule for the handlers of a selected-steps run.
 
 - The run cannot be retried, rescheduled, or edited. These requests answer HTTP 409.
 
