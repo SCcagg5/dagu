@@ -1529,6 +1529,12 @@ function DAGTable({
     return hierarchicalData;
   }, [dags, clientSort, compareDags]);
 
+  // The chevron column unfolds the groups: without a group it has no use.
+  const hasGroups = useMemo(
+    () => data.some((row) => row.kind === ItemKind.Group),
+    [data]
+  );
+
   const instance = useReactTable<Data>({
     data,
     columns,
@@ -1547,6 +1553,7 @@ function DAGTable({
     state: {
       expanded,
       columnFilters,
+      columnVisibility: { Expand: hasGroups },
     },
     onExpandedChange: handleExpandedChange,
     meta: {
@@ -1820,7 +1827,7 @@ function DAGTable({
           <colgroup>
             {canDeleteDAGs && <col style={{ width: '24px' }} />}
             <col style={{ width: '24px' }} />
-            <col style={{ width: '18px' }} />
+            {hasGroups && <col style={{ width: '18px' }} />}
             <col style={{ width: '28%' }} />
             <col style={{ width: '88px' }} />
             <col className={activityColumn.col} />
@@ -1923,7 +1930,7 @@ function DAGTable({
                     {recentRunsOf !== null && (
                       <TableRow className="bg-muted/20 hover:bg-muted/20">
                         <TableCell
-                          colSpan={columns.length}
+                          colSpan={instance.getVisibleLeafColumns().length}
                           className="px-2 py-1 pl-12"
                         >
                           <DAGRecentRuns fileName={recentRunsOf} />
@@ -1936,7 +1943,7 @@ function DAGTable({
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length}
+                  colSpan={instance.getVisibleLeafColumns().length}
                   className="h-64 text-center"
                 >
                   <div className="flex flex-col items-center justify-center py-8">
