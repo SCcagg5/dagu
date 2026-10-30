@@ -976,7 +976,7 @@ describe('useStepRunActions sub-runs and logs', () => {
 
     expect(openOnStack).not.toHaveBeenCalled();
     expect(open).toHaveBeenCalledWith(
-      '/dags/example?remoteNode=edge&run=run-1',
+      '/dags/example?remoteNode=edge&run=run-1&subRun=c-1',
       '_blank'
     );
     open.mockRestore();

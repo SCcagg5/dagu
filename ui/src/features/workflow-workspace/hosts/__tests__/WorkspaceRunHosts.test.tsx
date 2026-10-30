@@ -66,10 +66,20 @@ vi.mock('@/features/dag-runs/hooks/useBoundedDAGRunDetails', () => ({
 vi.mock(
   '@/features/dag-runs/components/dag-run-details/DAGRunDetailsContent',
   () => ({
-    default: function ChildContent({ dagRunId }: { dagRunId: string }) {
+    default: function ChildContent({
+      dagRunId,
+      initialStepName,
+    }: {
+      dagRunId: string;
+      initialStepName?: string;
+    }) {
       const open = useOpenSubRun();
       return (
-        <div data-testid="child-content" data-run={dagRunId}>
+        <div
+          data-testid="child-content"
+          data-run={dagRunId}
+          data-step={initialStepName}
+        >
           <button
             type="button"
             onClick={() => open?.({ name: 'grandchild', dagRunId: 'g-1' })}
@@ -370,8 +380,9 @@ describe('WorkspaceRunHosts', () => {
 
     fireEvent.click(link, { ctrlKey: true });
     expect(openSpy).toHaveBeenCalledTimes(1);
-    // The workflow page has no sub-run address: the tab opens the root run.
+    // The tab opens the child over its root run.
     expect(openSpy.mock.calls[0]?.[0]).toContain('/dags/demo?');
+    expect(openSpy.mock.calls[0]?.[0]).toContain('subRun=c-9');
     expect(openSpy.mock.calls[0]?.[1]).toBe('_blank');
     expect(screen.queryByTestId('child-content')).not.toBeInTheDocument();
 
@@ -408,6 +419,59 @@ describe('WorkspaceRunHosts', () => {
       'a-1'
     );
     expect(crumbs()).toEqual(['demo', 'helper']);
+  });
+
+  describe('a sub-run link', () => {
+    const SUB_RUN = '/dag-runs/{name}/{dagRunId}/sub-dag-runs/{subDAGRunId}';
+
+    beforeEach(() => {
+      const base = serve(server);
+      h.GET.mockImplementation(
+        async (
+          path: string,
+          init?: { params?: { path?: Record<string, string> } }
+        ) => {
+          if (path !== SUB_RUN) return base(path, init);
+          return init?.params?.path?.subDAGRunId === 'c-1'
+            ? { data: { dagRunDetails: { ...run('c-1'), name: 'child-dag' } } }
+            : {
+                error: { code: 'not_found', message: 'not found' },
+                response: { status: 404 },
+              };
+        }
+      );
+    });
+
+    function lastURL(): string {
+      return String(h.navigate.mock.lastCall?.[0] ?? '');
+    }
+
+    // ?step next to ?subRun is a step of the sub-run, not of the run.
+    it('opens the sub-run on the stack with its step, once', async () => {
+      renderHosts(null, `/dags/${FILE_NAME}?run=run-2&subRun=c-1&step=deploy`);
+
+      const content = await screen.findByTestId('child-content');
+      expect(content).toHaveAttribute('data-run', 'c-1');
+      expect(content).toHaveAttribute('data-step', 'deploy');
+      expect(crumbs()).toEqual(['demo', 'child-dag']);
+      expect(lastBoundedTarget()).toMatchObject({
+        subDAGRunId: 'c-1',
+        parentName: 'demo',
+        parentDAGRunId: 'run-2',
+      });
+      // The link leaves the URL, with its step.
+      expect(lastURL()).toContain('run=run-2');
+      expect(lastURL()).not.toMatch(/subRun|step/);
+      expect(h.navigate.mock.lastCall?.[1]).toMatchObject({ replace: true });
+    });
+
+    it('drops the link of a sub-run that the run does not have', async () => {
+      renderHosts(null, `/dags/${FILE_NAME}?run=run-2&subRun=gone`);
+
+      await vi.waitFor(() => expect(h.navigate).toHaveBeenCalled());
+      expect(lastURL()).not.toContain('subRun');
+      expect(screen.queryByTestId('child-content')).not.toBeInTheDocument();
+    });
   });
 
   it('renders the children unchanged without WorkspaceDataProvider', () => {

@@ -340,10 +340,10 @@ describe('dock tab bodies', () => {
       const [url, target] = open.mock.calls[0]!;
       expect(target).toBe('_blank');
       expect(String(url)).toMatch(/^\/dags\/demo\?.*run=run-2/);
-      // The workflow page has no sub-run address: the tab opens the root run.
-      expect(
-        new URLSearchParams(String(url).split('?')[1]).has('subDAGRunId')
-      ).toBe(false);
+      // The tab opens the child over its root run.
+      expect(new URLSearchParams(String(url).split('?')[1]).get('subRun')).toBe(
+        'c-1'
+      );
       expect(screen.queryByTestId('child-content')).not.toBeInTheDocument();
 
       // A plain click after a modifier click uses the stack again.
@@ -365,6 +365,30 @@ describe('dock tab bodies', () => {
       prettyValues: true,
       pollWhileEmpty: false,
     });
+  });
+
+  // A run that ended with no outputs may still write them for a moment; the
+  // list stops asking once that moment is over, with no other render.
+  it('stops polling the outputs 15 s after the run ended', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    try {
+      vi.setSystemTime(new Date('2026-01-15T02:00:10Z'));
+      setLatest(
+        run('run-1', [node('a')], Status.Success, {
+          finishedAt: '2026-01-15T02:00:05Z',
+        })
+      );
+      await renderBody('outputs');
+      expect(propsOf('outputs').pollWhileEmpty).toBe(true);
+
+      act(() => {
+        vi.advanceTimersByTime(11_000);
+      });
+
+      expect(propsOf('outputs').pollWhileEmpty).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // The OUTPUT column of a step: the Outputs tab shows the outputs of that
