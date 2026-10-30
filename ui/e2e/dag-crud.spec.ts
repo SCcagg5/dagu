@@ -19,12 +19,6 @@ function dagDefinitionsEntry(page: Page, dagName: string) {
     .first();
 }
 
-function specViewButton(page: Page, name: string) {
-  return page
-    .getByRole('group', { name: 'View mode' })
-    .getByRole('button', { name, exact: true });
-}
-
 function localScopedURL(baseURL: string, path: string) {
   const url = new URL(path, baseURL);
   url.searchParams.set('remoteNode', 'local');
@@ -86,13 +80,17 @@ steps:
           new URL(response.url()).pathname.endsWith('/spec')
       );
       await saveButton.click();
+      // The editor shows the YAML diff before it saves.
+      await page
+        .getByRole('dialog', { name: 'Review changes' })
+        .getByRole('button', { name: 'Save', exact: true })
+        .click();
       expect((await response).ok()).toBeTruthy();
       await expect(saveButton).toBeDisabled();
     };
     await expect(warning).toBeVisible();
-    // The default viewport is too narrow for Split, so the tab opens on the
-    // graph; the YAML view also shows the warnings.
-    await specViewButton(page, 'YAML').click();
+    // The YAML view also shows the warnings.
+    await page.getByRole('button', { name: 'YAML', exact: true }).click();
     await expect(warning).toBeVisible();
     const editor = page.locator('.monaco-editor textarea').first();
     await editor.focus();
@@ -108,15 +106,16 @@ steps:
     await expect(page.getByText('Valid', { exact: true })).toBeVisible();
     await expect(warning).toHaveCount(0);
     await saveSpec();
-    // The chosen view survives a reload.
     await page.reload();
-    await expect(page.locator('.monaco-editor')).toBeVisible();
     await expect(warning).toHaveCount(0);
   });
 
-  // Live validation redraws the graph and errors beside the editor. None of
-  // that may move the editor while the user types.
-  test('keeps the spec editor in place while the split preview updates', async ({ page, request }) => {
+  // Live validation redraws the canvas and the messages. None of that may move
+  // the YAML drawer while the user types.
+  test('keeps the spec editor in place while the canvas updates', async ({
+    page,
+    request,
+  }) => {
     const stack = await loadStack();
     const token = await loginViaAPI(
       request,
@@ -131,17 +130,11 @@ steps:
 `;
     const fileName = await writeLocalDAG(dagName, definition);
     await waitForDAGAvailable(request, token, fileName);
-    // Wide enough for the graph to sit beside the editor.
     await page.setViewportSize({ width: 1600, height: 900 });
     await page.goto(`/dags/${encodeURIComponent(fileName)}/spec`);
 
-    const graph = page.locator('.mermaid svg');
+    await page.getByRole('button', { name: 'YAML', exact: true }).click();
     const monaco = page.locator('.monaco-editor').first();
-    await expect(specViewButton(page, 'Split')).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
-    await expect(graph.getByText('first', { exact: true })).toBeInViewport();
     await expect(monaco).toBeInViewport();
     const editorTop = async () => (await monaco.boundingBox())?.y ?? NaN;
     const initialTop = await editorTop();
@@ -170,20 +163,18 @@ steps:
     await page.locator('.monaco-editor textarea').first().focus();
     await expect(monaco).toHaveClass(/\bfocused\b/);
 
-    await replaceSpec('steps: []');
-    await expect(page.getByText('No steps to render')).toBeVisible();
-    await expectEditorInPlace();
-
-    await replaceSpec(`steps: [${step('first')}, ${step('second')}, ${step('third')}]`);
+    await replaceSpec(
+      `steps: [${step('first')}, ${step('second')}, ${step('third')}]`
+    );
     await expect(page.getByText('Valid', { exact: true })).toBeVisible();
-    await expect(graph.getByText('third', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('ve-canvas-node-steps[2]')).toBeVisible();
     await expectEditorInPlace();
 
     await replaceSpec(
       `steps: [${step('first')}, ${step('second')}, ` +
         `${step('third', ', depends: [missing]')}]`
     );
-    await expect(page.getByText(/^\d+ issues?$/)).toBeVisible();
+    await expect(page.getByText(/^\d+ issues?$/).first()).toBeAttached();
     await expectEditorInPlace();
   });
 
@@ -253,7 +244,11 @@ steps:
       page.getByRole('heading', { level: 1, name: dagName, exact: true })
     ).toBeVisible();
 
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    // The editor has a Delete button for each step; the header's comes first.
+    await page
+      .getByRole('button', { name: 'Delete', exact: true })
+      .first()
+      .click();
 
     const deleteDialog = page.getByRole('dialog');
     await expect(deleteDialog).toBeVisible();
