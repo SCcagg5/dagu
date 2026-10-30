@@ -128,9 +128,11 @@ type Props = {
   onDeleteView: (viewId: string) => Promise<void>;
   /**
    * Renames a saved view. With it, the selector shows Save, Rename and Delete
-   * buttons for the active view, and shows no selector while no view is saved.
+   * buttons for the active view.
    */
   onRenameView?: (viewId: string, name: string) => Promise<void>;
+  /** The current filters are those of a saved view: there is nothing new to save. */
+  filtersAlreadySaved?: boolean;
 };
 
 export function ViewSelector({
@@ -151,6 +153,7 @@ export function ViewSelector({
   onSetPinned,
   onDeleteView,
   onRenameView,
+  filtersAlreadySaved = false,
 }: Props): React.ReactElement {
   const [saveDialogOpen, setSaveDialogOpen] = React.useState(false);
   const [manageDialogOpen, setManageDialogOpen] = React.useState(false);
@@ -411,7 +414,10 @@ export function ViewSelector({
               }
               aria-label={ts('Save view')}
               disabled={
-                isMutating || (activeView ? !isActiveViewEdited : false)
+                isMutating ||
+                (activeView
+                  ? !isActiveViewEdited
+                  : isAllView || filtersAlreadySaved)
               }
               onClick={() =>
                 activeView

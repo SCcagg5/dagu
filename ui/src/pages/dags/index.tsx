@@ -1021,6 +1021,9 @@ function DAGsContent() {
   const isWorkflowViewEdited = activeWorkflowView
     ? !areDAGDefinitionsFiltersEqual(activeWorkflowView.filters, currentFilters)
     : false;
+  const areWorkflowFiltersSaved = workflowViews.some((view) =>
+    areDAGDefinitionsFiltersEqual(view.filters, currentFilters)
+  );
   const isAllWorkflowsView =
     activeWorkflowViewId === null &&
     areDAGDefinitionsFiltersEqual(currentFilters, defaultFilters);
@@ -1169,6 +1172,7 @@ function DAGsContent() {
             defaultWorkflowViewId={defaultWorkflowViewId}
             isAllWorkflowsView={isAllWorkflowsView}
             isWorkflowViewEdited={isWorkflowViewEdited}
+            areWorkflowFiltersSaved={areWorkflowFiltersSaved}
             canManageWorkflowViews={canManageWorkflowViews}
             canDeleteDAGs={canManageWorkflowViews}
             canRenameDAGs={canManageWorkflowViews}

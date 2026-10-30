@@ -440,6 +440,7 @@ type Props = {
   isAllWorkflowsView: boolean;
   /** Whether the selected saved view differs from its stored filters */
   isWorkflowViewEdited: boolean;
+  areWorkflowFiltersSaved: boolean;
   /** Whether the current user can mutate shared views in this scope */
   canManageWorkflowViews: boolean;
   /** Whether the current user can delete workflows in this scope */
@@ -611,7 +612,7 @@ const defaultColumns = [
             table.toggleAllRowsExpanded();
           }
         }}
-        className="flex items-center justify-center text-muted-foreground cursor-pointer h-6 w-6 focus:outline-none rounded"
+        className="flex items-center justify-center text-muted-foreground cursor-pointer h-6 w-[18px] focus:outline-none rounded"
       >
         {table.getIsAllRowsExpanded() ? (
           <>
@@ -659,9 +660,9 @@ const defaultColumns = [
       }
       return null;
     },
-    size: 24,
-    minSize: 24,
-    maxSize: 24,
+    size: 18,
+    minSize: 18,
+    maxSize: 18,
   }),
   columnHelper.accessor('name', {
     id: 'Name',
@@ -1131,6 +1132,7 @@ function DAGTable({
   defaultWorkflowViewId,
   isAllWorkflowsView,
   isWorkflowViewEdited,
+  areWorkflowFiltersSaved,
   canManageWorkflowViews,
   canDeleteDAGs,
   canRenameDAGs,
@@ -1642,6 +1644,7 @@ function DAGTable({
             defaultViewId={defaultWorkflowViewId}
             isAllView={isAllWorkflowsView}
             isActiveViewEdited={isWorkflowViewEdited}
+            filtersAlreadySaved={areWorkflowFiltersSaved}
             canManageViews={canManageWorkflowViews}
             error={workflowViewError}
             onSelectView={onSelectWorkflowView}
@@ -1817,7 +1820,7 @@ function DAGTable({
           <colgroup>
             {canDeleteDAGs && <col style={{ width: '24px' }} />}
             <col style={{ width: '24px' }} />
-            <col style={{ width: '24px' }} />
+            <col style={{ width: '18px' }} />
             <col style={{ width: '28%' }} />
             <col style={{ width: '88px' }} />
             <col className={activityColumn.col} />
@@ -1831,7 +1834,7 @@ function DAGTable({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={`py-1 text-muted-foreground text-xs overflow-hidden ${header.column.id === 'Select' || header.column.id === 'Expand' || header.column.id === 'Pin' ? 'px-0' : 'px-2'} ${header.column.id === 'Activity' ? activityColumn.cell : ''}`}
+                    className={`py-1 text-muted-foreground text-xs overflow-hidden ${header.column.id === 'Select' || header.column.id === 'Expand' || header.column.id === 'Pin' ? 'px-0' : header.column.id === 'Name' ? 'pl-1 pr-2' : 'px-2'} ${header.column.id === 'Activity' ? activityColumn.cell : ''}`}
                   >
                     {header.isPlaceholder ? null : (
                       <div>
@@ -1908,7 +1911,7 @@ function DAGTable({
                       {row.getVisibleCells().map((cell) => (
                         <TableCell
                           key={cell.id}
-                          className={`py-1 align-middle overflow-hidden truncate ${cell.column.id === 'Select' || cell.column.id === 'Expand' || cell.column.id === 'Pin' ? 'px-0' : 'px-2'} ${cell.column.id === 'Activity' ? activityColumn.cell : ''}`}
+                          className={`py-1 align-middle overflow-hidden truncate ${cell.column.id === 'Select' || cell.column.id === 'Expand' || cell.column.id === 'Pin' ? 'px-0' : cell.column.id === 'Name' ? 'pl-1 pr-2' : 'px-2'} ${cell.column.id === 'Activity' ? activityColumn.cell : ''}`}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
