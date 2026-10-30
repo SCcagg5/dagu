@@ -101,7 +101,8 @@ function ExpressionRow({
 }: {
   expression: string;
   editable: boolean;
-  onCommit(next: string): void;
+  /** False when the panel refuses the expression: the draft goes back. */
+  onCommit(next: string): boolean;
   onRemove(): void;
 }): ReactElement {
   const { ts } = useI18n();
@@ -109,8 +110,8 @@ function ExpressionRow({
   const runs = nextRuns(draft.trim());
   const commit = () => {
     const next = draft.trim();
-    if (next === '') setDraft(expression);
-    else if (next !== expression) onCommit(next);
+    if (next === expression) return;
+    if (next === '' || !onCommit(next)) setDraft(expression);
   };
   return (
     <li className="space-y-1">
@@ -176,7 +177,7 @@ export function CronLauncherPanel({
 }: {
   schedule: ScheduleView;
   editable: boolean;
-  /** The new list of expressions; an empty list removes the schedule. */
+  /** The new list of start expressions; the other entries stay. */
   onChange(expressions: string[]): void;
   onClose(): void;
 }): ReactElement {
@@ -205,9 +206,11 @@ export function CronLauncherPanel({
               key={`${expression}-${index}`}
               expression={expression}
               editable={editable}
-              onCommit={(next) =>
-                onChange(expressions.map((e, i) => (i === index ? next : e)))
-              }
+              onCommit={(next) => {
+                if (expressions.includes(next)) return false;
+                onChange(expressions.map((e, i) => (i === index ? next : e)));
+                return true;
+              }}
               onRemove={() =>
                 onChange(expressions.filter((_, i) => i !== index))
               }
@@ -264,7 +267,7 @@ export function CronLauncherPanel({
           </div>
         </section>
       )}
-      {editable && (expressions.length > 0 || schedule.others > 0) && (
+      {editable && expressions.length > 0 && (
         <Button
           type="button"
           variant="outline"

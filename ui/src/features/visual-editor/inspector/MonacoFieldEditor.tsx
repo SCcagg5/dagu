@@ -32,6 +32,8 @@ export function MonacoFieldEditor({
   commitRef.current = onCommit;
   const valueRef = useRef(value);
   valueRef.current = value;
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
 
   useEffect(() => {
     if (value !== shown.current) {
@@ -63,7 +65,7 @@ export function MonacoFieldEditor({
             editor.focus();
           }
           editor.onDidBlurEditorText(() => {
-            if (!readOnly && draftRef.current !== valueRef.current) {
+            if (!readOnlyRef.current && draftRef.current !== valueRef.current) {
               commitRef.current?.(draftRef.current);
             }
           });

@@ -70,4 +70,20 @@ describe('MonacoField', () => {
     fireEvent.blur(editor);
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it('does not commit after it becomes read-only', async () => {
+    const { editor, rerender, onCommit } = await setup();
+    fireEvent.change(editor, { target: { value: 'typed' } });
+    rerender(
+      <MonacoField
+        value="echo a"
+        language="shell"
+        readOnly
+        ariaLabel="Script"
+        onCommit={onCommit}
+      />
+    );
+    fireEvent.blur(editor);
+    expect(onCommit).not.toHaveBeenCalled();
+  });
 });

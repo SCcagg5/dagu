@@ -24,6 +24,9 @@ export function isRunStep(step: StepView): boolean {
 
 type Plan = { ops: DagEditOp[]; confirm: boolean; keepOps?: DagEditOp[] };
 
+// The keys that hold the command of a command step.
+const COMMAND_FIELDS = ['run', 'command', 'script'];
+
 /**
  * Operations of a change of the step action. With `with` present, the user
  * confirms the removal of the parameters: `ops` apply on "Remove",
@@ -32,8 +35,9 @@ type Plan = { ops: DagEditOp[]; confirm: boolean; keepOps?: DagEditOp[] };
  * - Action A to action B: `['action'] = B`; on "Remove" also
  *   `['with'] = undefined`, then `['with'] = template.with` when the
  *   template has one. "Keep" changes the action only.
- * - Command to action B: `['run'] = undefined`, `['shell'] = undefined`
- *   when set, `['action'] = B`, `['with'] = template.with` when set.
+ * - Command to action B: `run`, `command` and `script` removed when set,
+ *   `['shell'] = undefined` when set, `['action'] = B`,
+ *   `['with'] = template.with` when set.
  * - Action to command: `['action'] = undefined`, `['with'] = undefined`
  *   when set, `['run'] = ''`. "Keep" cancels.
  */
@@ -67,7 +71,9 @@ export function planActionChange(
     return { ops, confirm: hasWith };
   }
   if (runStep) {
-    const ops = [set(['run'], undefined)];
+    const ops = COMMAND_FIELDS.filter((field) => field in step.value).map(
+      (field) => set([field], undefined)
+    );
     if (step.value.shell !== undefined) {
       ops.push(set(['shell'], undefined));
     }

@@ -1423,6 +1423,29 @@ describe('RouterNode', () => {
     ).toBeInTheDocument();
   });
 
+  // jsdom has no hit testing: the nearest pointer-events class decides
+  // whether a hover reaches the element and shows its title.
+  it('lets a hover reach its tooltips', () => {
+    const node = {
+      ...router(['ok']),
+      routeValue: '${steps.produce.outputs.code}',
+      issues: { errors: 1, warnings: 0 },
+    };
+    const { getByRole, getByTitle } = renderIn(
+      <RouterNode {...nodeProps(node)} />
+    );
+    const hoverable = (element: HTMLElement) => {
+      const gate = element.closest(
+        '.pointer-events-none, .pointer-events-auto'
+      );
+      return !gate || gate.classList.contains('pointer-events-auto');
+    };
+    expect(hoverable(getByTitle('route'))).toBe(true);
+    expect(hoverable(getByTitle(node.routeValue))).toBe(true);
+    expect(hoverable(getByTitle('ok'))).toBe(true);
+    expect(hoverable(getByRole('img', { name: 'Errors: 1' }))).toBe(true);
+  });
+
   // The router is a square turned by 45 degrees, so its box is a square.
   it('is a square box that grows with the route count', () => {
     expect(routerSize(0)).toBe(160);
