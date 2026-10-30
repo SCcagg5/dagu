@@ -1904,7 +1904,7 @@ function DAGTable({
                         row.original?.kind === ItemKind.Group
                           ? 'bg-muted/50 font-semibold cursor-pointer hover:bg-muted/70'
                           : 'cursor-pointer hover:bg-muted/50'
-                      } ${isDAGRow && 'dag' in row.original && (row.original as DAGRow).dag.latestDAGRun?.status === Status.Running ? 'animate-running-row' : ''} ${isDAGRow ? 'group/row' : ''}`}
+                      } ${isDAGRow && 'dag' in row.original && (row.original as DAGRow).dag.latestDAGRun?.status === Status.Running ? 'animate-running-row' : ''} group/row`}
                       onClick={(e) => {
                         // Handle group row clicks - toggle expanded state
                         if ((row.original as Data)?.kind === ItemKind.Group) {
