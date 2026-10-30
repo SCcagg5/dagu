@@ -228,16 +228,9 @@ steps:
     await expect(
       page.getByRole('dialog', { name: 'Run progress' })
     ).toHaveCount(0);
-    await expect
-      .poll(() => {
-        const url = new URL(page.url());
-        return [
-          url.pathname,
-          url.searchParams.get('remoteNode'),
-          url.searchParams.get('run'),
-        ];
-      })
-      .toEqual([`/dags/${encodeURIComponent(fileName)}`, 'local', runId]);
+    await expect(page).toHaveURL(
+      new RegExp(`/dags/${dagName}\\.yaml\\?remoteNode=local&run=${runId}`)
+    );
     try {
       await expect(
         page.getByTestId('ww-run-chip').getByTestId('ww-run-progress')
