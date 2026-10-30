@@ -889,8 +889,8 @@ const defaultColumns = [
   }),
   columnHelper.accessor('kind', {
     id: 'Active',
-    size: 220,
-    minSize: 180,
+    size: 280,
+    minSize: 240,
     header: () => (
       <span className="text-xs">
         <I18nText text={'Active'} />
@@ -1842,7 +1842,7 @@ function DAGTable({
             <col style={{ width: '28%' }} />
             <col style={{ width: '88px' }} />
             <col className={activityColumn.col} />
-            <col style={{ width: '220px' }} />
+            <col style={{ width: '280px' }} />
             <col style={{ width: '160px' }} />
           </colgroup>
           <TableHeader>
