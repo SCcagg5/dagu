@@ -212,7 +212,7 @@ func (c *continuousStep) track(ctx context.Context, s samples.Sample, now time.T
 	case !failed && c.failed:
 		c.writeDue = true
 		logger.Info(ctx, "Continuous step recovered",
-			slog.Uint64("failed-samples", c.failedCount+1),
+			slog.Uint64("failed-samples", c.failedCount),
 			slog.Duration("outage", now.Sub(c.failedSince)))
 	}
 	if failed {

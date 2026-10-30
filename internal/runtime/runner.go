@@ -451,19 +451,18 @@ func (r *Runner) runGraphLoop(ctx context.Context, plan *Plan, nodes []*Node, pr
 				// Set step context for all logs in this goroutine
 				ctx := logger.WithValues(ctx, tag.Step(n.Name()))
 
-				// Finish the node and clamp its dependents before the wait group
-				// lets the run end, so that the final status holds the clamped times.
+				// Finish the node and clamp its dependents before the runner loop
+				// queues them and before the wait group lets the run end, so that
+				// a dependent starts after the finish and the final status holds
+				// the clamped times.
 				defer func() {
 					defer wg.Done()
 					r.finishNode(n, nil)
 					r.clampDependentStarts(plan, n)
+					doneCh <- n
 				}()
 				// Recover from panics and signal progress for status updates
 				defer r.recoverNodePanic(ctx, n, progressCh)
-				// Signal completion to runner loop
-				defer func() {
-					doneCh <- n
-				}()
 
 				// Anything evaluated during Prepare must see the node's real pre-execution env.
 				var err error

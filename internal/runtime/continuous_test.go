@@ -187,6 +187,20 @@ func TestContinuousStepWarnsOnceWhileRecordsFail(t *testing.T) {
 	assert.Contains(t, logs.String(), "Samples are recorded again")
 }
 
+// The recovered log counts the failed samples of the outage.
+func TestContinuousStepRecoveredLogCountsFailures(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	c := newContinuousStepForTest(clock)
+	logs := &syncBuffer{}
+	ctx := logger.WithLogger(context.Background(), logger.NewLogger(logger.WithWriter(logs)))
+
+	for _, exitCode := range []int{0, 7, 7, 0} {
+		c.track(ctx, samples.Sample{Time: clock.now(), ExitCode: exitCode}, clock.now())
+		clock.advance(time.Second)
+	}
+	assert.Contains(t, logs.String(), `"failed-samples":2,`)
+}
+
 func TestContinuousStepDetection(t *testing.T) {
 	cases := []struct {
 		name string
