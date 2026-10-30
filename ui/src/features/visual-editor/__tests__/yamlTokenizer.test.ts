@@ -125,6 +125,15 @@ describe('tokenizeYaml', () => {
     expect(lines[3]!.key).toBe('next');
   });
 
+  it('ends a block scalar of a list item at the next key of the item', () => {
+    const lines = tokenizeYaml('- run: |\n    echo\n  name: x\n- |\n text');
+    expect(kinds(lines[1]!)).toEqual(['string:echo']);
+    expect(lines[2]!.key).toBe('name');
+    expect(kinds(lines[2]!)).toEqual(['key:name', 'punct::', 'string:x']);
+    // The text of a block item may sit one column right of the marker.
+    expect(kinds(lines[4]!)).toEqual(['string:text']);
+  });
+
   it('colours anchors and document markers', () => {
     expect(first('a: &x 1')).toContain('variable:&x');
     expect(first('---')).toEqual(['punct:---']);

@@ -44,6 +44,20 @@ describe('buildAgentRunInfo', () => {
     });
   });
 
+  it('counts a tool and a task named as a property of an object', () => {
+    const info = buildAgentRunInfo(
+      run({
+        agentEvents: [
+          { turn: 1, kind: 'action', name: 'toString', status: 'succeeded' },
+        ] as never,
+        agentTasks: [] as never,
+      })
+    );
+    expect(info?.calls['toString']).toBe(1);
+    expect(info?.calls['constructor']).toBeUndefined();
+    expect(info?.tasks['constructor']).toBeUndefined();
+  });
+
   it('gives zero turns for a run that has not decided yet', () => {
     expect(buildAgentRunInfo(run({ agentTasks: [] as never }))).toEqual({
       iterations: 0,

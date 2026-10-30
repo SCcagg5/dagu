@@ -10,6 +10,13 @@ function isPlainObject(value: unknown): value is Plain {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** The value of an own key; a key such as `constructor` is not inherited. */
+function ownValue(object: Plain, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(object, key)
+    ? object[key]
+    : undefined;
+}
+
 /** Deep equality of JSON-like values; `undefined` keys count as absent. */
 export function sameValue(a: unknown, b: unknown): boolean {
   if (a === b) {
@@ -21,7 +28,7 @@ export function sameValue(a: unknown, b: unknown): boolean {
   if (isPlainObject(a) && isPlainObject(b)) {
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
     for (const key of keys) {
-      if (!sameValue(a[key], b[key])) {
+      if (!sameValue(ownValue(a, key), ownValue(b, key))) {
         return false;
       }
     }
@@ -52,10 +59,17 @@ export function diffFormData(
     const changes: FieldChange[] = [];
     const keys = [
       ...Object.keys(prev),
-      ...Object.keys(next).filter((k) => !(k in prev)),
+      ...Object.keys(next).filter(
+        (k) => !Object.prototype.hasOwnProperty.call(prev, k)
+      ),
     ];
     for (const key of keys) {
-      changes.push(...diffFormData(prev[key], next[key], [...base, key]));
+      changes.push(
+        ...diffFormData(ownValue(prev, key), ownValue(next, key), [
+          ...base,
+          key,
+        ])
+      );
     }
     return changes;
   }

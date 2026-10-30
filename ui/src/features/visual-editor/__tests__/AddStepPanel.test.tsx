@@ -388,6 +388,19 @@ describe('AddStepPanel favourites', () => {
       'archive.create',
     ]);
     expect(screen.getAllByRole('option')[0]).toHaveTextContent('archive');
+    // The active row follows the action, so the same key undoes the toggle.
+    expect(screen.getByRole('option', { selected: true })).toHaveTextContent(
+      'Create an archive'
+    );
+    fireEvent.keyDown(search, {
+      key: 'F',
+      code: 'KeyF',
+      altKey: true,
+      shiftKey: true,
+    });
+    expect(JSON.parse(localStorage.getItem(FAVOURITES_KEY) ?? '[]')).toEqual(
+      []
+    );
   });
 
   it('removes the star with a second click', () => {

@@ -165,7 +165,7 @@ function unquote(raw: string): string {
 export function tokenizeYaml(source: string): YamlLine[] {
   const lines = source.split('\n');
   const result: YamlLine[] = [];
-  // Indent of the key that opened a block scalar, while its lines run.
+  // Column of the node that opened a block scalar, while its lines run.
   let blockParent: number | null = null;
 
   for (const line of lines) {
@@ -191,26 +191,29 @@ export function tokenizeYaml(source: string): YamlLine[] {
 
     push(tokens, 'plain', line.slice(0, indent));
     let rest = line.slice(indent);
+    // The column of the node that a block scalar of this line belongs to:
+    // the key, else the last sequence marker.
+    let parent = indent;
     // Sequence markers: "- ", also nested ("- - a").
-    let markers = 0;
     for (;;) {
       const marker = /^-(?:\s+|$)/.exec(rest);
       if (!marker) break;
+      parent = line.length - rest.length;
       push(tokens, 'punct', '-');
       push(tokens, 'plain', marker[0].slice(1));
       rest = rest.slice(marker[0].length);
-      markers += 1;
     }
     const keyMatch = KEY_RE.exec(rest);
     let key: string | undefined;
     if (keyMatch) {
+      parent = line.length - rest.length;
       key = unquote(keyMatch[0]);
       push(tokens, 'key', keyMatch[0]);
       push(tokens, 'punct', ':');
       rest = rest.slice(keyMatch[0].length + 1);
     }
     const opensBlock = tokenizeValue(rest, tokens);
-    if (opensBlock) blockParent = indent + (markers > 0 ? 1 : 0);
+    if (opensBlock) blockParent = parent;
     result.push({ tokens, key, indent });
   }
   return result;

@@ -92,6 +92,19 @@ describe('diffFormData', () => {
       [{ path: ['with', 'pod', 'spec', 'image'], value: 'b' }],
     ],
     ['an undefined key that was absent', { a: 1 }, { a: 1, b: undefined }, []],
+    // Names of the prototype of an object are keys like any other.
+    [
+      'a new key named constructor',
+      { a: '1' },
+      { a: '1', constructor: '2' },
+      [{ path: ['with', 'constructor'], value: '2' }],
+    ],
+    [
+      'a removed key named toString',
+      { toString: '1' },
+      {},
+      [{ path: ['with', 'toString'], value: undefined }],
+    ],
   ])('%s', (_, prev, next, expected) => {
     expect(diffFormData(prev, next, ['with'])).toEqual(expected);
   });

@@ -173,14 +173,13 @@ export function IssuesPopover({
   const shown = React.useCallback(
     (list: IssueRow[]): ShownRow[] => {
       const result = list.map((row, index) => {
-        const target =
-          stepOf(row.message) ??
-          (row.issue?.stepName
-            ? {
-                step: row.issue.stepName,
-                field: fieldInStep(row.issue.stepPath, row.issue.fieldPath),
-              }
-            : undefined);
+        // The issue of the row names its step: two steps can share a message.
+        const target = row.issue?.stepName
+          ? {
+              step: row.issue.stepName,
+              field: fieldInStep(row.issue.stepPath, row.issue.fieldPath),
+            }
+          : stepOf(row.message);
         const line = row.issue ? lineOf?.(row.issue) : undefined;
         return {
           index,
