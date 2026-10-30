@@ -380,7 +380,7 @@ export function ViewSelector({
           </DropdownMenuContent>
         </DropdownMenu>
         {onRenameView && canManageViews && (
-          <div className="order-last flex items-center gap-1">
+          <div className="order-last ml-auto flex items-center gap-1">
             {activeView && (
               <>
                 <Button

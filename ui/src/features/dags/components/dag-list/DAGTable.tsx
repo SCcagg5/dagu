@@ -1712,8 +1712,8 @@ function DAGTable({
             <Button
               type="button"
               variant="destructive"
-              // Last in the row, set apart from the buttons of the views.
-              className="order-last ml-6"
+              // Last in the row, floated to the right, apart from the views buttons.
+              className="order-last ml-auto"
               disabled={isDeleting}
               onClick={() => {
                 setDeleteError(null);
@@ -1729,7 +1729,7 @@ function DAGTable({
 
           {/* Pagination - pushed to right */}
           {pagination && (
-            <div className="flex-shrink-0 ml-auto">
+            <div className="flex-shrink-0">
               <DAGPagination
                 totalPages={pagination.totalPages}
                 page={pagination.page}
