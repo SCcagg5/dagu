@@ -1712,7 +1712,8 @@ function DAGTable({
             <Button
               type="button"
               variant="destructive"
-              className="order-last"
+              // Last in the row, set apart from the buttons of the views.
+              className="order-last ml-6"
               disabled={isDeleting}
               onClick={() => {
                 setDeleteError(null);
