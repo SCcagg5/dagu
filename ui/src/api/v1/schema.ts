@@ -6249,7 +6249,7 @@ export interface components {
              */
             tags?: string[];
         };
-        /** @description The run that supplied outputs of a step were captured from. */
+        /** @description The run that a step's supplied outputs were captured from. */
         ReusedOutputSource: {
             runId: components["schemas"]["DAGRunId"];
             /** @description RFC 3339 timestamp of when the outputs were captured. Optional. */
@@ -7189,12 +7189,12 @@ export interface components {
             windows: components["schemas"]["AvailabilityWindow"][];
             /**
              * Format: int64
-             * @description Count of samples since the last failed sample
+             * @description Count of samples since the last failed sample. A lower bound once the raw tier no longer holds that sample.
              */
             streak: number;
             /**
              * Format: date-time
-             * @description Time of the last failed sample. Absent when none failed.
+             * @description Time of the last failed sample, or the start of its aggregate bucket once the raw tier no longer holds it. Absent when none failed.
              */
             lastFailureAt?: string;
             /**

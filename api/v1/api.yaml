@@ -15818,7 +15818,7 @@ components:
 
     ReusedOutputSource:
       type: object
-      description: "The run that supplied outputs of a step were captured from."
+      description: "The run that a step's supplied outputs were captured from."
       properties:
         runId:
           $ref: "#/components/schemas/DAGRunId"
@@ -17629,11 +17629,11 @@ components:
         streak:
           type: integer
           format: int64
-          description: "Count of samples since the last failed sample"
+          description: "Count of samples since the last failed sample. A lower bound once the raw tier no longer holds that sample."
         lastFailureAt:
           type: string
           format: date-time
-          description: "Time of the last failed sample. Absent when none failed."
+          description: "Time of the last failed sample, or the start of its aggregate bucket once the raw tier no longer holds it. Absent when none failed."
         totalCount:
           type: integer
           format: int64
