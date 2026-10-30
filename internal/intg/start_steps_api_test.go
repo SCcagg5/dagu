@@ -71,6 +71,9 @@ func TestAPIStartStepsSetsOutputs(t *testing.T) {
 			DagRunId: &runID,
 			Steps:    &[]string{"consume"},
 			Outputs:  &map[string]map[string]string{"build": {"RESULT": "given"}},
+			OutputsSources: &map[string]api.ReusedOutputSource{
+				"build": {RunId: "captured-elsewhere"},
+			},
 		},
 	).ExpectStatus(http.StatusOK).Send(t)
 
