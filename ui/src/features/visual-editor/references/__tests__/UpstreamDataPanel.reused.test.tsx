@@ -82,7 +82,7 @@ const scope: ReferenceScope = {
   ],
 };
 
-const T0 = Date.parse('2026-10-01T00:00:00Z');
+const T0 = Date.parse('2026-10-01T12:00:00Z');
 const reused = (
   step: string,
   extra: Partial<InputProvenance> = {}

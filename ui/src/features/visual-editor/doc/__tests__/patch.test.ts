@@ -151,14 +151,22 @@ describe('diffLines', () => {
     }
   });
 
-  it('is fast for 1500 lines with one insertion', () => {
+  // Two separate insertions leave repeated lines between them, so the
+  // Myers search runs instead of the common prefix and suffix shortcut.
+  it('is fast for 1500 lines with two separate insertions', () => {
     const a = Array.from({ length: 1500 }, (_, i) => `line ${i % 40}`);
-    const b = [...a.slice(0, 700), 'new', 'new 2', ...a.slice(700)];
+    const b = [
+      ...a.slice(0, 300),
+      'new',
+      ...a.slice(300, 1200),
+      'new 2',
+      ...a.slice(1200),
+    ];
     const start = performance.now();
     const hunks = diffLines(a, b);
     expect(performance.now() - start).toBeLessThan(200);
     expect(apply(a, b, hunks)).toEqual(b);
-    expect(hunks.length).toBe(1);
+    expect(hunks.length).toBe(2);
   });
 });
 
