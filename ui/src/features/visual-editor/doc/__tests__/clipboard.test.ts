@@ -374,14 +374,11 @@ steps:
 `);
   });
 
-  it('adds a handler copy as a step at the end', () => {
-    const result = done(
-      duplicateStepsOp(parseDagDoc(yamlHandlers), ['handler_on.failure']),
-      yamlHandlers
-    );
-    expect(result.text).toBe(
-      `${yamlHandlers}  # Notify on failure.\n  - name: step\n    run: ./notify.sh\n`
-    );
+  it('refuses a handler', () => {
+    // A copy of a handler would run as a step on every run.
+    expect(
+      duplicateStepsOp(parseDagDoc(yamlHandlers), ['handler_on.failure'])
+    ).toMatchObject({ ok: false, code: 'noop' });
   });
 
   it('refuses no step, an unknown step and broken YAML', () => {
