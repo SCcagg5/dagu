@@ -1,10 +1,10 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useCallback, useEffect, useState } from 'react';
+import useSWR from 'swr';
 import { useRemoteNode } from '@/contexts/RemoteNodeContext';
-import { useQuery } from '@/hooks/api';
-import { subscribeClock } from '@/hooks/useClock';
+import { useClient, useQuery } from '@/hooks/api';
+import { presetView, type RangePresetId } from './sampleBars';
 
 /** The step that the panel reads, in a root run. */
 export interface ContinuousTarget {
@@ -26,24 +26,6 @@ function pathOf(target: ContinuousTarget) {
   };
 }
 
-/**
- * The clock of the windows that end now. It ticks every `pollMs`; with null it
- * stays where it is, so a long range keeps one query key and is never fetched
- * again. `reset` sets it to the clock, when the user picks a window.
- */
-export function useWindowClock(pollMs: number | null): {
-  now: number;
-  reset(): void;
-} {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (pollMs === null) return;
-    return subscribeClock(pollMs, () => setNow(Date.now()));
-  }, [pollMs]);
-  const reset = useCallback(() => setNow(Date.now()), []);
-  return { now, reset };
-}
-
 /** The availability and the streak of the step. Polled while `poll` is set. */
 export function useStepAvailability(target: ContinuousTarget, poll: boolean) {
   const remoteNode = useRemoteNode();
@@ -54,31 +36,58 @@ export function useStepAvailability(target: ContinuousTarget, poll: boolean) {
   );
 }
 
+/** The window of the samples: fixed times, or a preset that ends now. */
+export type SamplesWindow =
+  | { from: number; to: number }
+  | { preset: RangePresetId; startedAt?: number };
+
 /**
- * The buckets of a window. A live window gets a new `from` and `to` from the
- * clock, so the key changes and the old buckets stay on the screen until the
- * new ones come.
+ * The buckets of a window. A preset has one key: each read asks for the
+ * window that ends at the time of the read, so `poll` reads it again every
+ * POLL_MS and the cache keeps one entry however long the page stays open. A
+ * zoomed or panned window has its times in the key. The old buckets stay on
+ * the screen until the new ones come.
  */
 export function useStepSamples(
   target: ContinuousTarget,
-  window: { from: number; to: number },
-  points: number
+  window: SamplesWindow,
+  points: number,
+  poll: boolean
 ) {
   const remoteNode = useRemoteNode();
-  return useQuery(
-    '/dag-runs/{name}/{dagRunId}/steps/{stepName}/samples',
-    {
-      params: {
-        path: pathOf(target),
-        query: {
-          remoteNode,
-          from: iso(window.from),
-          to: iso(window.to),
-          points,
-        },
-      },
+  const client = useClient();
+  const at =
+    'preset' in window
+      ? [window.preset, window.startedAt ?? null]
+      : [window.from, window.to];
+  return useSWR(
+    [
+      'continuous-samples',
+      target.name,
+      target.runId,
+      target.step,
+      remoteNode,
+      points,
+      ...at,
+    ],
+    async () => {
+      const { from, to } =
+        'preset' in window
+          ? presetView(window.preset, Date.now(), window.startedAt)
+          : window;
+      const { data, error } = await client.GET(
+        '/dag-runs/{name}/{dagRunId}/steps/{stepName}/samples',
+        {
+          params: {
+            path: pathOf(target),
+            query: { remoteNode, from: iso(from), to: iso(to), points },
+          },
+        }
+      );
+      if (error) throw error;
+      return data;
     },
-    { keepPreviousData: true }
+    { keepPreviousData: true, refreshInterval: poll ? POLL_MS : 0 }
   );
 }
 
