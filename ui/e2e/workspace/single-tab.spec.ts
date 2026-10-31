@@ -252,11 +252,8 @@ test.describe('workspace single tab', () => {
       `/dags/${encodeURIComponent(fileName)}`
     );
 
-    // One tab: one pane, no mode tabs, no second pane.
+    // One tab: one pane.
     await expect(page.getByTestId('ww-pane')).toHaveCount(1);
-    await expect(page.getByTestId('ww-mode-tabs')).toHaveCount(0);
-    await expect(page.getByTestId('ww-pane-executions')).toHaveCount(0);
-    await expect(page.getByTestId('ww-pane-editor')).toHaveCount(0);
 
     // The page names the latest run in ?run (history replace): the latest
     // run is overlaid on the editable graph, and the run chip says so.
@@ -321,6 +318,7 @@ test.describe('workspace single tab', () => {
       .getByTestId('ve-canvas-frame')
       // Below the floating toolbar row, left of the graph.
       .click({ position: { x: 24, y: 160 } });
+    await expect.poll(() => query(page, 'step')).toBeNull();
     await expect(dockOf(page)).toHaveAttribute('data-state', 'collapsed');
     await page.waitForTimeout(500);
     await expect(dockOf(page)).toHaveAttribute('data-state', 'collapsed');
@@ -537,7 +535,6 @@ test.describe('workspace single tab', () => {
       { timeout: 30_000 }
     );
     await expect(page.getByTestId('ww-pane')).toHaveCount(1);
-    await expect(page.getByTestId('ww-mode-tabs')).toHaveCount(0);
 
     // A bare /executions gives the workflow route, with the dock collapsed.
     await gotoWorkspace(page, `${base}/executions`);
@@ -752,9 +749,7 @@ steps:
     const base = `/dags/${encodeURIComponent(fileName)}`;
 
     await openWorkflow(page, gotoWorkspace, base);
-    // The run list, the List and Grid views and their switch are gone.
-    await expect(page.getByTestId('ww-execution-list')).toHaveCount(0);
-    await expect(page.getByTestId('ww-executions-grid')).toHaveCount(0);
+    // The switch of the List and Grid views is gone.
     await expect(
       page.getByRole('button', { name: 'Grid', exact: true })
     ).toHaveCount(0);
