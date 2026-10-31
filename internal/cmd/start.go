@@ -62,8 +62,9 @@ Flags can override default settings such as DAG-run ID, DAG name, or suppress ou
 
 Use --only to run just the named steps (by name or ID) in a new DAG-run of the
 current definition; every other step is recorded as skipped. Add --outputs-from
-to carry the step outputs and work directory of ONE finished run into every
-skipped step, so the selected steps can reference them. Add --output-from
+to carry the work directory of ONE finished run, and the outputs of the skipped
+steps that the selected steps depend on, so the selected steps can reference
+them. Add --output-from
 <step>=<run-id> to take the outputs of ONE skipped step from a finished run;
 it takes precedence over --outputs-from for that step. The run must be a run of
 the same DAG, and the step must have succeeded in it. A step selected by --only
@@ -101,7 +102,7 @@ var onlyFlag = commandLineFlag{
 
 var outputsFromFlag = commandLineFlag{
 	name:  "outputs-from",
-	usage: "Finished dag-run ID whose step outputs and work directory feed every step skipped by --only",
+	usage: "Finished dag-run ID whose work directory, and the outputs of the skipped steps that --only steps depend on, feed the run",
 }
 
 var outputFromFlag = commandLineFlag{
