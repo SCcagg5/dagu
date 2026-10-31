@@ -179,8 +179,8 @@ describe('DAGRunTable', () => {
     );
     // The dot carries the status text in its label only.
     expect(screen.queryByText('Failed')).not.toBeInTheDocument();
-    // No schedule time: only the status dot and the retry text, no separator.
-    expect(screen.queryByText('·')).not.toBeInTheDocument();
+    // No schedule time: the time of the run follows the dot.
+    expect(screen.getByText('·')).toBeInTheDocument();
   });
 
   it('selects all the loaded runs from the header checkbox', () => {

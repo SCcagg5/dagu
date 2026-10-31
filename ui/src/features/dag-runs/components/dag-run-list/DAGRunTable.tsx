@@ -29,6 +29,7 @@ import {
 } from '../../hooks/useBulkDAGRunSelection';
 import { buildDAGPageURL } from '../../lib/dagRunUrls';
 import { useOpenPage } from '../../lib/useOpenPage';
+import { statusMoment } from '@/features/dags/components/dag-list/recentRunFacts';
 import { StepDetailsTooltip } from './StepDetailsTooltip';
 import { DAGRunArtifactsButton } from './DAGRunArtifactsButton';
 import { I18nText } from '@/i18n/I18nText';
@@ -240,9 +241,6 @@ function DAGRunTable({
         : value.utcOffset(config.tzOffsetInSec / 60);
     return configuredTime.format('YYYY-MM-DD HH:mm:ss');
   };
-  const showScheduleColumn = dagRuns.some((dagRun) =>
-    Boolean(dagRun.scheduleTime)
-  );
   const showProfileColumn = dagRuns.some((dagRun) =>
     Boolean(dagRun.profileName)
   );
@@ -577,12 +575,12 @@ function DAGRunTable({
                       limit={dagRun.autoRetryLimit}
                       className="text-[10px]"
                     />
-                    {showScheduleColumn && dagRun.scheduleTime && (
+                    {statusMoment(dagRun) && (
                       <>
                         <span className="text-muted-foreground">·</span>
                         <RelativeTime
-                          timestamp={dagRun.scheduleTime}
-                          absolute={dagRun.scheduleTime}
+                          timestamp={statusMoment(dagRun) ?? ''}
+                          absolute={statusMoment(dagRun) ?? ''}
                           compact
                           ago
                           className="text-muted-foreground"

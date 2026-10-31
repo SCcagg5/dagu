@@ -37,3 +37,16 @@ export function queueWaitMs(run: Run): number | null {
   const wait = started - queued;
   return wait >= QUEUE_WAIT_MIN_MS ? wait : null;
 }
+
+/**
+ * The time that the status column tells next to the dot: when the run was
+ * scheduled, else when it ended, else when it started.
+ */
+export function statusMoment(
+  run: Pick<Run, 'scheduleTime' | 'finishedAt' | 'startedAt'>
+): string | null {
+  for (const at of [run.scheduleTime, run.finishedAt, run.startedAt]) {
+    if (at && Number.isFinite(Date.parse(at)) && Date.parse(at) > 0) return at;
+  }
+  return null;
+}

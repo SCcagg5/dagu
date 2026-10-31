@@ -21,7 +21,7 @@ import { withoutWorkspaceLabels } from '@/lib/workspace';
 import { cn } from '@/lib/utils';
 import { runDisplayStatus } from '@/lib/runDisplayStatus';
 
-import { failureCause, queueWaitMs } from './recentRunFacts';
+import { failureCause, queueWaitMs, statusMoment } from './recentRunFacts';
 
 type Run = components['schemas']['DAGRunDetails'];
 
@@ -92,7 +92,6 @@ export function DAGRecentRuns({ fileName }: { fileName: string }) {
 
 /** The columns of the runs of a workflow: those of the Executions page. */
 interface RunColumns {
-  scheduled: boolean;
   profile: boolean;
   /** The CSS grid template that the header and every line share. */
   template: string;
@@ -100,16 +99,15 @@ interface RunColumns {
 
 /**
  * The columns of the Executions page, in its order. The status column also
- * holds the scheduled time, when a run has one. Profile shows only when a run
+ * holds the time of the run (scheduled, ended or started). Profile shows only when a run
  * fills it. The columns share the width in fractions:
  * a wide list spreads them, not leaves a gap.
  */
 function runColumns(runs: readonly Run[]): RunColumns {
-  const scheduled = runs.some((r) => !!r.scheduleTime);
   const profile = runs.some((r) => !!r.profileName);
   const template = [
     'minmax(0,2fr)', // run id
-    scheduled ? 'minmax(0,1.6fr)' : '7rem', // status, and when it was scheduled
+    'minmax(0,1.6fr)', // status, and its time
     'minmax(0,1fr)', // trigger
     profile && 'minmax(0,1fr)',
     'minmax(0,1fr)', // queued
@@ -119,7 +117,7 @@ function runColumns(runs: readonly Run[]): RunColumns {
   ]
     .filter(Boolean)
     .join(' ');
-  return { scheduled, profile, template };
+  return { profile, template };
 }
 
 function RunHeader({ columns }: { columns: RunColumns }) {
@@ -177,6 +175,7 @@ function RunLine({
   const labels = withoutWorkspaceLabels(run.labels ?? run.tags ?? []);
   const shownLabels = labels.slice(0, MAX_LABELS_SHOWN);
   const healthy = runDisplayStatus(run).healthy;
+  const moment = statusMoment(run);
   const trigger = run.triggerType ? triggerTypeLabels[run.triggerType] : null;
   return (
     <li>
@@ -194,10 +193,10 @@ function RunLine({
         </span>
         <span className="flex min-w-0 items-center gap-1.5">
           <StatusDot kind="run" status={run.status} healthy={healthy} />
-          {columns.scheduled && run.scheduleTime && (
+          {moment && (
             <>
               <span className="text-muted-foreground">·</span>
-              <Moment at={run.scheduleTime} />
+              <Moment at={moment} />
             </>
           )}
         </span>

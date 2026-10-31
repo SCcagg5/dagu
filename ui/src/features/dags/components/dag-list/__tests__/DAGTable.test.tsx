@@ -1044,8 +1044,12 @@ describe('DAGTable', () => {
       ).toBeInTheDocument();
       expect(within(panel).queryByRole('img', { name: 'Running' })).toBeNull();
       expect(within(panel).queryByText('Healthy')).toBeNull();
-      expect(within(panel).getByText('3h ago')).toBeInTheDocument();
+      // A run without a scheduled time tells when it ended next to the dot:
+      // one minute after its start, which rounds to the same "3h ago".
+      expect(within(panel).getAllByText('3h ago')).toHaveLength(2);
       expect(within(panel).getByText('5m ago')).toBeInTheDocument();
+      expect(within(panel).getByText('4m ago')).toBeInTheDocument();
+      expect(within(panel).getAllByText('·')).toHaveLength(2);
     });
 
     it('tells the trigger, the cause of a failure, the labels and the queue wait', () => {
