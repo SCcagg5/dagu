@@ -64,6 +64,8 @@ func fileSpan(t Tier, sec int64) (start, end int64) {
 	case TierHour:
 		s = time.Date(tm.Year(), tm.Month(), 1, 0, 0, 0, 0, time.UTC)
 		e = s.AddDate(0, 1, 0)
+	case TierDay:
+		fallthrough
 	default:
 		s = time.Date(tm.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
 		e = s.AddDate(1, 0, 0)
@@ -430,6 +432,7 @@ func cmpInt(a, b int64) int {
 
 // parseRaw decodes a raw line: the offset in milliseconds, the duration in
 // microseconds and the exit code. The message is not read.
+// nolint:revive
 func parseRaw(line []byte) (off, us int64, exit int, ok bool) {
 	if len(line) < 7 || line[0] != '[' {
 		return

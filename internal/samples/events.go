@@ -124,6 +124,7 @@ func loadTracker(path string) (t tracker, lastEvent int64, err error) {
 				newestFailed = &ev
 			}
 			earliest = &ev
+		case EventStarted, EventStopped:
 		}
 		return scanned < maxScan
 	})
