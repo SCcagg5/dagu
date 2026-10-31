@@ -32,6 +32,17 @@ describe('envOps', () => {
     ).toEqual([op(['env', 1, 'B'], '3')]);
   });
 
+  // A later item wins over an earlier one with the same key.
+  it('sets the item that gives the value of a key', () => {
+    const list = [{ A: '1' }, { A: '2' }, { B: '3' }];
+    expect(envOps('steps[2]', list, { A: '2', B: '4' })).toEqual([
+      op(['env', 2, 'B'], '4'),
+    ]);
+    expect(envOps('steps[2]', list, { A: '5', B: '3' })).toEqual([
+      op(['env', 1, 'A'], '5'),
+    ]);
+  });
+
   it('rebuilds a list of maps when the keys change', () => {
     expect(envOps('steps[2]', [{ A: '1' }], { A: '1', C: '4' })).toEqual([
       op(['env'], [{ A: '1' }, { C: '4' }]),

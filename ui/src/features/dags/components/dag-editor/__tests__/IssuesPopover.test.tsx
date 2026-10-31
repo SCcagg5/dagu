@@ -316,6 +316,32 @@ describe('IssuesPopover with the issues of the client', () => {
     expect(screen.queryByRole('dialog', { name: 'Issues' })).toBeNull();
   });
 
+  it('reveals the step of its own issue when two steps share a message', () => {
+    const onRevealStep = vi.fn();
+    const shared = (stepName: string, stepPath: string): ValidationIssue => ({
+      severity: ValidationIssueSeverity.error,
+      source: ValidationIssueSource.build,
+      message: 'id is required when the step declares outputs.',
+      stepName,
+      stepPath,
+    });
+    render(
+      <IssuesPopover
+        warnings={[]}
+        errors={[]}
+        issues={[shared('a', 'steps[0]'), shared('b', 'steps[1]')]}
+        onRevealStep={onRevealStep}
+      />
+    );
+    const panel = openPopover();
+    const rows = within(panel).getAllByRole('button', {
+      name: /id is required/,
+    });
+    expect(rows[1]).toHaveAttribute('title', 'Show step b');
+    fireEvent.click(rows[1]!);
+    expect(onRevealStep).toHaveBeenLastCalledWith('b');
+  });
+
   it('takes the place of Save as the triangle icon with the count next to it', () => {
     render(
       <IssuesPopover warnings={[]} errors={[]} issues={found} lineOf={lineOf} />
