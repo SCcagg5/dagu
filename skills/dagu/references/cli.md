@@ -21,8 +21,9 @@ Flags:
 - `--run-id/-r` — Custom run ID
 - `--from-run-id` — Historic dag-run ID to use as the template for a new run
 - `--only` — Run only this step (name or ID) in a new run of the current definition; repeatable. Other steps are recorded as skipped. Not with `--from-run-id`
-- `--outputs-from` — Finished run of the same DAG whose step outputs and work directory feed the `--only` steps (requires `--only`)
-- `--output` — Output of a step skipped by `--only`, as `<step>.<name>=<value>`; repeatable, takes precedence over `--outputs-from` (requires `--only`)
+- `--outputs-from` — Finished run of the same DAG whose work directory, and the outputs of the skipped steps that the `--only` steps depend on, feed the run (requires `--only`)
+- `--output-from` — Run that gives the outputs of ONE skipped step, as `<step>=<run-id>`; repeatable, takes precedence over `--outputs-from` for that step (requires `--only`). The run must be a finished run of the same DAG, and the step must have succeeded there
+- `--output` — Deprecated: use `--output-from`. Output of a step skipped by `--only`, as `<step>.<name>=<value>`; repeatable, takes precedence over `--outputs-from` and `--output-from` (requires `--only`)
 - `--labels` — Additional labels (comma-separated key=value or key-only)
 - `--tags` — Deprecated alias for `--labels`
 - `--default-working-dir` — Default working directory for DAGs without explicit workingDir
