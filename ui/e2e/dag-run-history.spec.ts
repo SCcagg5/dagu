@@ -21,10 +21,9 @@ async function openNewestRunFromLane(page: Page, dagName: string) {
   await lane.press('Enter');
 }
 
-// A row of a run list opens the run on its own page: no side panel. The link
-// names the run on the workflow page, which sends it to the run page.
+// A row of a run list opens the run on its workflow page: no side panel.
 for (const view of ['list', 'grouped', 'activity'] as const) {
-  test(`opens a run on its page from the ${view} view`, async ({
+  test(`opens a run on its workflow page from the ${view} view`, async ({
     page,
     request,
   }) => {
@@ -50,7 +49,10 @@ steps:
     await waitForRunStatus(request, token, dagName, runId, ['succeeded']);
     await loginViaUI(page, stack.auth.adminUsername, stack.auth.adminPassword);
 
-    const runPage = `/dag-runs/${dagName}/${runId}`;
+    const here = () => {
+      const url = new URL(page.url());
+      return { path: url.pathname, run: url.searchParams.get('run') };
+    };
 
     if (view === 'activity') {
       await page.goto('/dashboard');
@@ -71,7 +73,11 @@ steps:
       }
     }
 
-    await expect.poll(() => new URL(page.url()).pathname).toBe(runPage);
+    await expect
+      .poll(() => here())
+      .toEqual({ path: `/dags/${dagName}`, run: runId });
+    // The run opens in the Run panel of the workflow page, not in a side panel.
+    await expect(page.getByTestId('ww-pane')).toBeVisible();
     await expect(page.locator('.dagRun-modal-content')).toHaveCount(0);
 
     if (view === 'list') {
@@ -85,7 +91,12 @@ steps:
           .first()
           .click({ modifiers: ['ControlOrMeta'] }),
       ]);
-      await expect.poll(() => new URL(popup.url()).pathname).toBe(runPage);
+      await expect
+        .poll(() => {
+          const url = new URL(popup.url());
+          return { path: url.pathname, run: url.searchParams.get('run') };
+        })
+        .toEqual({ path: `/dags/${dagName}`, run: runId });
       await popup.close();
       // The list stays where it was.
       expect(new URL(page.url()).pathname).toBe('/dag-runs');
