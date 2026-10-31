@@ -50,6 +50,9 @@ import { stepReuse, type StepReuse } from './stepReuse';
 // stays for screen readers and the keyboard. The container query reads the
 // nearest @container: the body of the Run panel.
 const ICONS_ONLY = '@max-[900px]:sr-only';
+// ICONS_ONLY hides the focus ring of a row's button: the row shows it.
+const ICONS_ONLY_FOCUS =
+  '@max-[900px]:has-[:focus-visible]:ring-1 @max-[900px]:has-[:focus-visible]:ring-inset @max-[900px]:has-[:focus-visible]:ring-ring';
 
 export interface RunStepListProps {
   dag: ApiDAGDetails;
@@ -265,6 +268,7 @@ const StepRow = memo(function StepRow({
       onClick={() => onSelect(step.name)}
       className={cn(
         'flex min-h-6 cursor-pointer items-start gap-2 px-3 py-1 text-xs leading-4 [contain:layout_paint] hover:bg-muted/60 @max-[900px]:justify-center @max-[900px]:px-0',
+        ICONS_ONLY_FOCUS,
         selected && 'bg-primary/10 hover:bg-primary/15'
       )}
     >
@@ -439,6 +443,7 @@ export function RunStepList({
         onClick={() => onSelect(null)}
         className={cn(
           'flex min-h-6 cursor-pointer items-center gap-2 px-3 py-1 hover:bg-muted/60 @max-[900px]:justify-center @max-[900px]:px-0',
+          ICONS_ONLY_FOCUS,
           selected === null && 'bg-primary/10 hover:bg-primary/15'
         )}
       >
