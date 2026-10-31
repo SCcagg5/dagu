@@ -92,6 +92,9 @@ export function RenameStepPopover({
         onKeyDown={(event) => {
           // The field is in a portal: keys must not reach the editor around it.
           event.stopPropagation();
+          if (event.nativeEvent.isComposing) {
+            return;
+          }
           if (event.key === 'Enter') {
             event.preventDefault();
             finish(true);

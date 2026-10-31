@@ -29,15 +29,17 @@ function toRows(value: Record<string, string>): Row[] {
   }));
 }
 
+// A Map and Object.fromEntries keep keys such as `toString` and `__proto__`
+// as plain own keys.
 function toObject(rows: Row[]): Record<string, string> {
-  const result: Record<string, string> = {};
+  const result = new Map<string, string>();
   for (const row of rows) {
     const key = row.key.trim();
-    if (key && !(key in result)) {
-      result[key] = row.value;
+    if (key && !result.has(key)) {
+      result.set(key, row.value);
     }
   }
-  return result;
+  return Object.fromEntries(result);
 }
 
 function sameObject(
@@ -147,11 +149,12 @@ function stringMap(value: unknown): Record<string, string> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return {};
   }
-  const result: Record<string, string> = {};
-  for (const [key, item] of Object.entries(value)) {
-    result[key] = typeof item === 'string' ? item : JSON.stringify(item);
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      typeof item === 'string' ? item : JSON.stringify(item),
+    ])
+  );
 }
 
 /**

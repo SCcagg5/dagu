@@ -57,6 +57,20 @@ describe('issueRows', () => {
     expect(rows.warnings).toEqual([{ message: 'm', issue: warning }]);
   });
 
+  it('keeps the issue of each position on its own message', () => {
+    const second = issue({ message: '[2:1] invalid key', line: 2 });
+    const first = issue({ message: '[1:1] invalid key', line: 1 });
+    const rows = issueRows({
+      warnings: [],
+      errors: ['[1:1] invalid key', '[2:1] invalid key'],
+      issues: [second, first],
+    });
+    expect(rows.errors).toEqual([
+      { message: '[1:1] invalid key', issue: first },
+      { message: '[2:1] invalid key', issue: second },
+    ]);
+  });
+
   it('gives the same issue to one message only', () => {
     const rows = issueRows({
       warnings: [],

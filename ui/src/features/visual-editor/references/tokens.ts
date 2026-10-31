@@ -149,7 +149,6 @@ export function findOpenReference(
     if (!isEscapedDollar(text, open) && /^[A-Za-z0-9_.]*$/.test(query)) {
       return { from: open, query };
     }
-    return null;
   }
   const lone = caret - 1;
   if (text[lone] === '$' && lone >= lineStart && !isEscapedDollar(text, lone)) {
