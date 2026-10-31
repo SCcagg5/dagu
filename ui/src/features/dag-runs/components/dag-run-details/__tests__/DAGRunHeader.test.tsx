@@ -1,7 +1,13 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { Status, StatusLabel } from '@/api/v1/schema';
@@ -62,6 +68,24 @@ describe('DAGRunHeader', () => {
     expect(
       screen.queryByText('Run link copied to clipboard')
     ).not.toBeInTheDocument();
+  });
+
+  // The workflow page has no address for a sub-run: its link opens the root run.
+  it('names the root run on the copy link of a sub-run', () => {
+    render(
+      <MemoryRouter>
+        <RemoteNodeProvider remoteNode="local">
+          <DAGRunHeader
+            dagRun={{ ...dagRun, name: 'child', dagRunId: 'child-1' } as never}
+            refreshFn={vi.fn()}
+          />
+        </RemoteNodeProvider>
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Copy link to the root run' })
+    ).toBeInTheDocument();
   });
 
   // The run page has the same one-row header as the workflow page.
@@ -155,6 +179,20 @@ describe('DAGRunHeader', () => {
       );
       // It sits next to the definition link.
       expect(definition.nextElementSibling).toBe(show);
+    });
+
+    it('leaves a modified click on the definition link to the browser', () => {
+      renderHeader({ ...dagRun, sourceFileName: 'nightly.yaml' });
+      const before = screen.getByTestId('location').textContent;
+
+      const link = screen.getByRole('link', {
+        name: 'View workflow definition',
+      });
+      const event = createEvent.click(link, { ctrlKey: true });
+      fireEvent(link, event);
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(screen.getByTestId('location')).toHaveTextContent(before ?? '');
     });
 
     it('navigates inside the app on a plain click', () => {
