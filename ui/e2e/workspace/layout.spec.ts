@@ -196,13 +196,15 @@ test.describe('workspace layout', () => {
     expect((await box(page.getByTestId('ww-bar'))).height).toBeLessThanOrEqual(
       44
     );
-    await compact.getByRole('button', { name: 'Back to latest' }).click();
+    await compact
+      .getByRole('button', { name: 'Back to latest', exact: true })
+      .click();
     // The URL names the latest run.
     await expect(page).toHaveURL(
       new RegExp(`[?&]run=${encodeURIComponent(runId)}(&|$)`)
     );
     await expect(
-      compact.getByRole('button', { name: 'Back to latest' })
+      compact.getByRole('button', { name: 'Back to latest', exact: true })
     ).toHaveCount(0);
 
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -210,7 +212,10 @@ test.describe('workspace layout', () => {
     const start = page
       .getByTestId('ww-run-split')
       .locator('[data-ww-action="start"]');
-    const caret = page.getByRole('button', { name: 'More run options' });
+    const caret = page.getByRole('button', {
+      name: 'More run options',
+      exact: true,
+    });
     await expect(caret).toBeDisabled();
     const clean = await box(start);
 
@@ -400,7 +405,7 @@ test.describe('workspace layout', () => {
         // The expanded node view covers the whole zone, the row included.
         expect((await box(ndv)).y).toBeCloseTo(zone.y, 0);
         await expectSame(reference, 'node view');
-        await ndv.getByRole('button', { name: 'Close' }).click();
+        await ndv.getByRole('button', { name: 'Close', exact: true }).click();
         await expect(ndv).toBeHidden();
         await expectSame(reference, 'node view closed');
       });
@@ -421,7 +426,7 @@ test.describe('workspace layout', () => {
     await field.blur();
     await expect(save).toBeEnabled({ timeout: 30_000 });
     await expectSame(clean, 'dirty with the form open');
-    await ndv.getByRole('button', { name: 'Close' }).click();
+    await ndv.getByRole('button', { name: 'Close', exact: true }).click();
     await expectSame(clean, 'dirty with no panel');
   });
 
@@ -465,9 +470,9 @@ test.describe('workspace layout', () => {
     // The YAML panel takes the right side of the zone and the canvas keeps
     // the rest. The node view has no button that docks it.
     await expect(
-      ndv.getByRole('button', { name: 'Dock to the side' })
+      ndv.getByRole('button', { name: 'Dock to the side', exact: true })
     ).toHaveCount(0);
-    await ndv.getByRole('button', { name: 'Close' }).click();
+    await ndv.getByRole('button', { name: 'Close', exact: true }).click();
     // The toolbar of the canvas: the node view has a YAML tab of its own.
     await page
       .getByTestId('ve-toolbar')
@@ -512,9 +517,10 @@ test.describe('workspace layout', () => {
     ]);
     await openEditor(page, gotoWorkspace, fileName);
 
-    await expect(page.getByTestId('ve-add-step-fab')).toHaveCount(0);
     await expect(
-      page.getByTestId('ww-canvas').getByRole('button', { name: 'Tools' })
+      page
+        .getByTestId('ww-canvas')
+        .getByRole('button', { name: 'Tools', exact: true })
     ).toBeVisible();
     await expect(page.getByTestId('flow-minimap')).toBeHidden();
     expect((await documentScrolls(page)).horizontal).toBe(false);

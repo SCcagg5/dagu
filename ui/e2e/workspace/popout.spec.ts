@@ -4,15 +4,19 @@
 import type { APIRequestContext } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import {
-  loadStack,
-  loginViaAPI,
   startDAG,
   uniqueName,
   waitForDAGAvailable,
   waitForRunStatus,
   writeLocalDAG,
 } from '../helpers/e2e';
-import { expect, signIn, test as base, type FixtureDAG } from './fixtures';
+import {
+  adminToken,
+  expect,
+  signIn,
+  test as base,
+  type FixtureDAG,
+} from './fixtures';
 
 // The full-page logs of the workspace: the step log that the dock opens in a
 // new tab, the run log with its ZIP download, and the log of a sub-run.
@@ -78,15 +82,6 @@ const test = base.extend<{
     }
   },
 });
-
-async function adminToken(request: APIRequestContext): Promise<string> {
-  const stack = await loadStack();
-  return loginViaAPI(
-    request,
-    stack.auth.adminUsername,
-    stack.auth.adminPassword
-  );
-}
 
 async function runToEnd(
   request: APIRequestContext,

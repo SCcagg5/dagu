@@ -1,7 +1,12 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { test as base, expect, type Page } from '@playwright/test';
+import {
+  test as base,
+  expect,
+  type APIRequestContext,
+  type Page,
+} from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
@@ -30,6 +35,42 @@ export async function signIn(page: Page): Promise<void> {
   await useDefaultWorkspaceScope(page);
 }
 
+/** Signs in to the API as the stack admin and returns the bearer token. */
+export async function adminToken(request: APIRequestContext): Promise<string> {
+  const stack = await loadStack();
+  return loginViaAPI(
+    request,
+    stack.auth.adminUsername,
+    stack.auth.adminPassword
+  );
+}
+
+/**
+ * Waits until the page is at the path and has these query values. A null
+ * value means that the key is absent.
+ */
+export async function expectAt(
+  page: Page,
+  pathname: string,
+  query: Record<string, string | null>
+): Promise<void> {
+  await expect
+    .poll(
+      () => {
+        const url = new URL(page.url());
+        const values = Object.keys(query).map(
+          (key) => `${key}=${url.searchParams.get(key)}`
+        );
+        return [url.pathname, ...values];
+      },
+      { timeout: 30_000 }
+    )
+    .toEqual([
+      pathname,
+      ...Object.entries(query).map(([key, value]) => `${key}=${value}`),
+    ]);
+}
+
 export type FixtureDAG = { dagName: string; fileName: string };
 
 type WorkspaceFixtures = {
@@ -47,12 +88,7 @@ export const test = base.extend<WorkspaceFixtures>({
     await use(gotoWorkspace);
   },
   fixtureDAG: async ({ request }, use) => {
-    const stack = await loadStack();
-    const token = await loginViaAPI(
-      request,
-      stack.auth.adminUsername,
-      stack.auth.adminPassword
-    );
+    const token = await adminToken(request);
     const created: string[] = [];
     await use(async (file, prefix = 'e2e-ws') => {
       const spec = readFileSync(path.join(FIXTURE_DAG_DIR, file), 'utf8');
