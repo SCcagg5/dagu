@@ -115,6 +115,13 @@ describe('isSameYaml', () => {
     expect(isSameYaml('', '\n\n')).toBe(true);
   });
 
+  // An alias without its anchor parses, but the document has no value.
+  it('compares text when an alias has no anchor', () => {
+    const unresolved = 'steps:\n  - name: a\n    run: *missing\n';
+    expect(isSameYaml(base, unresolved)).toBe(false);
+    expect(isSameYaml(unresolved, unresolved + '\n\n')).toBe(true);
+  });
+
   it('compares every document of a multi document text', () => {
     const one = 'name: a\n---\nname: b\n';
     expect(isSameYaml(one, 'name: a\n\n---\n\nname: b\n')).toBe(true);
@@ -673,6 +680,24 @@ describe('formatStepRange', () => {
     const text =
       'name: demo\n\nsteps:\n  - name: a\n    run: echo\n    stderr: &log /tmp/a.log\n    stdout: *log\n';
     expect(formatStepRange(text, parseDagDoc(text).steps[0]!)).toBeNull();
+  });
+
+  // Block style cannot go inside a flow collection.
+  it('returns null for a step in a flow collection', () => {
+    for (const text of [
+      'name: demo\nsteps: [{run: echo a, name: a}]\n',
+      'name: demo\nsteps: [\n  {run: echo a, name: a}\n]\n',
+      'name: demo\nsteps: {a: {run: echo a, description: x}}\n',
+    ]) {
+      expect(formatStepRange(text, parseDagDoc(text).steps[0]!)).toBeNull();
+    }
+  });
+
+  it('formats a flow mapping step of a block list', () => {
+    const text = 'name: demo\nsteps:\n  - {run: echo a, name: a}\n';
+    expect(formatStep(text, 0)).toBe(
+      'name: demo\nsteps:\n  - name: a\n    run: echo a\n'
+    );
   });
 
   it('returns null for a broken step', () => {

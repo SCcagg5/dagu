@@ -70,11 +70,17 @@ function stepFields(step?: StepRunOptions) {
   };
 }
 
+// The server refuses a label value that does not start with a letter or a
+// digit, and a run id can start with '_' or '-'. Such a run gets no
+// outputs-from label: the body names it anyway.
+const LABEL_VALUE_START = /^[a-zA-Z0-9]/;
+
 function runLabels(step?: StepRunOptions): string[] {
+  const from = step?.outputsFromRunId;
   return [
     EDITOR_RUN_LABEL,
-    ...(step?.outputsFromRunId
-      ? [`${OUTPUTS_FROM_PREFIX}${step.outputsFromRunId}`]
+    ...(from && LABEL_VALUE_START.test(from)
+      ? [`${OUTPUTS_FROM_PREFIX}${from}`]
       : []),
     ...(step?.reused ?? [])
       .filter((reused) => reused.stale)

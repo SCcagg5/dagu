@@ -73,6 +73,7 @@ function textOf(node: unknown): string | undefined {
   const value = node.value;
   return typeof value === 'string' ||
     typeof value === 'number' ||
+    typeof value === 'bigint' ||
     typeof value === 'boolean'
     ? String(value)
     : undefined;
@@ -134,8 +135,11 @@ function entryForCopy(
   return map;
 }
 
+/** Integers stay exact beyond 2^53, as the server reads them. */
+const EXACT_INTS = { intAsBigInt: true };
+
 function firstDocument(text: string): Document | null {
-  const doc = parseAllDocuments(text)[0];
+  const doc = parseAllDocuments(text, EXACT_INTS)[0];
   return doc && doc.errors.length === 0 ? (doc as Document) : null;
 }
 
@@ -205,7 +209,7 @@ function stepsOf(node: unknown): YAMLMap[] | null {
 function readClipboard(
   yaml: string
 ): { doc: Document; entries: YAMLMap[] } | null {
-  const doc = parseDocument(yaml);
+  const doc = parseDocument(yaml, EXACT_INTS);
   if (doc.errors.length > 0) return null;
   const root = doc.contents;
   let entries: YAMLMap[] | null = null;
@@ -243,6 +247,12 @@ function freshId(base: string, used: Set<string>): string {
   return uniqueStepName(base, used);
 }
 
+/** The `name` or `id` of an entry as the server reads it: trimmed, if set. */
+function identityOf(entry: YAMLMap, key: 'name' | 'id'): string | undefined {
+  const text = textOf(entry.get(key, true))?.trim();
+  return text === '' ? undefined : text;
+}
+
 interface Renamed {
   entry: YAMLMap;
   name?: string;
@@ -261,8 +271,8 @@ function renameEntries(
 } {
   const pasted = new Set<string>();
   for (const entry of entries) {
-    for (const key of ['name', 'id']) {
-      const value = textOf(entry.get(key, true));
+    for (const key of ['name', 'id'] as const) {
+      const value = identityOf(entry, key);
       if (value !== undefined) pasted.add(value);
     }
   }
@@ -274,8 +284,8 @@ function renameEntries(
   const ids = new Map<string, string>();
   const renamed: Renamed[] = [];
   for (const entry of entries) {
-    const oldName = textOf(entry.get('name', true));
-    const oldId = textOf(entry.get('id', true));
+    const oldName = identityOf(entry, 'name');
+    const oldId = identityOf(entry, 'id');
     let id = oldId;
     if (oldId !== undefined && used.has(oldId)) {
       id = freshId(oldId, avoid());
@@ -388,7 +398,7 @@ export function pasteStepsOp(
       (pasted.has(value) ? value : undefined);
 
     for (const { entry, name, id } of renamed) {
-      if (id !== undefined && textOf(entry.get('id', true)) !== id) {
+      if (id !== undefined && identityOf(entry, 'id') !== id) {
         setScalar(entry, 'id', id);
       }
       const current = readDepends(entry.get('depends', true));
@@ -413,7 +423,7 @@ export function pasteStepsOp(
         if (value !== scalar.value) scalar.value = value;
       });
       if (isSeq(steps)) {
-        if (name !== undefined && textOf(entry.get('name', true)) !== name) {
+        if (name !== undefined && identityOf(entry, 'name') !== name) {
           if (entry.has('name')) setScalar(entry, 'name', name);
           else
             entry.items.unshift(new Pair(new Scalar('name'), new Scalar(name)));

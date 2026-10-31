@@ -20,6 +20,7 @@ const DEFAULT_STYLE: DependsStyle = { multi: 'flow', singleScalar: false };
 function textOf(value: unknown): string | undefined {
   return typeof value === 'string' ||
     typeof value === 'number' ||
+    typeof value === 'bigint' ||
     typeof value === 'boolean'
     ? String(value)
     : undefined;

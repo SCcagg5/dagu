@@ -26,6 +26,18 @@ describe('runRequests', () => {
     });
   });
 
+  // A run id can start with '_' or '-', and the server refuses such a label
+  // value. The body still names the run.
+  it('writes no outputs-from label that the server would refuse', () => {
+    expect(
+      buildStartBody({ steps: ['b'], outputsFromRunId: '_source' })
+    ).toEqual({
+      steps: ['b'],
+      outputsFromRunId: '_source',
+      labels: [EDITOR_RUN_LABEL],
+    });
+  });
+
   it('leaves no outputsFromRunId key when no run is given', () => {
     const body = buildStartBody({ steps: ['b'] });
     expect(body).toEqual({ steps: ['b'], labels: [EDITOR_RUN_LABEL] });

@@ -16,6 +16,7 @@ import {
   isScalar,
   isSeq,
   parseAllDocuments,
+  visit,
 } from 'yaml';
 import { stringifyString } from 'yaml/util';
 import type { StepView, TextEdit } from '../contracts';
@@ -286,8 +287,8 @@ function looseText(text: string): string {
  * with the same key order, and the comments are equal, on the same nodes.
  * Blank lines, trailing spaces, the final line end, line ends (LF or CRLF),
  * the indentation width and the quote style of a string are no change. A
- * text that does not parse is compared as text, with blank lines and
- * trailing spaces dropped.
+ * text that does not parse, or that has an alias without its anchor, is
+ * compared as text, with blank lines and trailing spaces dropped.
  */
 export function isSameYaml(a: string, b: string): boolean {
   if (a === b) return true;
@@ -297,15 +298,20 @@ export function isSameYaml(a: string, b: string): boolean {
     return !left && !right && looseText(a) === looseText(b);
   }
   if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index++) {
-    const x = left[index]!;
-    const y = right[index]!;
-    if (!sameValue(x.toJS(), y.toJS())) return false;
-    const cx = commentLines(x);
-    const cy = commentLines(y);
-    if (cx.length !== cy.length || cx.some((line, i) => line !== cy[i])) {
-      return false;
+  try {
+    for (let index = 0; index < left.length; index++) {
+      const x = left[index]!;
+      const y = right[index]!;
+      if (!sameValue(x.toJS(), y.toJS())) return false;
+      const cx = commentLines(x);
+      const cy = commentLines(y);
+      if (cx.length !== cy.length || cx.some((line, i) => line !== cy[i])) {
+        return false;
+      }
     }
+  } catch {
+    // toJS throws on an alias without its anchor.
+    return looseText(a) === looseText(b);
   }
   return true;
 }
@@ -660,12 +666,30 @@ export function minimalEdit(
   };
 }
 
+/** True when a flow collection of document 0 holds the text at `offset`. */
+function inFlowCollection(text: string, offset: number): boolean {
+  const doc = parseAllDocuments(text)[0];
+  if (!doc) return false;
+  let inside = false;
+  visit(doc, {
+    Collection(_, node) {
+      const range = node.range;
+      if (node.flow && range && range[0] < offset && offset < range[1]) {
+        inside = true;
+        return visit.BREAK;
+      }
+    },
+  });
+  return inside;
+}
+
 /** What `formatStepRange` reads of a step. */
 export type StepSpan = Pick<StepView, 'form' | 'range' | 'handler' | 'broken'>;
 
 /**
  * The edit that puts one step in canonical form, or null when the step is
- * already canonical, is broken, or does not parse. The edit lies inside
+ * already canonical, is broken, does not parse, or sits in a flow
+ * collection, where the block style cannot go. The edit lies inside
  * `step.range`: the rest of the text stays byte for byte. The step gets the
  * rules of `formatYaml` (key order, block style, no blank line, comments
  * kept, strings folded at FORMAT_LINE_WIDTH), keeps its indentation and uses
@@ -677,6 +701,7 @@ export type StepSpan = Pick<StepView, 'form' | 'range' | 'handler' | 'broken'>;
 export function formatStepRange(text: string, step: StepSpan): TextEdit | null {
   if (step.broken !== undefined) return null;
   const { from, to } = step.range;
+  if (inFlowCollection(text, from)) return null;
   const original = text.slice(from, to);
   const column = from - (text.lastIndexOf('\n', from - 1) + 1);
   // A step of the map form, and a handler, comes with its key.

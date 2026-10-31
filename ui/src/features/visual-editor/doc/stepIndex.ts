@@ -223,6 +223,7 @@ function scalarText(node: unknown): string | undefined {
   const v = node.value;
   return typeof v === 'string' ||
     typeof v === 'number' ||
+    typeof v === 'bigint' ||
     typeof v === 'boolean'
     ? String(v)
     : undefined;
