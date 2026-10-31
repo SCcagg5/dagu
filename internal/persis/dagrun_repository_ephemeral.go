@@ -33,11 +33,11 @@ func (r *DAGRunRepository) createStore(
 	options DAGRunCreateAttemptOptions,
 ) (DAGRunStore, bool, error) {
 	newRoot := !options.Retry && options.RootDAGRun.Zero()
-	if options.Ephemeral {
+	if options.Ephemeral && newRoot {
 		if r.ephemeral == nil {
 			return nil, false, ErrEphemeralUnsupported
 		}
-		if newRoot && dag != nil {
+		if dag != nil {
 			if err := rejectExistingRun(ctx, r.store, ir.NewDAGRunRef(dag.Name, dagRunID)); err != nil {
 				return nil, false, err
 			}
