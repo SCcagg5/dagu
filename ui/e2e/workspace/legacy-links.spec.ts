@@ -129,6 +129,7 @@ test.describe('workspace legacy links', () => {
   }) => {
     const { fileName } = await fixtureDAG('visual-params.yaml', 'e2e-ws-link');
     const base = `/dags/${encodeURIComponent(fileName)}`;
+    const previous = page.url();
 
     await gotoWorkspace(
       page,
@@ -136,8 +137,10 @@ test.describe('workspace legacy links', () => {
     );
     await expectAt(page, base, { step: 'prepare', remoteNode: 'local' });
     await expect(page.getByTestId('ww-pane')).toBeVisible();
+    // A pushed redirect would bring Back to /executions and then redirect
+    // again to the workflow route.
     await page.goBack();
-    expect(new URL(page.url()).pathname).not.toMatch(/\/executions$/);
+    await expect(page).toHaveURL(previous);
   });
 
   // R2. parity:shell-docs-redirect parity:page-legacy-docs-redirect

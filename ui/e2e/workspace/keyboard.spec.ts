@@ -67,7 +67,9 @@ async function confirmRunStep(
   token: string,
   dagName: string
 ): Promise<void> {
-  const runsBefore = await listDAGRuns(request, token, dagName);
+  const runsBefore = new Set(
+    (await listDAGRuns(request, token, dagName)).map((run) => run.dagRunId)
+  );
   const confirm = page.getByRole('dialog', { name: 'Run step' });
   await expect(confirm).toBeVisible();
   // The dialog has Cancel, Step only and Run (Changed steps shows only when
@@ -75,13 +77,25 @@ async function confirmRunStep(
   await tabTo(page, confirm.getByRole('button', { name: 'Run' }));
   await page.keyboard.press('Enter');
   await expect(confirm).toBeHidden({ timeout: 30_000 });
+  let started: string[] = [];
   await expect
-    .poll(async () => (await listDAGRuns(request, token, dagName)).length, {
-      timeout: 60_000,
+    .poll(
+      async () => {
+        started = (await listDAGRuns(request, token, dagName))
+          .map((run) => run.dagRunId)
+          .filter((id) => !runsBefore.has(id));
+        return started.length;
+      },
+      { timeout: 60_000 }
+    )
+    .toBe(1);
+  // The one tab stays on its page: ?run names the new run, not the earlier
+  // one, and the dock is not opened by the run.
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('run'), {
+      timeout: 30_000,
     })
-    .toBeGreaterThan(runsBefore.length);
-  // The one tab stays on its page: the run is shown on it, and the dock is
-  // not opened by the run.
+    .toBe(started[0]);
   await expect(page.getByTestId('ww-pane')).toHaveCount(1);
 }
 
