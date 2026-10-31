@@ -11,14 +11,15 @@ import {
 import { UserPreferencesProvider } from '@/contexts/UserPreference';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { ContinuousPanel } from '../ContinuousPanel';
+import type { SamplesWindow } from '../useContinuousData';
 
 type StepAvailability = components['schemas']['StepAvailability'];
 type StepEvents = components['schemas']['StepEvents'];
 type StepSamples = components['schemas']['StepSamples'];
 type Node = components['schemas']['Node'];
 
-// useQuery is answered by path. A value of null is an error, undefined is
-// still loading.
+// useQuery and useStepSamples are answered by path. A value of null is an
+// error, undefined is still loading.
 const h = vi.hoisted(() => ({
   responses: {} as Record<string, unknown>,
   calls: [] as Array<{
@@ -26,7 +27,18 @@ const h = vi.hoisted(() => ({
     query: Record<string, unknown>;
     config: Record<string, unknown> | undefined;
   }>,
+  samples: [] as Array<{
+    window: SamplesWindow;
+    points: number;
+    poll: boolean;
+  }>,
 }));
+
+function answer(data: unknown) {
+  return data === null
+    ? { data: undefined, error: new Error('failed') }
+    : { data, error: undefined };
+}
 
 vi.mock('@/hooks/api', () => ({
   useQuery: (
@@ -35,15 +47,26 @@ vi.mock('@/hooks/api', () => ({
     config?: Record<string, unknown>
   ) => {
     h.calls.push({ path, query: init.params.query, config });
-    const answer =
+    const data =
       typeof h.responses[path] === 'function'
         ? (h.responses[path] as (q: Record<string, unknown>) => unknown)(
             init.params.query
           )
         : h.responses[path];
-    return answer === null
-      ? { data: undefined, error: new Error('failed') }
-      : { data: answer, error: undefined };
+    return answer(data);
+  },
+}));
+// The samples hook has tests of its own: here it records what the panel asks.
+vi.mock('../useContinuousData', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../useContinuousData')>()),
+  useStepSamples: (
+    _target: unknown,
+    window: SamplesWindow,
+    points: number,
+    poll: boolean
+  ) => {
+    h.samples.push({ window, points, poll });
+    return answer(h.responses[SAMPLES]);
   },
 }));
 vi.mock('@/contexts/RemoteNodeContext', () => ({
@@ -129,10 +152,12 @@ function plotEnd(svg: SVGElement): number {
   return Number(svg.getAttribute('width')) - 1;
 }
 
-/** The latest request for a path. */
-function lastCall(path: string) {
-  return h.calls.filter((c) => c.path === path).pop()!;
+/** The latest window that the panel asked the samples of. */
+function lastSamples() {
+  return h.samples[h.samples.length - 1]!;
 }
+
+const STARTED_MS = Date.parse('2026-10-01T00:00:00Z');
 
 function renderPanel(active = false) {
   return render(
@@ -151,9 +176,18 @@ function renderPanel(active = false) {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.useFakeTimers({
+    toFake: [
+      'Date',
+      'setInterval',
+      'clearInterval',
+      'setTimeout',
+      'clearTimeout',
+    ],
+  });
   vi.setSystemTime(NOW);
   h.calls.length = 0;
+  h.samples.length = 0;
   h.responses = {};
 });
 afterEach(() => {
@@ -221,13 +255,9 @@ describe('ContinuousPanel', () => {
       [EVENTS]: events,
     };
     renderPanel();
-    const call = h.calls.find((c) => c.path === SAMPLES)!;
-    expect(call.query.points).toBe(Math.floor((640 - 24 - 44) / 4));
-    expect(Date.parse(call.query.to as string)).toBe(NOW);
-    expect(
-      Date.parse(call.query.to as string) -
-        Date.parse(call.query.from as string)
-    ).toBe(86_400_000);
+    const call = h.samples[0]!;
+    expect(call.points).toBe(Math.floor((640 - 24 - 44) / 4));
+    expect(call.window).toEqual({ preset: '24h', startedAt: STARTED_MS });
   });
 
   it('shows a bar tooltip with the bucket numbers on hover', () => {
@@ -353,15 +383,82 @@ describe('ContinuousPanel', () => {
     };
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: '30d' }));
-    const call = lastCall(SAMPLES);
-    expect(
-      Date.parse(call.query.to as string) -
-        Date.parse(call.query.from as string)
-    ).toBe(30 * 86_400_000);
+    expect(lastSamples().window).toEqual({
+      preset: '30d',
+      startedAt: STARTED_MS,
+    });
   });
 
-  // Polling: the short windows of an active run move every 10 s; a long
-  // window keeps one key. The availability and the events refresh on a timer.
+  // The latency labels take the left 44 px of the chart: a zoom at the left
+  // edge of the plot keeps the start of the window.
+  it('zooms around the time under the pointer', () => {
+    h.responses = {
+      [AVAIL]: availability,
+      [SAMPLES]: samples(5),
+      [EVENTS]: events,
+    };
+    renderPanel();
+    const chart = screen.getByTestId('continuous-chart');
+    chart.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 44 + 572, height: 124 }) as DOMRect;
+    fireEvent.wheel(chart, { deltaY: -100, clientX: 44 });
+    // Past the rest that a zoom waits for.
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    const window = lastSamples().window as { from: number; to: number };
+    expect(window.from).toBe(NOW - 86_400_000);
+    expect(window.to).toBeLessThan(NOW);
+  });
+
+  // A drag pans on each move: the window is asked for once the drag rests,
+  // so the moves leave no request and no cache entry of their own.
+  it('asks for a dragged window once it rests', () => {
+    h.responses = {
+      [AVAIL]: availability,
+      [SAMPLES]: samples(300),
+      [EVENTS]: events,
+    };
+    renderPanel();
+    const keys = () =>
+      new Set(h.samples.map((c) => JSON.stringify([c.window, c.points])));
+    const svg = screen.getByTestId('continuous-chart').querySelector('svg')!;
+    // A drag to the right moves the window back in time.
+    fireEvent.pointerDown(svg, { clientX: 300, pointerId: 1 });
+    for (const x of [320, 340, 360, 380]) {
+      fireEvent.pointerMove(svg, { clientX: x, pointerId: 1 });
+    }
+    fireEvent.pointerUp(svg, { clientX: 380, pointerId: 1 });
+    expect(keys().size).toBe(1);
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(keys().size).toBe(2);
+    expect(lastSamples().window).toHaveProperty('to');
+  });
+
+  // The browser can take the pointer during a drag and send no pointerup: the
+  // drag ends, and a later move points at a bar again.
+  it('ends a drag that the browser cancels', () => {
+    h.responses = {
+      [AVAIL]: availability,
+      [SAMPLES]: samples(300),
+      [EVENTS]: events,
+    };
+    renderPanel();
+    const svg = screen.getByTestId('continuous-chart').querySelector('svg')!;
+    svg.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 572, height: 96 }) as DOMRect;
+    fireEvent.pointerDown(svg, { clientX: 10, pointerId: 1 });
+    fireEvent.pointerCancel(svg, { pointerId: 1 });
+    fireEvent.pointerMove(svg, { clientX: plotEnd(svg), clientY: 40 });
+    expect(screen.getByTestId('continuous-tooltip')).toBeInTheDocument();
+  });
+
+  // Polling: a short preset of an active run polls; a long one is read once.
+  // A preset keeps its window across the clock (the samples hook reads the
+  // window that ends at each read). The availability and the events refresh
+  // on a timer.
   it('polls the 24h range of an active run and not a long range', () => {
     h.responses = {
       [AVAIL]: availability,
@@ -369,27 +466,25 @@ describe('ContinuousPanel', () => {
       [EVENTS]: events,
     };
     renderPanel(true);
-    const first = lastCall(SAMPLES);
     expect(h.calls.find((c) => c.path === AVAIL)!.config?.refreshInterval).toBe(
       10_000
     );
-    h.calls.length = 0;
-    act(() => {
-      vi.advanceTimersByTime(10_000);
+    expect(lastSamples()).toMatchObject({
+      window: { preset: '24h' },
+      poll: true,
     });
-    // The tick moved the window.
-    expect(h.calls.length).toBeGreaterThan(0);
-    const moved = lastCall(SAMPLES);
-    expect(moved.query.to).not.toBe(first.query.to);
-
-    fireEvent.click(screen.getByRole('button', { name: '1y' }));
-    const chosen = lastCall(SAMPLES);
-    h.calls.length = 0;
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
-    expect(h.calls.filter((c) => c.path === SAMPLES)).toHaveLength(0);
-    expect(chosen.query.points).toBeGreaterThan(0);
+    expect(
+      new Set(h.samples.map((c) => JSON.stringify([c.window, c.points])))
+    ).toHaveProperty('size', 1);
+
+    fireEvent.click(screen.getByRole('button', { name: '1y' }));
+    expect(lastSamples()).toMatchObject({
+      window: { preset: '1y' },
+      poll: false,
+    });
   });
 
   it('does not poll a run that ended', () => {
@@ -402,6 +497,7 @@ describe('ContinuousPanel', () => {
     expect(h.calls.find((c) => c.path === AVAIL)!.config?.refreshInterval).toBe(
       0
     );
+    expect(lastSamples().poll).toBe(false);
     h.calls.length = 0;
     act(() => {
       vi.advanceTimersByTime(60_000);

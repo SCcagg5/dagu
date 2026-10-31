@@ -3,6 +3,7 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -31,10 +32,8 @@ import {
   type View,
 } from './sampleBars';
 import {
-  POLL_MS,
   useStepAvailability,
   useStepSamples,
-  useWindowClock,
   type ContinuousTarget,
 } from './useContinuousData';
 
@@ -45,12 +44,12 @@ const DEFAULT_WIDTH_PX = 640;
 const DEFAULT_PRESET: RangePresetId = '24h';
 /** The padding of the panel, left and right. */
 const PANEL_PAD_PX = 24;
+/** How long a zoom or a pan rests before the chart asks for its window. */
+const SETTLE_MS = 300;
 
 /** The window as fixed times: a zoom or a pan starts from what the chart shows. */
-function fixed(view: View | null, now: number): View {
-  return view
-    ? { ...view, ...viewAt(view, now) }
-    : presetView(DEFAULT_PRESET, now);
+function fixed(view: View, now: number): View {
+  return { ...view, ...viewAt(view, now) };
 }
 
 export interface ContinuousPanelProps {
@@ -85,15 +84,22 @@ export function ContinuousPanel({
   );
   const startMs = startedAt ? Date.parse(startedAt) : undefined;
 
-  const [view, setView] = useState<View | null>(null);
-  const preset = view ? view.preset : DEFAULT_PRESET;
-  const polled = active && preset !== null && POLLED_PRESETS.includes(preset);
-  const clock = useWindowClock(polled ? POLL_MS : null);
-  const live: View = useMemo(
-    () => view ?? presetView(DEFAULT_PRESET, clock.now),
-    [view, clock.now]
+  const [view, setView] = useState<View>(() =>
+    presetView(DEFAULT_PRESET, Date.now())
   );
-  const range = viewAt(live, clock.now);
+  // The window of the request: a preset at once, a zoom or a pan once it
+  // rests, so that a drag does not ask for each of its moves.
+  const [asked, setAsked] = useState(view);
+  useEffect(() => {
+    if (view.preset !== null) {
+      setAsked(view);
+      return;
+    }
+    const timer = setTimeout(() => setAsked(view), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [view]);
+  const polled =
+    active && asked.preset !== null && POLLED_PRESETS.includes(asked.preset);
 
   const [selected, setSelected] = useState<{
     time: number;
@@ -105,12 +111,18 @@ export function ContinuousPanel({
   const width = measured ?? DEFAULT_WIDTH_PX;
 
   const chartWidth = width - PANEL_PAD_PX;
-  const points = pointsForWindow(chartWidth - AXIS_PX, range.to - range.from);
+  const points = pointsForWindow(chartWidth - AXIS_PX, asked.to - asked.from);
   const availability = useStepAvailability(target, active);
-  const samples = useStepSamples(target, range, points);
+  const samples = useStepSamples(
+    target,
+    asked.preset === null
+      ? { from: asked.from, to: asked.to }
+      : { preset: asked.preset, startedAt: startMs },
+    points,
+    polled
+  );
 
   const choose = (id: RangePresetId) => {
-    clock.reset();
     setSelected(null);
     setView(presetView(id, Date.now(), startMs));
   };
@@ -130,8 +142,8 @@ export function ContinuousPanel({
     const to = samples.data ? Date.parse(samples.data.to) : Number.NaN;
     return Number.isFinite(from) && Number.isFinite(to) && to > from
       ? { from, to }
-      : range;
-  }, [samples.data, range]);
+      : { from: asked.from, to: asked.to };
+  }, [samples.data, asked]);
 
   const eventsWindow = selected
     ? bucketWindow(selected.time, selected.resolutionSeconds)
@@ -182,7 +194,7 @@ export function ContinuousPanel({
             <ToggleButton
               key={p.id}
               value={p.id}
-              groupValue={preset ?? undefined}
+              groupValue={view.preset ?? undefined}
               onClick={() => choose(p.id)}
               className="h-6 px-2"
             >
