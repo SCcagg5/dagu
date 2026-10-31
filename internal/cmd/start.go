@@ -69,7 +69,8 @@ them. Add --output-from
 it takes precedence over --outputs-from for that step. The run must be a run of
 the same DAG, and the step must have succeeded in it. A step selected by --only
 cannot be named in --output-from. The run records the source run of each reused
-output.
+output. The deprecated --output <step>.<name>=<value> still sets an output of a
+skipped step directly and takes precedence over both; use --output-from.
 
 Examples:
   echo '"hello world"' | dagu start --params-stdin my_dag
@@ -87,7 +88,7 @@ This command parses the DAG definition, resolves parameters, and initiates the D
 }
 
 // Command line flags for the start command
-var startFlags = []commandLineFlag{paramsFlag, paramsStdinFlag, nameFlag, dagRunIDFlag, fromRunIDFlag, parentDAGRunFlag, rootDAGRunFlag, workerLabelFlag, labelsFlag, tagsFlag, defaultWorkingDirFlag, profileFlag, startWorkerIDFlag, attemptIDFlag, triggerTypeFlag, triggerActorFlag, scheduleTimeFlag, sourceFileFlag, noReuseFlag, onlyFlag, outputsFromFlag, outputFromFlag, removedOutputFlag}
+var startFlags = []commandLineFlag{paramsFlag, paramsStdinFlag, nameFlag, dagRunIDFlag, fromRunIDFlag, parentDAGRunFlag, rootDAGRunFlag, workerLabelFlag, labelsFlag, tagsFlag, defaultWorkingDirFlag, profileFlag, startWorkerIDFlag, attemptIDFlag, triggerTypeFlag, triggerActorFlag, scheduleTimeFlag, sourceFileFlag, noReuseFlag, onlyFlag, outputsFromFlag, outputFromFlag, outputFlag}
 
 var fromRunIDFlag = commandLineFlag{
 	name:  "from-run-id",
@@ -111,13 +112,10 @@ var outputFromFlag = commandLineFlag{
 	isStringArray: true,
 }
 
-// removedOutputFlag keeps the old --output flag parsed so that its use gives a
-// clear error in place of "unknown flag".
-var removedOutputFlag = commandLineFlag{
+var outputFlag = commandLineFlag{
 	name:          "output",
-	usage:         "Removed: use --output-from <step>=<run-id>",
+	usage:         "Deprecated: use --output-from <step>=<run-id>. Output of a step skipped by --only, as <step>.<name>=<value>; repeatable",
 	isStringArray: true,
-	hidden:        true,
 }
 
 // startWorkerIDFlag identifies which worker executes this DAG run (for distributed execution tracking)
