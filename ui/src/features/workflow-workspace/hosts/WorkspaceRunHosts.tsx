@@ -4,18 +4,23 @@
 import {
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
+import { useRemoteNode } from '@/contexts/RemoteNodeContext';
 import {
   SubRunOpenProvider,
   SubRunStackModal,
   type SubRunStackEntry,
 } from '@/features/dags/components/common/SubRunStackModal';
 import { RootDAGRunContext } from '@/features/dags/contexts/RootDAGRunContext';
+import { useQuery } from '@/hooks/api';
+import { whenEnabled } from '@/hooks/queryUtils';
 import { WorkspaceDataContext } from '../data/context';
 import type { WorkspaceRunValue } from '../data/types';
+import { useWorkspaceUrl } from '../state/workspaceUrl';
 
 const noop = () => undefined;
 
@@ -49,6 +54,7 @@ function RunHosts({
   const open = useCallback((entry: SubRunStackEntry) => {
     setStack((prev) => [...prev, entry]);
   }, []);
+  useLinkedSubRun(run, setStack);
 
   const details = run.details;
   // The URL owns the selection, so consumers cannot change it.
@@ -73,4 +79,50 @@ function RunHosts({
       </SubRunOpenProvider>
     </RootDAGRunContext.Provider>
   );
+}
+
+/**
+ * A link names a sub-run of the run with ?subRun, and one of its steps with
+ * ?step. Once the run has loaded, the sub-run opens on the stack and the
+ * link leaves the URL.
+ */
+function useLinkedSubRun(
+  run: WorkspaceRunValue,
+  show: (stack: SubRunStackEntry[]) => void
+) {
+  const [url, setUrl] = useWorkspaceUrl();
+  const remoteNode = useRemoteNode();
+  const linked = url.subRun;
+  const ref =
+    run.details && run.details.dagRunId === run.ref?.runId ? run.ref : null;
+  // The entry needs the name of the sub-run, which the link does not hold.
+  const { data, error } = useQuery(
+    '/dag-runs/{name}/{dagRunId}/sub-dag-runs/{subDAGRunId}',
+    whenEnabled(!!linked && !!ref, {
+      params: {
+        path: {
+          name: ref?.name ?? '',
+          dagRunId: ref?.runId ?? '',
+          subDAGRunId: linked?.id ?? '',
+        },
+        query: { remoteNode },
+      },
+    })
+  );
+  const child =
+    data?.dagRunDetails?.dagRunId === linked?.id ? data?.dagRunDetails : null;
+  const settled = !!child || !!error || run.notFound;
+  useEffect(() => {
+    if (!linked || !settled) return;
+    if (child) {
+      show([
+        {
+          name: child.name,
+          dagRunId: child.dagRunId,
+          step: linked.step ?? undefined,
+        },
+      ]);
+    }
+    setUrl({ subRun: null }, { replace: true });
+  }, [child, linked, setUrl, settled, show]);
 }

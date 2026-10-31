@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppBarContext } from '@/contexts/AppBarContext';
 import { LayoutChromeProvider } from '@/contexts/LayoutChromeContext';
+import { DAGRunDetailsContent } from '@/features/dag-runs/components/dag-run-details';
 import { WorkflowWorkspace } from '@/features/workflow-workspace';
 import { LogPopoutPage } from '@/features/workflow-workspace/popout/LogPopoutPage';
 import { useQuery } from '@/hooks/api';
@@ -28,6 +29,10 @@ vi.mock('@/features/workflow-workspace/popout/LogPopoutPage', async () => {
   }
   return { LogPopoutPage: vi.fn(() => <Popout />) };
 });
+
+vi.mock('@/features/dag-runs/components/dag-run-details', () => ({
+  DAGRunDetailsContent: vi.fn(() => <div data-testid="run-details" />),
+}));
 
 vi.mock('@/hooks/api', () => ({
   useQuery: vi.fn(),
@@ -258,6 +263,80 @@ describe('DAGDetails page', () => {
       });
     });
 
+    // A file named like another DAG holds that DAG: the run link of the DAG
+    // of that name goes to the file of the run.
+    it('opens a run link on the file of its run when the file holds another DAG', async () => {
+      useQueryMock.mockImplementation(
+        (path) =>
+          ({
+            data:
+              path === '/dags/{fileName}'
+                ? { ...dagData, dag: { ...dagData.dag, name: 'etl-legacy' } }
+                : path === '/dag-runs/{name}/{dagRunId}'
+                  ? { dagRunDetails: { sourceFileName: 'etl-v2' } }
+                  : undefined,
+            mutate: vi.fn(),
+          }) as never
+      );
+
+      renderPage('/dags/etl?run=r1');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('location')).toHaveTextContent(
+          /^\/dags\/etl-v2\?run=r1$/
+        );
+      });
+      expect(vi.mocked(useQuery)).toHaveBeenCalledWith(
+        '/dag-runs/{name}/{dagRunId}',
+        {
+          params: {
+            path: { name: 'etl', dagRunId: 'r1' },
+            query: { remoteNode: 'local' },
+          },
+        }
+      );
+      // The other DAG never shows: only the file of the run does.
+      expect(
+        workspaceMock.mock.calls.every(([props]) => props.fileName === 'etl-v2')
+      ).toBe(true);
+    });
+
+    // The API names no source file once the file is gone: deleted, or
+    // renamed while the DAG name stayed.
+    it('shows a run whose workflow file is gone', async () => {
+      const mutateRun = vi.fn();
+      const fileLess = { name: 'etl', dagRunId: 'r1' };
+      useQueryMock.mockImplementation((path) =>
+        path === '/dag-runs/{name}/{dagRunId}'
+          ? ({
+              data: { dagRunDetails: fileLess },
+              mutate: mutateRun,
+            } as never)
+          : ({
+              data: undefined,
+              error: { code: 'not_found', message: 'DAG is not found' },
+              mutate: vi.fn(),
+            } as never)
+      );
+
+      renderPage('/dags/etl?run=r1');
+
+      expect(await screen.findByTestId('run-details')).toBeInTheDocument();
+      const props = vi.mocked(DAGRunDetailsContent).mock.lastCall?.[0];
+      expect(props).toMatchObject({
+        name: 'etl',
+        dagRun: fileLess,
+        dagRunId: 'r1',
+        fillHeight: true,
+      });
+      props?.refreshFn();
+      expect(mutateRun).toHaveBeenCalled();
+      expect(
+        screen.queryByRole('heading', { name: 'Workflow not found' })
+      ).not.toBeInTheDocument();
+      expect(workspaceMock).not.toHaveBeenCalled();
+    });
+
     it('reports a failed load with the server message and a retry', () => {
       const mutate = vi.fn();
       useQueryMock.mockImplementation(
@@ -388,10 +467,10 @@ describe('DAGDetails page', () => {
       '/dags/release-notes?dagRunId=run-7&subDAGRunId=child-2&dagRunName=release-notes&step=deploy'
     );
 
-    // The step of the sub-run is not a step of the root run.
+    // The step is of the sub-run, which opens on top of the root run.
     await waitFor(() => {
       expect(screen.getByTestId('location')).toHaveTextContent(
-        /^\/dags\/release-notes\?remoteNode=local&run=run-7$/
+        /^\/dags\/release-notes\?remoteNode=local&run=run-7&subRun=child-2&step=deploy$/
       );
     });
     // The redirect target is this page: the body mounts once it is there.

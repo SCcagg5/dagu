@@ -331,10 +331,10 @@ describe('LogPopoutPage', () => {
           subDAGRunId: 'sub-2',
         })
       );
-      // The run ID opens the root run: the workflow page has no sub-run address.
+      // The run ID opens the sub-run over its root run.
       expect(screen.getByTestId('run-meta')).toHaveAttribute(
         'data-href',
-        '/dags/release?remoteNode=local&run=run-7'
+        '/dags/release?remoteNode=local&run=run-7&subRun=sub-3'
       );
       expect(lastStepLogProps()).toMatchObject({
         dagName: 'child',

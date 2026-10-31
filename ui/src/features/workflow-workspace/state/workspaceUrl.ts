@@ -52,6 +52,11 @@ export interface WorkspaceUrlState {
   } | null;
   /** ?run ; null = latest */
   run: string | null;
+  /**
+   * ?subRun: a sub-run of the run that a link opens on the sub-run stack,
+   * once. A ?step next to it is a step of that sub-run, so `step` is null.
+   */
+  subRun: { id: string; step: string | null } | null;
   /** ?def=run: the canvas shows the definition that the run used. null = the current definition. */
   def: 'run' | null;
   /** ?step (server step name) */
@@ -110,6 +115,7 @@ const POPOUT_KEYS = ['dagRunId', 'dagRunName', 'subDAGRunId'] as const;
 const CARRY_KEYS = ['remoteNode', 'workspace'] as const;
 const OWNED_KEYS: ReadonlySet<string> = new Set<string>([
   ...STATE_KEYS,
+  'subRun',
   // ?view (List or Grid) is gone: a URL write drops it.
   'view',
   // ?yaml (the legacy /spec link) is gone once the editor has opened the YAML.
@@ -171,6 +177,8 @@ export function parseWorkspaceUrl(
   if (remoteNode !== null) carry.remoteNode = remoteNode;
   const workspace = text(search, 'workspace');
   if (workspace !== null) carry.workspace = workspace;
+  const subRunId = text(search, 'subRun');
+  const subRun = subRunId ? { id: subRunId, step: text(search, 'step') } : null;
 
   return {
     mode,
@@ -178,8 +186,9 @@ export function parseWorkspaceUrl(
     panel: oneOf(text(search, 'panel'), OPEN_PANELS),
     wtab: oneOf(text(search, 'wtab'), WORKFLOW_PANEL_TABS),
     run: text(search, 'run'),
+    subRun,
     def: oneOf(text(search, 'def'), ['run'] as const),
-    step: text(search, 'step'),
+    step: subRun ? null : text(search, 'step'),
     ndv: oneOf(text(search, 'ndv'), ['docked', 'expanded'] as const),
     // 'steps' and 'spec' were tabs: a link to them shows the default tab.
     dock: oneOf(text(search, 'dock'), DOCK_TABS),
@@ -215,6 +224,11 @@ function buildQuery(s: WorkspaceUrlState): URLSearchParams {
   for (const key of STATE_KEYS) {
     const value = s[key];
     if (value) query.set(key, value);
+  }
+  // A step of the run itself drops a sub-run link that has not opened yet.
+  if (s.subRun && s.step === null) {
+    query.set('subRun', s.subRun.id);
+    if (s.subRun.step) query.set('step', s.subRun.step);
   }
   for (const key of CARRY_KEYS) {
     const value = s.carry[key];
@@ -277,7 +291,7 @@ function storeOf(navigator: object): RouterStore {
   return store;
 }
 
-/** push for mode, run, def and popout; replace for step, ndv, dock, stream, item, body, sub, panel, wtab. */
+/** push for mode, run, def and popout; replace for step, subRun, ndv, dock, stream, item, body, sub, panel, wtab. */
 export function useWorkspaceUrl(): [WorkspaceUrlState, SetWorkspaceUrl] {
   const { fileName = '', tab } = useParams<{
     fileName: string;
