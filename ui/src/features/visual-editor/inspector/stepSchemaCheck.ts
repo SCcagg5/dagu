@@ -3,7 +3,7 @@
 
 import validator from '@rjsf/validator-ajv8';
 import type { JSONSchema } from '../contracts';
-import { stepSchemaOf } from './actionRules';
+import { resolveSchemaRef, stepSchemaOf } from './actionRules';
 import { getActionWithSchema } from './withSchema';
 
 interface CompiledCheck {
@@ -28,10 +28,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** The `with` schema of a `run` step, or null when the schema has none. */
+function runWithSchema(schema: JSONSchema): JSONSchema | null {
+  const config = schema.definitions?.runWithConfig;
+  return isRecord(config) ? resolveSchemaRef(schema, config) : null;
+}
+
 /**
  * A small schema for one step value: the step properties that the value
  * uses (the inlined action rules are slow to compile), with the flat
- * `with` schema of the step action, and the step rule on unknown keys.
+ * `with` schema of the step action or of `run`, and the step rule on
+ * unknown keys.
  */
 function lightStepSchema(
   schema: JSONSchema,
@@ -52,7 +59,11 @@ function lightStepSchema(
       properties[key] = property;
     }
   }
-  const withSchema = action ? getActionWithSchema(schema, action, []) : null;
+  const withSchema = action
+    ? getActionWithSchema(schema, action, [])
+    : keys.includes('run')
+      ? runWithSchema(schema)
+      : null;
   if (withSchema && properties.with) {
     properties.with = withSchema;
   }
@@ -143,9 +154,9 @@ export function checkStepSchemaErrors(
 /**
  * Checks one step value against `definitions.step` of the DAG schema and
  * gives short messages (`/with/url must be string`). The check uses the
- * properties of the step, the `with` schema of its action and the rule on
- * unknown keys; the cross-field rules are left to the server validation.
- * Gives no message when the schema cannot compile.
+ * properties of the step, the `with` schema of its action or of `run` and
+ * the rule on unknown keys; the cross-field rules are left to the server
+ * validation. Gives no message when the schema cannot compile.
  */
 export function checkStepSchema(schema: JSONSchema, value: unknown): string[] {
   const messages = new Set<string>();

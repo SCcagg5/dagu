@@ -111,7 +111,8 @@ function clampSpot(
 /**
  * The selections cut to the lines of the step, or null when none reaches a
  * hidden line. Select all, a drag past the edge and a multi-cursor select
- * stay inside the step, so no edit can touch the hidden lines.
+ * stay inside the step, so an edit at the cursor cannot touch the hidden
+ * lines.
  */
 export function clampSelectionsToLines(
   selections: CursorSelection[],
@@ -494,8 +495,9 @@ export function useYamlEditorSync({
         if (moved) showNumbers();
         scheduleBars();
       };
-      // The editor holds the whole file: keep the cursor and every edit to
-      // the lines that show.
+      // The editor holds the whole file: keep the cursor and the edits at it
+      // to the lines that show. Edits of the whole text (undo, Replace All,
+      // the edits of the canvas) still reach the hidden lines.
       const selection = editor.onDidChangeCursorSelection?.((event) => {
         const next = clampSelectionsToLines(
           [event.selection, ...event.secondarySelections],
