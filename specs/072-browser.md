@@ -60,6 +60,18 @@ is idle, and a page it changed in place until its requests end and it stops
 changing for half a second. A page that has not settled after five seconds is
 read as it is.
 
+Such an operation can open a window and make the page that opened it load
+a document, as a search does that opens a "searching" window and posts into
+a frame whose answer closes the window. That window is not the page
+operations work on: the operation waits, up to its timeout, until the window
+closes or stays open half a second past the load, and until then every
+operation works on the page that opened it. A window still open after that,
+such as one to fill in and close, is the page operations work on, as is a
+window opened without making its opener load. A step that fails on such a
+window, as on a "searching" window a site leaves open over an error, names
+the page that opened it and, when the step takes screenshots on failure,
+saves that page as `NN-failure-opener.png`.
+
 Any operation may set `when`, a condition checked once before the operation;
 the operation is skipped unless it holds. Any operation may set `timeout`, a
 duration such as `30s`; the default is two minutes. A browser that stops
@@ -177,6 +189,11 @@ those outputs. Operation progress is written to stderr.
 `CHROME_PATH` or an installed Chrome), `viewport` `{width, height}`, `proxy`
 (unauthenticated), `allowed_domains`, `screenshots`, `profile`, and
 `client_certificates`.
+
+Each execution of a step drives a browser of its own. The items of a
+`foreach` whose body runs the step each have their own browser, and an item
+starting never closes the browser of an item still running. A new attempt
+of the step closes a browser its earlier attempt left open.
 
 A browser without a window sends the user agent its executable sends with
 one, never `HeadlessChrome`, so a site treats the step as it treats a person.
@@ -453,6 +470,16 @@ step on the same host replays them without a model request when the operation
 position, instruction, and page URL without query or fragment match, unless
 the act's choice is `every_run`. When a replay fails, the step asks the model
 again, or fails under `never` (see How much AI decides).
+An `act`'s recording replays only on a run its actions fit. A variable the
+instruction names that no recorded action uses, in its arguments, its
+element's name, or the row text that tells its element apart, such as a
+field the page already filled with the value, is kept with a salted digest
+of the value it had, never the value. A run in which such a variable holds
+another value does not replay: the model acts and its actions replace the
+recording, and under `never` the act fails with `its recording does nothing
+with %item%, so it fits only the value %item% had when it was recorded`. An
+approved commit act replays the actions a person approved, whatever the
+values.
 If the step succeeds, the model's new actions replace the recording; an act
 that records no actions, such as one whose click loaded a new document before
 it reported back, removes the recording instead, unless another run of the step

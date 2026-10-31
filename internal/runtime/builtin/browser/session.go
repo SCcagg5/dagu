@@ -649,9 +649,11 @@ type sessionRecorder struct {
 	preset []recordedAction
 }
 
-func (r sessionRecorder) lookup(string) ([]recordedAction, bool) { return r.preset, len(r.preset) > 0 }
-func (sessionRecorder) stage(string, []recordedAction)           {}
-func (sessionRecorder) drop(string)                              {}
+func (r sessionRecorder) lookup(string) (recording, bool) {
+	return recording{Actions: r.preset}, len(r.preset) > 0
+}
+func (sessionRecorder) stage(string, recording) {}
+func (sessionRecorder) drop(string)             {}
 
 // checkOperation refuses an operation the session cannot run as given: an
 // act using a variable no value was given for, one needing a model the
@@ -811,6 +813,9 @@ func (s *Sessions) Do(ctx context.Context, req DoRequest) (DoResult, error) {
 				// variable's value.
 				if entry.Recordable {
 					entry.Actions = done.Actions
+					if op.Act != nil {
+						entry.Assumed = agentstep.Assume(unusedVariables(op.Act.Instruction, done.Actions), values.all)
+					}
 				}
 				result.Recorded = entry.Recordable
 			}
@@ -867,6 +872,12 @@ func (s *Sessions) Do(ctx context.Context, req DoRequest) (DoResult, error) {
 			result.Status = OperationFailed
 			result.Error = &SessionError{Code: CodeWriteBlocked, Message: message}
 			entry.Status, entry.Error = OperationFailed, message
+		}
+		// A blocked form stays on its page as it was filled in, so a
+		// rehearsal says what became of the write rather than leave the
+		// operation looking as if it did nothing.
+		if write.Consequential() && !writegate.Sends(state.WriteGate) {
+			warnings = append(warnings, fmt.Sprintf("the write gate blocked %s, so nothing was saved; a rehearsal does not send it", write))
 		}
 	}
 	if blocked, err := eng.TakeBlockedRequests(); err == nil && len(blocked) > 0 {
@@ -1243,10 +1254,12 @@ func (u *sessionUse) retire(ctx context.Context, cause error) error {
 	return errors.Join(cause, err)
 }
 
+// release ends the command's hold on the session. A browser the command
+// attached and neither parked nor retired, as when it refused its input,
+// is left waiting for the next command.
 func (u *sessionUse) release() {
 	if u.eng != nil {
-		_ = u.eng.Detach(context.Background())
-		u.eng = nil
+		_ = u.park(context.Background(), u.state, u.sessions.now().Add(u.state.idleTimeout()))
 	}
 	u.stop()
 	_ = u.lock.Unlock()

@@ -146,6 +146,87 @@ func TestExtractPublishesOutputs(t *testing.T) {
 	assert.JSONEq(t, `{"total": 42.5}`, execution.stdout.String())
 	require.Len(t, run.vision.requests, 1)
 	assert.Len(t, run.vision.requests[0].Messages[1].Images, 1, "the model reads a screenshot")
+	assert.Equal(t, agentstep.ToolChoiceRequired, run.vision.requests[0].ToolChoice, "the model must call respond")
+}
+
+// A model whose answer has no respond call is shown that answer and asked
+// once more before the next model is tried. The rejected answer reaches the
+// step log masked, and every call's tokens count.
+func TestQueryCorrectsAnUnusableAnswer(t *testing.T) {
+	t.Parallel()
+
+	const step = `{"do": [{"extract": {"instruction": "The invoice total", "schema": {"type": "object", "properties": {"total": {"type": "number"}}}}}]}`
+
+	t.Run("Corrected", func(t *testing.T) {
+		t.Parallel()
+
+		run := newTestRun(t)
+		run.secrets = map[string]string{"SHOP_TOKEN": "hunter2-secret"}
+		run.vision.extract = `{"total": 42.5}`
+		run.vision.prose = []string{"The total is 42.5, token hunter2-secret."}
+		execution := run.execute(step, nil)
+		require.NoError(t, execution.err)
+
+		assert.Equal(t, map[string]any{"total": 42.5}, execution.exec.GetOutputs())
+		require.Len(t, run.vision.requests, 2, "the same model was asked once more")
+		assert.Len(t, run.vision.requests[0].Messages, 2, "the first call carried no correction")
+		retry := run.vision.requests[1].Messages
+		require.Len(t, retry, 4)
+		assert.Equal(t, llmpkg.RoleAssistant, retry[2].Role)
+		assert.NotContains(t, retry[2].Content, "hunter2-secret")
+		assert.Equal(t, llmpkg.RoleUser, retry[3].Role)
+		assert.Contains(t, retry[3].Content, "model did not return structured output")
+		log := execution.stderr.String()
+		assert.Contains(t, log, "warning: openai/test-model answer rejected: model did not return structured output")
+		assert.Contains(t, log, "The total is 42.5")
+		assert.NotContains(t, log, "hunter2-secret")
+		assert.Equal(t, int64(12), execution.exec.GetAgentSession().Usage.TotalTokens, "both calls count")
+	})
+
+	t.Run("InvalidArguments", func(t *testing.T) {
+		t.Parallel()
+
+		run := newTestRun(t)
+		run.secrets = map[string]string{"SHOP_TOKEN": "hunter2-secret"}
+		run.vision.extract = `{"total": 42.5}`
+		// Arguments cut off at max_tokens, the usual shape under a forced
+		// tool choice.
+		run.vision.badArgs = []string{`{"total": 42.5, "note": "hunter2-secret`}
+		execution := run.execute(step, nil)
+		require.NoError(t, execution.err)
+
+		assert.Equal(t, map[string]any{"total": 42.5}, execution.exec.GetOutputs())
+		require.Len(t, run.vision.requests, 2, "the same model was asked once more")
+		retry := run.vision.requests[1].Messages
+		require.Len(t, retry, 4)
+		assert.Equal(t, llmpkg.RoleAssistant, retry[2].Role)
+		assert.Contains(t, retry[2].Content, `"total": 42.5`, "the model sees its own arguments")
+		assert.NotContains(t, retry[2].Content, "hunter2-secret")
+		assert.Contains(t, retry[3].Content, "model did not return structured output")
+		assert.NotContains(t, execution.stderr.String(), "hunter2-secret")
+		assert.Equal(t, int64(12), execution.exec.GetAgentSession().Usage.TotalTokens, "both calls count")
+	})
+
+	t.Run("FallsBackAfterOneCorrection", func(t *testing.T) {
+		t.Parallel()
+
+		run := newTestRun(t)
+		run.llm = &ir.LLMConfig{Models: []ir.ModelEntry{
+			{Provider: "openai", Name: "first"},
+			{Provider: "openai", Name: "second"},
+		}}
+		run.vision.extract = `{"total": 42.5}`
+		run.vision.prose = []string{"Prose.", "Prose again."}
+		execution := run.execute(step, nil)
+		require.NoError(t, execution.err)
+
+		assert.Equal(t, map[string]any{"total": 42.5}, execution.exec.GetOutputs())
+		require.Len(t, run.vision.requests, 3)
+		assert.Equal(t, "first", run.vision.requests[1].Model)
+		assert.Equal(t, "second", run.vision.requests[2].Model)
+		assert.Len(t, run.vision.requests[2].Messages, 2, "the next model starts without the correction")
+		assert.Equal(t, int64(18), execution.exec.GetAgentSession().Usage.TotalTokens)
+	})
 }
 
 // extractStep reads the invoice amount into a number output.
@@ -1000,11 +1081,15 @@ func confirmDialog() (desktop.Element, []desktop.Element) {
 func TestHandlerClearsAScreenThatComesUpSometimes(t *testing.T) {
 	t.Parallel()
 
-	const steps = `{"ai": "never", "input": "direct", "find_within": "300ms",
+	// The step may look for an element, and the check wait, for a minute,
+	// far longer than any of these runs takes. A run that waited for the
+	// screen on either bound stands apart from one that did not, however
+	// slow the host.
+	const steps = `{"ai": "never", "input": "direct", "find_within": "1m",
 		"handle": [{"name": "入力中クリアの確認", "when": {"text": "クリアしていいですか"}, "recorded": {"windows": [{"click": {"role": "button", "name": "はい"}}]}}],
 		"do": [
 			{"act": {"instruction": "Reset", "recorded": {"windows": [{"click": {"role": "button", "id": "saveButton"}}]}}},
-			{"expect": {"element": {"role": "text_field", "id": "amountBox"}, "within": "2s"}}
+			{"expect": {"element": {"role": "text_field", "id": "amountBox"}, "within": "1m"}}
 		]}`
 	for _, tc := range []struct {
 		name      string
@@ -1045,7 +1130,7 @@ func TestHandlerClearsAScreenThatComesUpSometimes(t *testing.T) {
 			assert.Equal(t, tc.inputs, run.backend.inputs())
 			assert.Equal(t, tc.handled, strings.Contains(execution.stderr.String(), "handling 入力中クリアの確認"))
 			if !tc.handled {
-				assert.Less(t, time.Since(began), time.Second, "a run without the screen does not wait for it")
+				assert.Less(t, time.Since(began), 30*time.Second, "a run without the screen does not wait for it")
 			}
 		})
 	}
@@ -3429,9 +3514,11 @@ func TestActLimits(t *testing.T) {
 			want:  "the model could not complete the task: The file is missing",
 		},
 		{
+			// Reminded to continue, then asked for its report alone, a model
+			// that still answers without acting ends the act.
 			name:  "model stops without done",
 			with:  `{"do": [{"act": "Open the file"}]}`,
-			turns: []*computeruse.Turn{{Text: "I think it is open."}, {Text: "Still open."}},
+			turns: []*computeruse.Turn{{Text: "I think it is open."}, {Text: "Still open."}, {Text: "It is open."}},
 			want:  "the model stopped without reporting the task done",
 		},
 		{
@@ -3466,8 +3553,123 @@ func TestCapAsksForReport(t *testing.T) {
 	assert.Equal(t, []string{"move 1,1", "left down #1", "move 2,2", "left down #1"}, run.backend.inputs(), "the third click was not run")
 	require.Len(t, session.observations, 3)
 	assert.Equal(t, capNote, session.observations[2].Note)
+	assert.True(t, session.observations[2].ReportOnly)
 	assert.Equal(t, []computeruse.Result{{CallID: "c", Skipped: true}}, session.observations[2].Results)
 	assert.Contains(t, execution.stderr.String(), "Clicked around (2 actions)")
+}
+
+// A model that answers the request for its report after the cap with text
+// is asked for the report alone again, not offered actions it may not take.
+func TestCapAsksForReportAfterText(t *testing.T) {
+	t.Parallel()
+
+	run := newTestRun(t)
+	session := &scriptedSession{turns: []*computeruse.Turn{
+		actions(clickAt(1, 1), clickAt(2, 2)), actions(clickAt(3, 3)), said("I clicked around."), done("Clicked around"),
+	}}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"max_actions": 2, "cache": false, "do": [{"act": "Click around"}]}`, nil)
+	require.NoError(t, execution.err)
+
+	notes, reportOnly := session.requests()
+	assert.Equal(t, []string{"", "", capNote, reportNote}, notes)
+	assert.Equal(t, []bool{false, false, true, true}, reportOnly)
+}
+
+// A batch larger than the actions left leaves the model its actions, so a
+// smaller one may still finish the task.
+func TestCapLeavesActionsThatRemain(t *testing.T) {
+	t.Parallel()
+
+	run := newTestRun(t)
+	session := &scriptedSession{turns: []*computeruse.Turn{
+		actions(clickAt(1, 1), clickAt(2, 2)), actions(clickAt(3, 3), clickAt(4, 4)), actions(clickAt(3, 3)), done("Clicked around"),
+	}}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"max_actions": 3, "cache": false, "do": [{"act": "Click around"}]}`, nil)
+	require.NoError(t, execution.err)
+
+	assert.Equal(t, []string{"move 1,1", "left down #1", "move 2,2", "left down #1", "move 3,3", "left down #1"}, run.backend.inputs())
+	notes, reportOnly := session.requests()
+	assert.Equal(t, []string{"", "", capNote, ""}, notes)
+	assert.Equal(t, []bool{false, false, false, false}, reportOnly)
+}
+
+// A batch that overruns the actions left counts as an answer with actions,
+// so the model's answers without one are counted afresh, and with actions
+// left a text answer is reminded to continue before it is asked to report.
+func TestCapCountsTextAnswersAfresh(t *testing.T) {
+	t.Parallel()
+
+	run := newTestRun(t)
+	session := &scriptedSession{turns: []*computeruse.Turn{
+		said("Looking."), said("Still looking."), actions(clickAt(1, 1), clickAt(2, 2)), said("I would click twice."), said("Thinking."), said("I am stuck."),
+	}}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"max_actions": 1, "cache": false, "do": [{"act": "Click twice"}]}`, nil)
+	require.ErrorContains(t, execution.err, "the model stopped without reporting the task done")
+
+	notes, reportOnly := session.requests()
+	assert.Equal(t, []string{"", continueNote, reportNote, capNote, continueNote, reportNote}, notes)
+	assert.Equal(t, []bool{false, false, true, false, false, true}, reportOnly)
+}
+
+// The request for the report after the cap lists the screen's elements, so
+// the model judges its report from what the fields hold.
+func TestCapRequestListsElements(t *testing.T) {
+	t.Parallel()
+
+	run := newTestRun(t)
+	run.elements = newFakeElements()
+	session := &scriptedSession{turns: []*computeruse.Turn{actions(clickAt(1, 1), clickAt(2, 2)), done("Clicked around")}}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"idle": "0", "max_actions": 1, "cache": false, "do": [{"act": "Click around"}]}`, nil)
+	require.NoError(t, execution.err)
+
+	require.Len(t, session.observations, 2)
+	assert.Equal(t, capNote, session.observations[1].Note)
+	assert.Contains(t, session.observations[1].Elements, computeruse.Element{ID: "e1", Role: desktop.RoleButton, Name: "保存"})
+}
+
+// A model that cannot be forced to call a tool may end a task it did with
+// text instead of done. Answering a second time without acting, it is asked
+// for its report alone, so the act ends as the model reports it.
+func TestAnswersWithoutActingAskForReport(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		report *computeruse.Turn
+		// want is the act's error, empty when it succeeds.
+		want string
+	}{
+		{name: "done", report: done("Filled in the order")},
+		{
+			name:   "not done",
+			report: &computeruse.Turn{Done: &computeruse.Done{Success: false, Summary: "The quantity was not accepted"}},
+			want:   "the model could not complete the task: The quantity was not accepted",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			run := newTestRun(t)
+			session := &scriptedSession{turns: []*computeruse.Turn{
+				actions(clickAt(1, 1)), said("I filled in the order."), said("The order is filled in, not saved."), tc.report,
+			}}
+			run.sessions = []*scriptedSession{session}
+			execution := run.execute(`{"cache": false, "do": [{"act": "Fill in the order"}]}`, nil)
+			if tc.want != "" {
+				require.ErrorContains(t, execution.err, tc.want)
+			} else {
+				require.NoError(t, execution.err)
+				assert.Contains(t, execution.stderr.String(), "Filled in the order (1 actions)")
+			}
+
+			notes, reportOnly := session.requests()
+			assert.Equal(t, []string{"", "", continueNote, reportNote}, notes)
+			assert.Equal(t, []bool{false, false, false, true}, reportOnly, "the first reminder still lets the model act")
+		})
+	}
 }
 
 // A model that repeats its previous round on a screen that did not change is
@@ -3485,6 +3687,183 @@ func TestRepeatedRoundIsNoted(t *testing.T) {
 	assert.Empty(t, session.observations[1].Note, "one round is not a repeat")
 	assert.Equal(t, repeatNote, session.observations[2].Note)
 	assert.Contains(t, execution.stderr.String(), "repeated its previous actions")
+}
+
+// A model that cycles through actions that leave the screen as it was, such
+// as clicking a field and selecting all in turn, is told so, then the act
+// ends instead of running to its timeout. A cycle whose actions change the
+// screen goes on.
+func TestStuckCycleEndsTheAct(t *testing.T) {
+	t.Parallel()
+
+	selectAll := keyPress("ctrl", "a")
+	cycle := []*computeruse.Turn{
+		actions(clickAt(5, 5)), actions(selectAll), actions(clickAt(5, 5)), actions(selectAll), actions(clickAt(5, 5)), done("Cleared the field"),
+	}
+
+	t.Run("still screen", func(t *testing.T) {
+		t.Parallel()
+		run := newTestRun(t)
+		session := &scriptedSession{turns: slices.Clone(cycle)}
+		run.sessions = []*scriptedSession{session}
+		execution := run.execute(`{"cache": false, "do": [{"act": "Clear the quantity"}]}`, nil)
+		require.ErrorContains(t, execution.err, "the model kept acting for 5 rounds without changing the screen")
+
+		notes, _ := session.requests()
+		assert.Equal(t, []string{"", "", "", stuckNote, stuckNote}, notes, "told whenever it repeats itself")
+		assert.Len(t, session.turns, 1, "the act ended before the model's report")
+	})
+
+	t.Run("changing screen", func(t *testing.T) {
+		t.Parallel()
+		run := newTestRun(t)
+		for shift := 1; shift <= 3; shift++ {
+			run.backend.afterClicks = append(run.backend.afterClicks, pattern(400, 200, shift*40))
+		}
+		session := &scriptedSession{turns: slices.Clone(cycle)}
+		run.sessions = []*scriptedSession{session}
+		execution := run.execute(`{"cache": false, "do": [{"act": "Clear the quantity"}]}`, nil)
+		require.NoError(t, execution.err)
+
+		notes, _ := session.requests()
+		assert.Equal(t, []string{"", "", "", "", "", ""}, notes)
+	})
+}
+
+// Actions an earlier failure skipped were never taken, so running them later
+// is no repeat.
+func TestSkippedActionsAreNotTried(t *testing.T) {
+	t.Parallel()
+
+	missing := computeruse.Action{CallID: "m", Kind: computeruse.KindClick, ElementID: "e9"}
+	selectAll, selectAllMac := keyPress("ctrl", "a"), keyPress("cmd", "a")
+	run := newTestRun(t)
+	session := &scriptedSession{turns: []*computeruse.Turn{
+		actions(missing, selectAll, selectAllMac), actions(selectAll), actions(selectAllMac), actions(selectAll), done("Selected the text"),
+	}}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"cache": false, "do": [{"act": "Select the text"}]}`, nil)
+	require.NoError(t, execution.err)
+
+	notes, _ := session.requests()
+	assert.Equal(t, []string{"", "", "", "", stuckNote}, notes, "only the last round repeats an action that ran")
+}
+
+// A screen that changed while the model chose its next actions, which then
+// did not run, starts the count afresh.
+func TestChangedScreenResetsStuck(t *testing.T) {
+	t.Parallel()
+
+	selectAll := keyPress("ctrl", "a")
+	run := newTestRun(t)
+	requests := 0
+	session := &scriptedSession{
+		turns: []*computeruse.Turn{
+			actions(selectAll), actions(selectAll), actions(selectAll), actions(selectAll), actions(selectAll), done("Selected the text"),
+		},
+		onNext: func() {
+			if requests++; requests == 3 {
+				run.backend.show(pattern(400, 200, 120))
+			}
+		},
+	}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"cache": false, "do": [{"act": "Select the text"}]}`, nil)
+	require.NoError(t, execution.err)
+
+	notes, _ := session.requests()
+	require.Len(t, notes, 6)
+	assert.Equal(t, divergedNote, notes[3], "the third round did not run")
+}
+
+// Rounds that only wait are not counted toward a stuck act, so a model may
+// wait for a slow application as long as the act lasts.
+func TestWaitingIsNotStuck(t *testing.T) {
+	t.Parallel()
+
+	wait := computeruse.Action{CallID: "w", Kind: computeruse.KindWait, Duration: time.Millisecond}
+	run := newTestRun(t)
+	session := &scriptedSession{turns: []*computeruse.Turn{
+		actions(wait), actions(wait), actions(wait), actions(wait), actions(wait), done("The report finished loading"),
+	}}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"cache": false, "do": [{"act": "Wait for the report"}]}`, nil)
+	require.NoError(t, execution.err)
+
+	notes, _ := session.requests()
+	assert.NotContains(t, notes, stuckNote)
+}
+
+// Clicks on different elements are different actions, even where none
+// changes the screen much, as when ticking boxes one by one: none is a
+// repeat, and the act is not stuck.
+func TestDistinctElementsAreNotStuck(t *testing.T) {
+	t.Parallel()
+
+	run := newTestRun(t)
+	run.elements = newFakeElements()
+	run.elements.elements = append(run.elements.elements,
+		desktop.Element{Role: desktop.RoleCheckbox, Name: "請求書", Bounds: image.Rect(190, 220, 210, 240)},
+		desktop.Element{Role: desktop.RoleCheckbox, Name: "領収書", Bounds: image.Rect(190, 250, 210, 270)},
+	)
+	click := func(id string) computeruse.Action {
+		return computeruse.Action{CallID: id, Kind: computeruse.KindClick, ElementID: id}
+	}
+	session := &scriptedSession{turns: []*computeruse.Turn{
+		actions(click("e1")), actions(click("e2")), actions(click("e3")), actions(click("e4")), done("Clicked each"),
+	}}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"idle": "0", "cache": false, "do": [{"act": "Click each control"}]}`, nil)
+	require.NoError(t, execution.err)
+
+	notes, _ := session.requests()
+	assert.Equal(t, []string{"", "", "", "", ""}, notes, "no round repeats another")
+}
+
+// Holding a key for different times is different actions.
+func TestDifferentHoldsAreNotStuck(t *testing.T) {
+	t.Parallel()
+
+	hold := func(d time.Duration) computeruse.Action {
+		return computeruse.Action{CallID: "h", Kind: computeruse.KindHoldKey, Keys: []string{"shift"}, Duration: d}
+	}
+	run := newTestRun(t)
+	session := &scriptedSession{turns: []*computeruse.Turn{
+		actions(hold(time.Millisecond)), actions(hold(2 * time.Millisecond)), actions(hold(3 * time.Millisecond)), actions(hold(4 * time.Millisecond)), done("Held shift"),
+	}}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"cache": false, "do": [{"act": "Hold shift"}]}`, nil)
+	require.NoError(t, execution.err)
+
+	notes, _ := session.requests()
+	assert.NotContains(t, notes, stuckNote)
+}
+
+// An empty field is offered with the hint it shows, so the model can tell a
+// grey "0" from a value; a field that holds a value shows none.
+func TestOfferedFieldShowsItsHint(t *testing.T) {
+	t.Parallel()
+
+	run := newTestRun(t)
+	run.elements = newFakeElements()
+	run.elements.elements = append(run.elements.elements,
+		desktop.Element{Role: desktop.RoleTextField, Name: "数量", Placeholder: "0", Bounds: image.Rect(190, 220, 390, 244)},
+		desktop.Element{Role: desktop.RoleTextField, Name: "単価", Value: "300", Placeholder: "0", Bounds: image.Rect(190, 250, 390, 274)},
+	)
+	session := &scriptedSession{turns: []*computeruse.Turn{done("Looked at the form")}}
+	run.sessions = []*scriptedSession{session}
+	execution := run.execute(`{"idle": "0", "do": [{"act": "Look at the form"}]}`, nil)
+	require.NoError(t, execution.err)
+
+	require.NotEmpty(t, session.observations)
+	offered := map[string]computeruse.Element{}
+	for _, e := range session.observations[0].Elements {
+		offered[e.Name] = e
+	}
+	assert.Equal(t, "0", offered["数量"].Hint)
+	assert.Empty(t, offered["数量"].Value)
+	assert.Equal(t, "300", offered["単価"].Value)
+	assert.Empty(t, offered["単価"].Hint, "a field that holds a value shows no hint")
 }
 
 // A scroll that moved nothing is reported at once, so the model scrolls

@@ -61,7 +61,8 @@ const (
 	PatternToggle Pattern = "toggle"
 	// PatternSelect selects a radio button, list item, tab, or cell.
 	PatternSelect Pattern = "select"
-	// PatternExpand opens a combo box or another collapsed element.
+	// PatternExpand opens a combo box or another collapsed element, and
+	// leaves one already open as it is.
 	PatternExpand Pattern = "expand"
 	// PatternSetValue replaces the text of a field.
 	PatternSetValue Pattern = "set_value"
@@ -122,6 +123,10 @@ type Element struct {
 	// Value is what the element holds, such as the text of a field. It is
 	// blank for a password field.
 	Value string
+	// Placeholder is the hint a field shows while it holds nothing, such as
+	// a grey "0". It is read on macOS; Windows UI Automation has no such
+	// property.
+	Placeholder string
 	// Label is the name of the element that labels this one, when the
 	// application links them.
 	Label string

@@ -33,19 +33,36 @@ type pageTarget struct {
 }
 
 // targetOf returns the element of snap at the XPath a selector names, and
-// false when no node of the tree is there.
-func targetOf(snap pageSnapshot, selector string) (pageTarget, bool) {
+// false when no node of the tree is there. With named, the controls the
+// tree leaves unnamed carry the names roots gives them; else every node
+// keeps the name the tree gives it.
+func targetOf(snap pageSnapshot, selector string, named bool) (pageTarget, bool) {
 	xpath := strings.TrimPrefix(selector, "xpath=")
 	for id, path := range snap.XPaths {
 		if path != xpath {
 			continue
 		}
 		roots := parseSnapshotTree(snap.Tree)
+		if named {
+			roots = snap.roots()
+		}
 		if found := pathTo(roots, id); found != nil {
 			return pageTarget{roots: roots, path: found}, true
 		}
 	}
 	return pageTarget{}, false
+}
+
+// identifyingTarget returns the element of snap at the XPath a selector
+// names, as a recording identifies it: by the name roots gives it, or,
+// when nothing names it, among the names the tree gives. A target recorded
+// with no name is checked among those, as stillTargets explains.
+func identifyingTarget(snap pageSnapshot, selector string) (pageTarget, bool) {
+	target, ok := targetOf(snap, selector, true)
+	if ok && target.node().name == "" {
+		return targetOf(snap, selector, false)
+	}
+	return target, ok
 }
 
 // pathTo returns the nodes from one of nodes down to the node with id, or
@@ -78,15 +95,22 @@ func (t pageTarget) distinctDepth() int {
 	return depth
 }
 
-// context is a digest of the text of the element's ancestor depth levels
-// up, with variables' values as their placeholders.
+// context is a digest of contextText.
 func (t pageTarget) context(depth int, variables map[string]string) string {
 	if depth >= len(t.path) {
 		return ""
 	}
-	text := withPlaceholders(textOf(t.path[len(t.path)-1-depth]), variables)
-	sum := sha256.Sum256([]byte(strings.Join(strings.Fields(text), " ")))
+	sum := sha256.Sum256([]byte(strings.Join(strings.Fields(t.contextText(depth, variables)), " ")))
 	return hex.EncodeToString(sum[:])
+}
+
+// contextText is the text of the element's ancestor depth levels up, with
+// variables' values as their placeholders, or "" above the page.
+func (t pageTarget) contextText(depth int, variables map[string]string) string {
+	if depth >= len(t.path) {
+		return ""
+	}
+	return withPlaceholders(textOf(t.path[len(t.path)-1-depth]), variables)
 }
 
 // matches reports whether the element is the one want recorded. Without
@@ -127,6 +151,10 @@ func identified(action recordedAction, target pageTarget, variables map[string]s
 		recorded.Lookalikes = count
 		if depth := target.distinctDepth(); depth > 0 {
 			recorded.Context, recorded.Depth = target.context(depth, variables), depth
+			if names := agentstep.VariableReferences(target.contextText(depth, variables)); len(names) > 0 {
+				slices.Sort(names)
+				recorded.ContextVariables = slices.Compact(names)
+			}
 		}
 	}
 	action.Target = recorded
@@ -138,7 +166,7 @@ func identified(action recordedAction, target pageTarget, variables map[string]s
 // tree is left unidentified.
 func identifyOn(snap pageSnapshot, actions []recordedAction, variables map[string]string) {
 	for i, action := range actions {
-		if target, ok := targetOf(snap, action.Selector); ok {
+		if target, ok := identifyingTarget(snap, action.Selector); ok {
 			actions[i] = identified(action, target, variables)
 		}
 	}
@@ -147,9 +175,13 @@ func identifyOn(snap pageSnapshot, actions []recordedAction, variables map[strin
 // stillTargets reports whether the element at the location action recorded
 // on snap is the one it acted on, and for a select, one offering the option
 // it picks. An action recorded without its element is checked for the
-// option only.
+// option only. An element recorded with no name is compared among the
+// names the tree gives, without those roots adds, so the recording of a
+// control that nothing named when it was recorded still finds the control
+// once its table row names it.
 func stillTargets(action recordedAction, snap pageSnapshot, variables map[string]string) bool {
-	target, found := targetOf(snap, action.Selector)
+	named := action.Target == nil || action.Target.Name != ""
+	target, found := targetOf(snap, action.Selector, named)
 	if action.Target != nil && (!found || !target.matches(*action.Target, variables)) {
 		return false
 	}

@@ -196,7 +196,7 @@ type exportedSession struct {
 	step       ExportedStep
 	ops        []ExportedOperation
 	variables  []ExportedVariable
-	recordings map[string][]recordedAction
+	recordings map[string]recording
 	// commits are the writes the step's operations sent or tried to send.
 	commits  []writegate.CommitPoint
 	warnings []string
@@ -207,7 +207,7 @@ type exportedSession struct {
 func exportStep(state sessionState, req ExportRequest) (*exportedSession, error) {
 	exported := &exportedSession{
 		step:       ExportedStep{ID: req.Step, Action: "browser.run", With: ExportedWith{URL: state.StartURL}},
-		recordings: map[string][]recordedAction{},
+		recordings: map[string]recording{},
 	}
 	if browser := exportBrowser(state.Browser); browser != nil {
 		exported.step.With.Browser = browser
@@ -246,13 +246,21 @@ func exportStep(state sessionState, req ExportRequest) (*exportedSession, error)
 				key, what = uploadReplayKey(index, op.Upload.Into, entry.URLBefore), fmt.Sprintf("upload into %q", op.Upload.Into)
 			}
 		}
+		// An act the session recorded before acts noted what their actions
+		// took for granted fits no value of a variable they never use.
+		var unnoted []string
+		if op.Act != nil && entry.Recordable && entry.Assumed == nil {
+			unnoted = unusedVariables(op.Act.Instruction, entry.Actions)
+		}
 		switch {
 		case key == "", entry.Status != OperationDone:
 			// A skipped operation has nothing to replay.
 		case !entry.Recordable:
 			exported.warnf("operation %d (%s) has no recording, so every run asks the model for it", sessionIndex, what)
+		case len(unnoted) > 0:
+			exported.warnf("operation %d (%s) never uses %%%s%%, and the session did not note its value, so its recording is not exported and the first run may ask the model for it", sessionIndex, what, unnoted[0])
 		default:
-			exported.recordings[key] = entry.Actions
+			exported.recordings[key] = recording{Actions: entry.Actions, Assumed: entry.Assumed}
 			item.Recorded = true
 			if previous != "" && pagePath(previous) != pagePath(entry.URLBefore) {
 				exported.warnf("the page changed from %s to %s before operation %d outside the exported operations, so the first run may ask the model for it; an expect: {url: ...} before it makes the step wait for that page",

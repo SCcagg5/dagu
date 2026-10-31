@@ -746,8 +746,23 @@ func (s *scriptedSession) Next(_ context.Context, obs computeruse.Observation) (
 	return turn, nil
 }
 
+// requests lists the note of every observation and whether it asked for
+// the model's report alone.
+func (s *scriptedSession) requests() (notes []string, reportOnly []bool) {
+	for _, obs := range s.observations {
+		notes = append(notes, obs.Note)
+		reportOnly = append(reportOnly, obs.ReportOnly)
+	}
+	return notes, reportOnly
+}
+
 func done(summary string) *computeruse.Turn {
 	return &computeruse.Turn{Done: &computeruse.Done{Success: true, Summary: summary}, Usage: llmpkg.Usage{PromptTokens: 10, CompletionTokens: 2}}
+}
+
+// said is a turn in which the model only answers in text.
+func said(text string) *computeruse.Turn {
+	return &computeruse.Turn{Text: text}
 }
 
 func actions(list ...computeruse.Action) *computeruse.Turn {
@@ -769,6 +784,12 @@ type visionModel struct {
 	extract  string
 	truths   map[string]bool
 	requests []*llmpkg.ChatRequest
+	// prose answers the first requests in plain text, one entry each,
+	// without the respond call.
+	prose []string
+	// badArgs answers the next requests with a respond call whose
+	// arguments are each entry, which need not be valid JSON.
+	badArgs []string
 	// onChat runs at the start of every request, as the screen may change
 	// while the model answers.
 	onChat func()
@@ -780,7 +801,23 @@ func (m *visionModel) Chat(_ context.Context, req *llmpkg.ChatRequest) (*llmpkg.
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.requests = append(m.requests, req)
+	// Record what this call carried: a retry appends to req.Messages.
+	sent := *req
+	sent.Messages = slices.Clone(req.Messages)
+	m.requests = append(m.requests, &sent)
+	if len(m.prose) > 0 {
+		text := m.prose[0]
+		m.prose = m.prose[1:]
+		return &llmpkg.ChatResponse{Content: text, Usage: llmpkg.Usage{PromptTokens: 5, CompletionTokens: 1}}, nil
+	}
+	if len(m.badArgs) > 0 {
+		args := m.badArgs[0]
+		m.badArgs = m.badArgs[1:]
+		return &llmpkg.ChatResponse{
+			ToolCalls: []llmpkg.ToolCall{{ID: "r", Type: "function", Function: llmpkg.ToolCallFunction{Name: agentstep.RespondToolName, Arguments: args}}},
+			Usage:     llmpkg.Usage{PromptTokens: 5, CompletionTokens: 1},
+		}, nil
+	}
 	arguments := m.extract
 	properties, _ := req.Tools[0].Function.Parameters["properties"].(map[string]any)
 	if _, judge := properties["answer"]; judge {

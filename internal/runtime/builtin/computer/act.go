@@ -23,6 +23,10 @@ import (
 // task properly.
 const continueNote = "Continue the task. " + computeruse.DoneInstruction
 
+// reportNote asks a model that keeps answering without acting to report the
+// task with done, the only tool it is then offered.
+const reportNote = "You have not reported the task. Report it now: call done with success set to true if the task is complete, or false with what is wrong or left."
+
 // personNote tells a model why its actions were not run.
 const personNote = "A person used the computer after your last screenshot, so your last actions were not run. Continue the task from the current screen."
 
@@ -34,6 +38,15 @@ const divergedNote = "The screen changed after the screenshot you chose your act
 // repeatNote tells a model that its last round repeated the one before it
 // and changed nothing on the screen.
 const repeatNote = "You repeated your previous round of actions, and the screen looks the same as it did before them. Repeating them again will not help. If the task is already complete, report done; otherwise take a different approach."
+
+// stuckNote tells a model that its last round only repeated actions it took
+// since the screen last changed, and changed nothing either.
+const stuckNote = "You repeated actions you already took, and the screen still looks as it did before them. Doing them again will not help. If the task is already complete, report done; otherwise take a different approach."
+
+// maxStuckRounds is how many rounds that only repeat actions the screen did
+// not answer an act allows before it ends. The model is told with each, so
+// the rounds after the first are its chance to take a different approach.
+const maxStuckRounds = 3
 
 // stillScrollNote tells a model that its scrolls left the window under the
 // pointer as it was.
@@ -143,7 +156,7 @@ func (r *run) act(ctx context.Context, index int, spec actSpec, timeout time.Dur
 	if !pinned && choice != aiEveryRun {
 		key = replayKey(index, spec.Instruction)
 		entry, ok := r.cache.Lookup(key)
-		switch {
+		switch unfit := r.unfit(spec.Instruction, entry); {
 		case !ok || len(entry.Turns) == 0:
 			if choice == aiNever {
 				return replayMiss{err: errors.New("there is no recording of it on this host"), via: agentstep.ViaScreen}
@@ -155,6 +168,15 @@ func (r *run) act(ctx context.Context, index int, spec actSpec, timeout time.Dur
 			if choice == aiNever {
 				return replayMiss{err: errors.New("its recording on this host is from an older version and was ignored"), via: agentstep.ViaScreen}
 			}
+		case unfit != "":
+			// The recording is kept for runs with the value it fits; what
+			// the model does here replaces it, unless the model does
+			// nothing.
+			reason := fmt.Sprintf("its recording does nothing with %%%s%%, so it fits only the value %%%s%% had when it was recorded", unfit, unfit)
+			if choice == aiNever {
+				return replayMiss{err: errors.New(reason), via: agentstep.ViaScreen}
+			}
+			logAction(r.timeline, index, "not replayed: "+reason)
 		default:
 			findWithin, err := r.cfg.findWithin(spec, r.exec.findWithin)
 			if err != nil {
@@ -209,6 +231,7 @@ func (r *run) act(ctx context.Context, index int, spec actSpec, timeout time.Dur
 		if key == "" {
 			key = replayKey(index, spec.Instruction)
 		}
+		outcome.recording.Assumed = agentstep.Assume(unusedVariables(spec.Instruction, outcome.recording.Turns), r.variables)
 		r.cache.Stage(key, outcome.recording)
 	}
 	r.report(ctx, agentstep.Report{
@@ -279,18 +302,25 @@ type actLoop struct {
 	elements []recordedElement
 	// choices maps the ids offered to the model this turn to the elements
 	// they name, so click_element resolves to a position.
-	choices  map[string]desktop.Element
-	reminded bool
+	choices map[string]desktop.Element
+	// stalled counts the model's answers in a row without an action.
+	stalled int
 	// capped records that the model was told the task has no actions left
 	// and asked for its report.
 	capped bool
 	// lastRound is the previous round of actions, for noticing a repeat.
 	lastRound string
+	// tried holds the actions the model took since the screen last changed,
+	// stillRounds counts the rounds they came in, and stuck the rounds that
+	// only repeated tried actions.
+	tried       map[string]bool
+	stillRounds int
+	stuck       int
 }
 
 // maxModelElements bounds how many actionable elements an observation
 // offers the model, so a large tree does not bloat the prompt, and
-// maxModelValue how much of an element's value it shows.
+// maxModelValue how much of an element's value or hint it shows.
 const (
 	maxModelElements = 80
 	maxModelValue    = 80
@@ -335,11 +365,23 @@ func (l *actLoop) run(ctx context.Context) error {
 				return fmt.Errorf("the task needed more than max_actions (%d) actions", l.budget)
 			}
 			l.capped = true
+			// The model acted, though nothing ran, so its answers without an
+			// action are counted afresh.
+			l.stalled = 0
 			logAction(l.r.timeline, l.index, "the task has used the actions it may take; asking the model to report")
-			if l.seen, err = l.look(ctx); err != nil {
+			offered, err := l.lookAndOffer(ctx)
+			if err != nil {
 				return err
 			}
-			obs = computeruse.Observation{Screen: l.seen.forModel(), Results: skippedResults(turn.Actions), Note: capNote}
+			// Only a budget with nothing left takes the actions away; one
+			// that a batch overran may still fit a smaller one.
+			obs = computeruse.Observation{
+				Screen:     l.seen.forModel(),
+				Results:    skippedResults(turn.Actions),
+				Note:       capNote,
+				ReportOnly: l.exhausted(),
+				Elements:   offered,
+			}
 			continue
 		}
 		// Before running the turn's actions, make sure the world still matches
@@ -377,7 +419,7 @@ func (l *actLoop) run(ctx context.Context) error {
 		if verify && len(turn.Actions) == 0 {
 			return l.finish(ctx, turn)
 		}
-		note, err := l.reminder(turn)
+		note, reportOnly, err := l.reminder(turn)
 		if err != nil {
 			return err
 		}
@@ -411,11 +453,20 @@ func (l *actLoop) run(ctx context.Context) error {
 			}
 			l.lastRound = round
 		}
+		stuck, err := l.progress(turn.Actions, results, before)
+		if err != nil {
+			return err
+		}
+		if stuck && note == "" {
+			logAction(l.r.timeline, l.index, "the model repeated earlier actions and the screen did not change")
+			note = stuckNote
+		}
 		obs = computeruse.Observation{
 			Screen:       l.seen.forModel(),
 			Results:      results,
 			Acknowledged: turn.Confirmation != "",
 			Note:         note,
+			ReportOnly:   reportOnly,
 			Elements:     offered,
 		}
 	}
@@ -508,7 +559,7 @@ func (l *actLoop) offerElements() []computeruse.Element {
 			continue
 		}
 		id := fmt.Sprintf("e%d", len(list)+1)
-		list = append(list, computeruse.Element{ID: id, Role: e.Role, Name: name, Value: l.r.modelValue(e, name)})
+		list = append(list, computeruse.Element{ID: id, Role: e.Role, Name: name, Value: l.r.modelValue(e, name), Hint: l.r.modelHint(e)})
 		choices[id] = e
 		if len(list) >= maxModelElements {
 			break
@@ -536,10 +587,26 @@ func (r *run) modelValue(e desktop.Element, name string) string {
 	if value == "" || value == name {
 		return ""
 	}
-	if runes := []rune(value); len(runes) > maxModelValue {
-		value = string(runes[:maxModelValue]) + "…"
+	return shortened(value)
+}
+
+// modelHint is the hint an empty field shows in place of a value, with
+// declared secrets masked and cut short when long, so the model can tell it
+// from a value. It is nothing for a field that holds a value.
+func (r *run) modelHint(e desktop.Element) string {
+	if strings.TrimSpace(e.Value) != "" {
+		return ""
 	}
-	return value
+	return shortened(strings.TrimSpace(r.masker.MaskString(e.Placeholder)))
+}
+
+// shortened cuts text the model is shown about an element to maxModelValue
+// characters.
+func shortened(text string) string {
+	if runes := []rune(text); len(runes) > maxModelValue {
+		return string(runes[:maxModelValue]) + "…"
+	}
+	return text
 }
 
 // actionableRole reports whether the model may usefully click an element of
@@ -878,6 +945,11 @@ func (l *actLoop) admit(turn *computeruse.Turn) (over bool, err error) {
 	return l.spent+l.outcome.actions+len(turn.Actions) > l.budget, nil
 }
 
+// exhausted reports whether the task has no action left.
+func (l *actLoop) exhausted() bool {
+	return l.spent+l.outcome.actions >= l.budget
+}
+
 // onlyScrolls reports a turn that does nothing but scroll.
 func onlyScrolls(actions []computeruse.Action) bool {
 	for _, action := range actions {
@@ -899,13 +971,68 @@ func allStill(views []view, before, after *image.RGBA) bool {
 	return true
 }
 
+// progress follows whether the model's rounds change the screen, and ends
+// an act going nowhere rather than letting it run to its timeout. A round
+// that leaves the screen as it was and only repeats actions taken since it
+// last changed is stuck, as in a cycle of focusing a field, selecting all,
+// and clicking it again; maxStuckRounds of them end the act. Actions that
+// only look or wait, or did not run, are not counted, but a change seen
+// after any turn is.
+func (l *actLoop) progress(actions []computeruse.Action, results []computeruse.Result, before *image.RGBA) (stuck bool, err error) {
+	if !displayView(before).still(before, l.seen.full) {
+		l.tried, l.stillRounds, l.stuck = nil, 0, 0
+		return false, nil
+	}
+	if l.tried == nil {
+		l.tried = map[string]bool{}
+	}
+	stuck, acted := true, false
+	for i, action := range actions {
+		if onlyObserves(action) || results[i].Skipped {
+			continue
+		}
+		acted = true
+		key := actionKey(action)
+		stuck = stuck && l.tried[key]
+		l.tried[key] = true
+	}
+	if !acted {
+		return false, nil
+	}
+	l.stillRounds++
+	if !stuck {
+		return false, nil
+	}
+	if l.stuck++; l.stuck >= maxStuckRounds {
+		return true, fmt.Errorf("the model kept acting for %d rounds without changing the screen", l.stillRounds)
+	}
+	return true, nil
+}
+
+// onlyObserves reports an action that looks at the screen or waits, which
+// is not expected to change it.
+func onlyObserves(action computeruse.Action) bool {
+	switch action.Kind {
+	case computeruse.KindWait, computeruse.KindScreenshot, computeruse.KindZoom, computeruse.KindCursorPosition:
+		return true
+	}
+	return false
+}
+
 // describeRound summarizes a round of actions so two rounds can be compared.
 func describeRound(actions []computeruse.Action) string {
 	parts := make([]string, 0, len(actions))
 	for _, action := range actions {
-		parts = append(parts, describeAction(action))
+		parts = append(parts, actionKey(action))
 	}
 	return strings.Join(parts, "\n")
+}
+
+// actionKey tells actions apart when looking for a repeat: what an action
+// does and the element it names, whose id stays the same while the screen
+// does, so clicks on two elements differ.
+func actionKey(action computeruse.Action) string {
+	return describeAction(action) + " " + action.ElementID
 }
 
 // apply performs a turn's actions and records the ones that completed; the
@@ -1028,18 +1155,31 @@ func (l *actLoop) finish(ctx context.Context, turn *computeruse.Turn) error {
 	return nil
 }
 
-// reminder returns the note sent with the next screen. A model that twice
-// answers without acting or reporting the task done is stuck.
-func (l *actLoop) reminder(turn *computeruse.Turn) (string, error) {
+// reminder returns the note sent with the next screen, and whether it asks
+// for the model's report alone. A model that answers without acting or
+// reporting the task done is reminded to continue. A model that cannot be
+// forced to call a tool may end with text again, so it is then asked for its
+// report with nothing else to call; one that still does not report is stuck.
+// A model with no action left is not reminded to continue but asked for
+// its report alone at once.
+func (l *actLoop) reminder(turn *computeruse.Turn) (note string, reportOnly bool, err error) {
 	if len(turn.Actions) > 0 {
-		l.reminded = false
-		return "", nil
+		l.stalled = 0
+		return "", false, nil
 	}
-	if l.reminded {
-		return "", fmt.Errorf("the model stopped without reporting the task done: %s", agentstep.QuoteShort(turn.Text))
+	l.stalled++
+	if l.exhausted() {
+		l.stalled = max(l.stalled, 2)
 	}
-	l.reminded = true
-	return continueNote, nil
+	switch l.stalled {
+	case 1:
+		return continueNote, false, nil
+	case 2:
+		logAction(l.r.timeline, l.index, "the model answered without acting or reporting; asking it to report")
+		return reportNote, true, nil
+	default:
+		return "", false, fmt.Errorf("the model stopped without reporting the task done: %s", agentstep.QuoteShort(turn.Text))
+	}
 }
 
 func skippedResults(actions []computeruse.Action) []computeruse.Result {

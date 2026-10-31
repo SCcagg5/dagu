@@ -129,6 +129,57 @@ func TestGenericSessionAnswersEveryCall(t *testing.T) {
 	assert.Equal(t, computeruse.SkippedText, messages[5].Content)
 }
 
+// A model asked for its report alone is offered no tool but done.
+func TestGenericSessionOffersOnlyDoneForReport(t *testing.T) {
+	t.Parallel()
+
+	provider := &scriptedProvider{responses: []*llm.ChatResponse{
+		{ToolCalls: []llm.ToolCall{toolCall("c1", "click", `{"x":1,"y":2}`)}},
+		{ToolCalls: []llm.ToolCall{toolCall("d1", "done", `{"success":true,"summary":"Settings open"}`)}},
+	}}
+	session := newGeneric(t, provider)
+	_, err := session.Next(context.Background(), computeruse.Observation{Screen: screen("a")})
+	require.NoError(t, err)
+	turn, err := session.Next(context.Background(), computeruse.Observation{
+		Screen:     screen("b"),
+		Results:    []computeruse.Result{{CallID: "c1"}},
+		Note:       "Report the task now.",
+		ReportOnly: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, &computeruse.Done{Success: true, Summary: "Settings open"}, turn.Done)
+
+	toolNames := func(req *llm.ChatRequest) []string {
+		var names []string
+		for _, tool := range req.Tools {
+			names = append(names, tool.Function.Name)
+		}
+		return names
+	}
+	assert.Contains(t, toolNames(provider.requests[0]), "click", "an ordinary observation offers the actions")
+	assert.Equal(t, []string{computeruse.DoneToolName}, toolNames(provider.requests[1]))
+	assert.Equal(t, "required", provider.requests[1].ToolChoice)
+}
+
+// The model is told that Return in a form or dialog may press its default
+// button, such as Save, so it sets a field or an option without Return, and
+// no example it is given presses Return.
+func TestGenericSessionWarnsThatReturnMayPressTheDefaultButton(t *testing.T) {
+	t.Parallel()
+
+	provider := &scriptedProvider{responses: []*llm.ChatResponse{
+		{ToolCalls: []llm.ToolCall{toolCall("d1", "done", `{"success":true,"summary":"Settings open"}`)}},
+	}}
+	session := newGeneric(t, provider)
+	_, err := session.Next(context.Background(), computeruse.Observation{Screen: screen("a")})
+	require.NoError(t, err)
+
+	system := provider.requests[0].Messages[0].Content
+	assert.Contains(t, system, "In a form or dialog, Return may press the default button, such as Save or OK, so do not press it to confirm a field or an option.")
+	assert.Contains(t, system, "to pick an option of a combo box or pop-up, call choose_option")
+	assert.NotContains(t, system, "press Return", "no example presses Return")
+}
+
 // Only the latest screenshots are sent; older ones are replaced with a note.
 func TestGenericSessionKeepsLatestScreenshots(t *testing.T) {
 	t.Parallel()
@@ -164,7 +215,11 @@ func TestGenericSessionListsOnlyTheLatestElements(t *testing.T) {
 	}
 	session := newGeneric(t, provider)
 	first := []computeruse.Element{{ID: "e1", Role: "button", Name: "新規受注…"}}
-	latest := []computeruse.Element{{ID: "e1", Role: "combo_box", Name: "顧客", Value: "%customer%"}, {ID: "e2", Role: "text_field", Name: "数量"}}
+	latest := []computeruse.Element{
+		{ID: "e1", Role: "combo_box", Name: "顧客", Value: "%customer%"},
+		{ID: "e2", Role: "text_field", Name: "数量"},
+		{ID: "e3", Role: "text_field", Name: "単価", Hint: "0"},
+	}
 	for _, elements := range [][]computeruse.Element{first, latest} {
 		_, err := session.Next(context.Background(), computeruse.Observation{Screen: screen("s"), Elements: elements})
 		require.NoError(t, err)
@@ -182,6 +237,7 @@ func TestGenericSessionListsOnlyTheLatestElements(t *testing.T) {
 	assert.Contains(t, texts[1], `- e1: combo_box "顧客" value "%customer%"`)
 	assert.Contains(t, texts[1], `- e2: text_field "数量"`)
 	assert.NotContains(t, texts[1], `"数量" value`, "an element with no value shows none")
+	assert.Contains(t, texts[1], `- e3: text_field "単価" empty, showing the hint "0"`, "an empty field shows its hint")
 }
 
 // A task that quotes the element list's header keeps all of its text when

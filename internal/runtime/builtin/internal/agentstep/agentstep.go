@@ -133,14 +133,16 @@ func Correction(reason error) string {
 }
 
 // RejectedAnswer returns what the model answered: the respond call's
-// arguments, otherwise its text.
+// arguments, otherwise its text, whichever is first not blank. A blank
+// answer becomes a placeholder, since providers reject an empty assistant
+// message.
 func RejectedAnswer(resp *llmpkg.ChatResponse) string {
 	for _, call := range resp.ToolCalls {
-		if call.Function.Name == RespondToolName {
+		if call.Function.Name == RespondToolName && strings.TrimSpace(call.Function.Arguments) != "" {
 			return call.Function.Arguments
 		}
 	}
-	if resp.Content != "" {
+	if strings.TrimSpace(resp.Content) != "" {
 		return resp.Content
 	}
 	return emptyAnswer

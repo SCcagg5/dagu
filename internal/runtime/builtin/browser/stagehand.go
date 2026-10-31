@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -49,10 +50,18 @@ const (
 	callTimeoutSlack = 5 * time.Second
 	// exitPollInterval spaces the checks for a closing browser's exit.
 	exitPollInterval = 100 * time.Millisecond
+	// browserExitTimeout is how long a browser asked to close gets to finish
+	// writing its profile before it is ended. A graceful Chrome shutdown can
+	// take tens of seconds on a loaded machine.
+	browserExitTimeout = 20 * time.Second
 	// unstartedCallTimeout bounds each request that ends a browser whose
 	// runtime failed to start, so a slow request cannot use up the next one's
 	// time.
 	unstartedCallTimeout = 5 * time.Second
+	// exitRequestTimeout bounds the request that asks a launched browser to
+	// exit, so one that stops answering DevTools is ended by the runtime
+	// instead of holding up the close.
+	exitRequestTimeout = 2 * time.Second
 	// settleQuiet is how long a page goes without a request in flight or a
 	// change to its document before what an action started counts as done;
 	// settleTimeout bounds the wait, and settlePoll spaces its checks.
@@ -106,8 +115,39 @@ const watchExpression = `(() => {
 // was never watched, as one an action navigated to is not.
 var quietExpression = fmt.Sprintf(`(() => { const s = window.__daguSettle; return s ? s.pending <= 0 && Date.now() - s.changed >= %d : null; })()`, settleQuiet.Milliseconds())
 
-// pageTextExpression reads the text a person sees on the page.
-const pageTextExpression = `document.body ? document.body.innerText : ""`
+// shownDocumentsFunction declares shownDocuments, which returns a document
+// and the documents of the frames it shows, nested ones too, each with the
+// XPath of the frame holding it as the browser runtime writes it across
+// frames, so that path followed by an XPath in the document names an
+// element. A frame from another origin cannot be read and is left out.
+const shownDocumentsFunction = `function xpathOf(element) {
+	const steps = [];
+	for (let node = element; node && node.nodeType === Node.ELEMENT_NODE; node = node.parentNode) {
+		let index = 1;
+		for (let sibling = node.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
+			if (sibling.localName === node.localName) index++;
+		}
+		steps.unshift(node.localName + "[" + index + "]");
+	}
+	return "/" + steps.join("/");
+}
+function shownDocuments(doc, path = "") {
+	const documents = [{doc, path}];
+	for (const frame of doc.querySelectorAll("frame, iframe")) {
+		const box = frame.getBoundingClientRect();
+		const shown = box.width > 0 && box.height > 0 && frame.checkVisibility({visibilityProperty: true});
+		if (frame.contentDocument && shown) documents.push(...shownDocuments(frame.contentDocument, path + xpathOf(frame)));
+	}
+	return documents;
+}`
+
+// pageTextExpression reads the text a person sees on the page, in the
+// frames it shows too. A body that is not rendered shows nothing, though
+// its innerText is the text it holds.
+const pageTextExpression = `(() => {
+	` + shownDocumentsFunction + `
+	return shownDocuments(document).map(({doc}) => doc.body && doc.body.checkVisibility() ? doc.body.innerText : "").filter(Boolean).join("\n");
+})()`
 
 // documentExpression reads the time the page's document began loading, which
 // differs for every document the page loads.
@@ -127,12 +167,18 @@ var sessionLostMarkers = []string{
 const contextLostMarker = "Cannot find context with specified id"
 
 // selectorVisibleExpression reports whether the selector, a JSON string
-// literal substituted for %s, matches any rendered, visible element.
-const selectorVisibleExpression = `Array.from(document.querySelectorAll(%s)).some((element) => {
-	const box = element.getBoundingClientRect();
-	const style = getComputedStyle(element);
-	return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none";
-})`
+// literal substituted for %s, matches any rendered, visible element of the
+// page or of the frames it shows, inside their open shadow roots too.
+const selectorVisibleExpression = `(() => {
+	` + shownDocumentsFunction + `
+	const matching = (root) => [...root.querySelectorAll(%s)].concat(
+		...[...root.querySelectorAll("*")].filter((element) => element.shadowRoot).map((element) => matching(element.shadowRoot)));
+	return shownDocuments(document).some(({doc}) => matching(doc).some((element) => {
+		const box = element.getBoundingClientRect();
+		const style = doc.defaultView.getComputedStyle(element);
+		return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+	}));
+})()`
 
 // pageOutcomeExpression describes what the browser shows. On its error page
 // that is the network error code and the host of the page that did not
@@ -509,6 +555,11 @@ func startEngine(ctx context.Context, browser *stagehand.Browser, cdpURL string,
 	if eng.responses, err = browserhost.WatchPageResponses(ctx, cdpURL); err != nil {
 		return nil, errors.Join(fmt.Errorf("watch page responses: %w", err), eng.release(context.WithoutCancel(ctx)))
 	}
+	// A frame a form posts into keeps its document until the answer loads,
+	// which only the browser tells.
+	if eng.loads, err = browserhost.WatchFrameLoads(ctx, cdpURL); err != nil {
+		return nil, errors.Join(fmt.Errorf("watch frame loads: %w", err), eng.release(context.WithoutCancel(ctx)))
+	}
 	if len(opts.AllowedDomains) > 0 {
 		// Blocked requests leave a broken page and a later, unrelated
 		// failure, so they are reported by host.
@@ -539,6 +590,12 @@ type stagehandEngine struct {
 	downloads *browserhost.DownloadWatcher
 	dialogs   *browserhost.DialogWatcher
 	responses *browserhost.PageResponseWatcher
+	loads     *browserhost.FrameLoadWatcher
+	// acted is when the last action or goto began; zero before the first.
+	acted time.Time
+	// holds holds the open windows heldWindows found held, by target ID,
+	// those it let go too.
+	holds map[string]windowHold
 	// blocked counts requests allowed_domains blocks; nil without
 	// allowed_domains.
 	blocked *browserhost.BlockedRequestWatcher
@@ -570,6 +627,12 @@ func (e *stagehandEngine) handleDownloads(ctx context.Context, dir string) error
 	return nil
 }
 
+// errNoPage reports a browser that shows no page, as for a moment after
+// the window in front closes.
+var errNoPage = errors.New("the browser shows no page")
+
+// page returns the page operations work on: the page in front, or, when
+// that is a held window, as heldWindows tells, the page that opened it.
 func (e *stagehandEngine) page(ctx context.Context) (*stagehand.Page, error) {
 	browserContext, err := e.browser.Context()
 	if err != nil {
@@ -579,6 +642,18 @@ func (e *stagehandEngine) page(ctx context.Context) (*stagehand.Page, error) {
 	if err != nil {
 		return nil, err
 	}
+	if page == nil {
+		return nil, errNoPage
+	}
+	if opener, held := e.heldWindows()[page.PageID()]; held {
+		pages, err := browserContext.Pages(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if i := slices.IndexFunc(pages, func(p *stagehand.Page) bool { return p.PageID() == opener }); i >= 0 {
+			page = pages[i]
+		}
+	}
 	// The caller's next call writes to the browser runtime, which closes its
 	// connection to the browser when that call's context has ended.
 	if err := ctx.Err(); err != nil {
@@ -587,39 +662,114 @@ func (e *stagehandEngine) page(ctx context.Context) (*stagehand.Page, error) {
 	return page, nil
 }
 
-func (e *stagehandEngine) Goto(ctx context.Context, url string, timeout time.Duration) error {
-	_, err := boundCall(ctx, timeout+callTimeoutSlack, func(ctx context.Context) (struct{}, error) {
-		page, err := e.page(ctx)
-		if err != nil {
-			return struct{}{}, err
+// windowHold is a window held behind the page that opened it.
+type windowHold struct {
+	opener string
+	// began is when the opener began the load the window was first held
+	// for.
+	began time.Time
+	// released is set once the window is let go, for good.
+	released bool
+}
+
+// heldWindows returns the windows operations look past, each with the
+// target ID of the page that opened it. A window is held when the last
+// action both opened it and made its opener load a document, as a search
+// does that opens a "searching" window and posts into a frame whose answer
+// closes the window. It stays held, through later actions too, while the
+// opener loads and for settleQuiet after, which a window the answer closes
+// takes to go; a window still open then is a page in its own right, such
+// as a form to fill in, and is never held again, even by a load its
+// opener begins after that quiet period.
+func (e *stagehandEngine) heldWindows() map[string]string {
+	holds := map[string]windowHold{}
+	openers := map[string]string{}
+	for _, window := range e.loads.Windows() {
+		load := e.loads.PageLoad(window.Opener)
+		hold, known := e.holds[window.TargetID]
+		if !known {
+			if e.acted.IsZero() || window.Opened.Before(e.acted) || load.Began.Before(e.acted) {
+				continue
+			}
+			hold = windowHold{opener: window.Opener, began: load.Began}
 		}
-		_, err = page.Goto(ctx, url, &stagehand.PageNavigationOptions{Timeout: new(int(timeout.Milliseconds()))})
-		return struct{}{}, err
-	})
-	if err == nil {
-		e.settle(ctx)
+		if !hold.released {
+			// A load begun a quiet period after the held one ended is
+			// another.
+			anotherLoad := load.Ended.After(hold.began) && load.Began.Sub(load.Ended) >= settleQuiet
+			hold.released = anotherLoad || !load.Loading && time.Since(load.Ended) >= settleQuiet
+		}
+		holds[window.TargetID] = hold
+		if !hold.released {
+			openers[window.TargetID] = hold.opener
+		}
 	}
-	return err
+	e.holds = holds
+	return openers
+}
+
+// Goto loads url over the page's own DevTools connection: the browser
+// runtime's goto waits for a document even when the load brings none, and
+// so fails a download only once its timeout ends.
+func (e *stagehandEngine) Goto(ctx context.Context, url string, timeout time.Duration) error {
+	limit := time.Now().Add(timeout)
+	page, err := boundCall(ctx, e.pageCallTimeout, e.page)
+	if err != nil {
+		return err
+	}
+	e.acted = time.Now()
+	loadCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	downloads := 0
+	if e.downloads != nil {
+		downloads = e.downloads.Begun()
+	}
+	load, err := browserhost.Navigate(loadCtx, e.handle.CDPURL, page.PageID(), url)
+	// A download is reported with the goto that began it, so the goto ends
+	// once the download is seen to begin.
+	if err == nil && load.Download && e.downloads != nil {
+		err = e.downloads.AwaitBegun(loadCtx, downloads)
+	}
+	if err != nil {
+		if ctx.Err() == nil && errors.Is(loadCtx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("the page did not load within %s", timeout)
+		}
+		return err
+	}
+	if load.Document {
+		e.settle(ctx, limit)
+		return nil
+	}
+	// A load that brought no new document has nothing to settle. A call
+	// to the page returns only after the browser runtime has taken in what
+	// the browser reported before it, such as a move to a fragment.
+	_, _ = e.evaluate(ctx, "location.href")
+	return nil
 }
 
 func (e *stagehandEngine) Act(ctx context.Context, instruction string, variables map[string]string, secret func(string) bool, timeout time.Duration) (actOutcome, error) {
+	limit := time.Now().Add(timeout)
 	// The page before the act identifies the element it acts on, which the
 	// act may rename or remove. Without it, the actions go unidentified.
 	before, beforeErr := e.Snapshot(ctx)
 	e.watch(ctx)
 	result, err := boundCall(ctx, timeout+callTimeoutSlack, func(ctx context.Context) (stagehand.ActResult, error) {
-		return e.client.Act(ctx, stagehand.ActInstruction(instruction), actOptions(variables, timeout))
+		page, err := e.page(ctx)
+		if err != nil {
+			return stagehand.ActResult{}, err
+		}
+		return e.client.Act(ctx, stagehand.ActInstruction(instruction), actOptions(page, variables, timeout))
 	})
 	if lost := sessionLost(result, err); lost != nil {
 		// The act may have loaded a new document before the page was lost.
-		e.settle(ctx)
+		e.settle(ctx, limit)
 		return actOutcome{}, lost
 	}
 	if err != nil {
 		return actOutcome{}, err
 	}
 	if result.Data.Success {
-		e.settle(ctx)
+		e.settle(ctx, limit)
 	}
 	outcome := actOutcome{Message: result.Data.Message, Success: result.Data.Success}
 	for _, action := range result.Data.Actions {
@@ -657,7 +807,7 @@ func uncheckedOption(snap pageSnapshot, snapErr error, actions []recordedAction,
 		if snapErr != nil {
 			return "the page could not be read to check the option picked: " + snapErr.Error()
 		}
-		if target, ok := targetOf(snap, action.Selector); ok && !offersOption(target.node(), action, variables) {
+		if target, ok := targetOf(snap, action.Selector, true); ok && !offersOption(target.node(), action, variables) {
 			node := target.node()
 			return fmt.Sprintf("the %s offers no option %s; %s", withName(node.role, node.name),
 				pickedOption(action.Arguments[0], variables, secret), offeredOptions(node))
@@ -667,6 +817,7 @@ func uncheckedOption(snap pageSnapshot, snapErr error, actions []recordedAction,
 }
 
 func (e *stagehandEngine) Replay(ctx context.Context, recorded recordedAction, variables map[string]string, timeout time.Duration) (bool, error) {
+	limit := time.Now().Add(timeout)
 	// The runtime types into or fills a hidden element without failing, so
 	// a recorded element that is now hidden, such as a field in a closed
 	// dialog, counts as a miss.
@@ -691,11 +842,15 @@ func (e *stagehandEngine) Replay(ctx context.Context, recorded recordedAction, v
 	}
 	e.watch(ctx)
 	result, err := boundCall(ctx, timeout+callTimeoutSlack, func(ctx context.Context) (stagehand.ActResult, error) {
-		return e.client.Act(ctx, stagehand.ObservedAction(action), actOptions(variables, timeout))
+		page, err := e.page(ctx)
+		if err != nil {
+			return stagehand.ActResult{}, err
+		}
+		return e.client.Act(ctx, stagehand.ObservedAction(action), actOptions(page, variables, timeout))
 	})
 	if lost := sessionLost(result, err); lost != nil {
 		// The action may have loaded a new document before the page was lost.
-		e.settle(ctx)
+		e.settle(ctx, limit)
 		return false, lost
 	}
 	if err != nil {
@@ -705,14 +860,15 @@ func (e *stagehandEngine) Replay(ctx context.Context, recorded recordedAction, v
 		return false, nil
 	}
 	if result.Data.Success {
-		e.settle(ctx)
+		e.settle(ctx, limit)
 	}
 	return result.Data.Success, nil
 }
 
 // watch readies the document the page shows to tell when what an action
-// starts on it has finished.
+// starts on it has finished, and notes when the action began.
 func (e *stagehandEngine) watch(ctx context.Context) {
+	e.acted = time.Now()
 	_, _ = boundCall(ctx, e.pageCallTimeout, func(ctx context.Context) (json.RawMessage, error) {
 		page, err := e.page(ctx)
 		if err != nil {
@@ -724,9 +880,10 @@ func (e *stagehandEngine) watch(ctx context.Context) {
 
 // settle waits for what an action started to finish before the next
 // operation reads the page: for the document it shows to settle, and for a
-// bot check the site answered with to pass.
-func (e *stagehandEngine) settle(ctx context.Context) {
-	e.settleDocument(ctx, time.Now().Add(e.settleWait))
+// bot check the site answered with to pass. limit is when the action's own
+// time ends, up to which a held window is waited out; zero waits out none.
+func (e *stagehandEngine) settle(ctx context.Context, limit time.Time) {
+	e.settleDocument(ctx, time.Now().Add(e.settleWait), limit)
 	e.awaitBotCheck(ctx)
 }
 
@@ -754,7 +911,7 @@ func (e *stagehandEngine) awaitBotCheck(ctx context.Context) {
 		if settled.After(deadline) {
 			settled = deadline
 		}
-		e.settleDocument(ctx, settled)
+		e.settleDocument(ctx, settled, time.Time{})
 		if !time.Now().Before(deadline) || !e.showsBotCheck(ctx) {
 			return
 		}
@@ -772,36 +929,57 @@ func (e *stagehandEngine) showsBotCheck(ctx context.Context) bool {
 }
 
 // settleDocument waits, until deadline, for the document the page shows to
-// settle: a new document until its network is idle, and the document an
-// action began on until its requests end and it stops changing. A page that
-// does not settle in time is left as it is.
-func (e *stagehandEngine) settleDocument(ctx context.Context, deadline time.Time) {
-	if !time.Now().Before(deadline) {
-		return
+// settle: every frame of the browser's pages, a page's own included, until
+// the document it loads has loaded, a new document until its network is
+// idle, and the document an action began on until its requests end and it
+// stops changing. The page is watched for settleQuiet at least, since a
+// navigation an action starts may begin a moment after the action returns.
+// While a window is held, as heldWindows tells, the wait goes on until none
+// is, up to limit when that is later than deadline. A page that does not
+// settle in time is left as it is.
+func (e *stagehandEngine) settleDocument(ctx context.Context, deadline, limit time.Time) {
+	// A held window holds the wait until the later of the two.
+	heldEnd := deadline
+	if limit.After(heldEnd) {
+		heldEnd = limit
 	}
-	ctx, cancel := waitContext(ctx, deadline)
+	ctx, cancel := waitContext(ctx, heldEnd)
 	defer cancel()
-	page, err := e.page(ctx)
-	if err != nil {
-		return
-	}
-	for time.Now().Before(deadline) {
-		quiet, err := page.Evaluate(ctx, quietExpression)
-		if err == nil && string(quiet) == "true" {
+	watched := time.Now().Add(settleQuiet)
+	for {
+		held := len(e.heldWindows()) > 0
+		end := deadline
+		if held {
+			end = heldEnd
+		}
+		if ctx.Err() != nil || !time.Now().Before(end) {
 			return
 		}
-		// A page that can't be read may be between documents, and one that
-		// reports no quiet state shows a document watch never readied; both
-		// wait as a newly loaded page does.
-		if err != nil || string(quiet) != "false" {
-			if wait := time.Until(deadline); wait > 0 {
-				_ = page.WaitForLoadState(ctx, stagehand.LoadStateNetworkIdle, new(int(wait.Milliseconds())))
+		if !held && !e.loads.Loading() {
+			// The page in front changes as the page opens or closes a window.
+			page, err := e.page(ctx)
+			if err != nil {
+				return
 			}
-			return
+			quiet, err := page.Evaluate(ctx, quietExpression)
+			switch {
+			case err == nil && string(quiet) == "true":
+				if !time.Now().Before(watched) {
+					return
+				}
+			case err == nil && string(quiet) == "false":
+				// The document still has requests in flight or changes.
+			default:
+				// A page that can't be read may be between documents, and one
+				// that reports no quiet state shows a document watch never
+				// readied; both wait as a newly loaded page does.
+				if wait := time.Until(deadline); wait > 0 {
+					_ = page.WaitForLoadState(ctx, stagehand.LoadStateNetworkIdle, new(int(wait.Milliseconds())))
+				}
+				return
+			}
 		}
-		if !pause(ctx, settlePoll, deadline) {
-			return
-		}
+		pause(ctx, settlePoll, end)
 	}
 }
 
@@ -901,7 +1079,11 @@ func (e *stagehandEngine) Extract(ctx context.Context, instruction string, schem
 
 func (e *stagehandEngine) Observe(ctx context.Context, instruction string, timeout time.Duration) ([]recordedAction, error) {
 	result, err := boundCall(ctx, timeout+callTimeoutSlack, func(ctx context.Context) (stagehand.ObserveResult, error) {
-		return e.client.Observe(ctx, &instruction, &stagehand.StagehandClientObserveOptions{Timeout: new(float64(timeout.Milliseconds()))})
+		page, err := e.page(ctx)
+		if err != nil {
+			return stagehand.ObserveResult{}, err
+		}
+		return e.client.Observe(ctx, &instruction, &stagehand.StagehandClientObserveOptions{Page: page, Timeout: new(float64(timeout.Milliseconds()))})
 	})
 	if err != nil {
 		return nil, err
@@ -918,6 +1100,11 @@ func (e *stagehandEngine) Observe(ctx context.Context, instruction string, timeo
 }
 
 func (e *stagehandEngine) WaitForSelector(ctx context.Context, selector string, timeout time.Duration) error {
+	// The runtime finds a selector that hops into frames, or an XPath, as
+	// written, but looks for a CSS selector in the page's own document only.
+	if !strings.Contains(selector, ">>") && !strings.HasPrefix(selector, "xpath=") && !strings.HasPrefix(selector, "/") {
+		return e.waitForVisible(ctx, selector, timeout)
+	}
 	matched, err := boundCall(ctx, timeout+callTimeoutSlack, func(ctx context.Context) (bool, error) {
 		page, err := e.page(ctx)
 		if err != nil {
@@ -938,6 +1125,33 @@ func (e *stagehandEngine) WaitForSelector(ctx context.Context, selector string, 
 	return nil
 }
 
+// waitForVisible waits up to timeout for the CSS selector to match a
+// visible element, as SelectorVisible tells, reading the page as
+// waitContext allows.
+func (e *stagehandEngine) waitForVisible(ctx context.Context, selector string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	reads, cancel := waitContext(ctx, deadline)
+	defer cancel()
+	for {
+		visible, err := e.SelectorVisible(reads, selector)
+		switch {
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case err == nil && visible:
+			return nil
+		// A read the deadline cut short found nothing in time.
+		case err != nil && time.Now().Before(deadline):
+			return err
+		}
+		if !pause(reads, conditionPollInterval, deadline) {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return fmt.Errorf("selector %q did not appear within %s", selector, timeout)
+		}
+	}
+}
+
 func (e *stagehandEngine) Screenshot(ctx context.Context) ([]byte, error) {
 	return boundCall(ctx, e.pageCallTimeout, func(ctx context.Context) ([]byte, error) {
 		page, err := e.page(ctx)
@@ -946,6 +1160,59 @@ func (e *stagehandEngine) Screenshot(ctx context.Context) ([]byte, error) {
 		}
 		return page.Screenshot(ctx, nil)
 	})
+}
+
+func (e *stagehandEngine) Opener(ctx context.Context) (string, bool, error) {
+	found := false
+	title, err := boundCall(ctx, e.pageCallTimeout, func(ctx context.Context) (string, error) {
+		opener, err := e.opener(ctx)
+		if err != nil || opener == nil {
+			return "", err
+		}
+		found = true
+		return opener.Title(ctx)
+	})
+	return title, found && err == nil, err
+}
+
+func (e *stagehandEngine) OpenerScreenshot(ctx context.Context) ([]byte, error) {
+	return boundCall(ctx, e.pageCallTimeout, func(ctx context.Context) ([]byte, error) {
+		opener, err := e.opener(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if opener == nil {
+			return nil, errors.New("no open page opened the window operations work on")
+		}
+		return opener.Screenshot(ctx, nil)
+	})
+}
+
+// opener returns the page that opened the window operations work on, while
+// it is open, or nil when operations work on a page no open page opened.
+func (e *stagehandEngine) opener(ctx context.Context) (*stagehand.Page, error) {
+	page, err := e.page(ctx)
+	if err != nil {
+		return nil, err
+	}
+	windows := e.loads.Windows()
+	i := slices.IndexFunc(windows, func(w browserhost.Window) bool { return w.TargetID == page.PageID() })
+	if i < 0 {
+		return nil, nil
+	}
+	openerID := windows[i].Opener
+	browserContext, err := e.browser.Context()
+	if err != nil {
+		return nil, err
+	}
+	pages, err := browserContext.Pages(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if j := slices.IndexFunc(pages, func(p *stagehand.Page) bool { return p.PageID() == openerID }); j >= 0 {
+		return pages[j], nil
+	}
+	return nil, nil
 }
 
 func (e *stagehandEngine) CurrentURL(ctx context.Context) (string, error) {
@@ -1006,8 +1273,41 @@ func (e *stagehandEngine) Snapshot(ctx context.Context) (pageSnapshot, error) {
 		if err != nil {
 			return pageSnapshot{}, err
 		}
-		return pageSnapshot{Tree: snapshot.FormattedTree, URLs: snapshot.URLMap, XPaths: snapshot.XPathMap, URL: pageURL, Title: title}, nil
+		snap := pageSnapshot{Tree: snapshot.FormattedTree, URLs: snapshot.URLMap, XPaths: snapshot.XPathMap, URL: pageURL, Title: title}
+		snap.Attributes = controlAttributes(ctx, page, snap)
+		return snap, nil
 	})
+}
+
+// controlAttributes reads the name or id attribute of each control the
+// tree of snap leaves unnamed, by element ID. A control whose attributes
+// cannot be read, as in a frame from another origin, is left out.
+func controlAttributes(ctx context.Context, page *stagehand.Page, snap pageSnapshot) map[string]string {
+	ids := unnamedControls(parseSnapshotTree(snap.Tree))
+	if len(ids) == 0 {
+		return nil
+	}
+	xpaths := make([]string, 0, len(ids))
+	for _, id := range ids {
+		xpaths = append(xpaths, snap.XPaths[id])
+	}
+	// The XPaths are embedded as a JSON array literal, never as code.
+	literal, err := json.Marshal(xpaths)
+	if err != nil {
+		return nil
+	}
+	raw, err := page.Evaluate(ctx, fmt.Sprintf(controlAttributesExpression, literal))
+	var values []string
+	if err != nil || json.Unmarshal(raw, &values) != nil || len(values) != len(ids) {
+		return nil
+	}
+	attributes := map[string]string{}
+	for i, id := range ids {
+		if values[i] != "" {
+			attributes[id] = values[i]
+		}
+	}
+	return attributes
 }
 
 // evaluate runs a JavaScript expression in the active page.
@@ -1150,12 +1450,59 @@ func (e *stagehandEngine) Detach(ctx context.Context) error {
 // client certificates and the gate that decided its writes.
 func (e *stagehandEngine) Close(ctx context.Context) error {
 	defer e.slot.Release()
+	releaseErr := e.release(ctx)
+	// The runtime asks a browser it reattached to exit itself.
+	if e.browser.Origin() == stagehand.BrowserOriginLaunched {
+		exitLaunchedBrowser(ctx, e.handle)
+	}
 	return errors.Join(
-		e.release(ctx),
+		releaseErr,
 		closeBrowser(ctx, e.handle.BrowserPID, e.handle.BrowserStartedAt, e.browser.Close),
 		killCertProxy(e.handle.CertProxy),
 		killWriteGate(e.handle.WriteGate),
 	)
+}
+
+// exitLaunchedBrowser asks a browser it launched to exit over DevTools and
+// waits up to browserExitTimeout for its processes to exit. Exiting on
+// request, the browser first writes what its profile keeps, such as the
+// cookies of a sign-in, and it stops answering DevTools before it is done.
+// The runtime ends a launched browser's processes all at once, which loses
+// what is not written yet, so it ends only a browser that does not exit on
+// request or in time.
+func exitLaunchedBrowser(ctx context.Context, handle browserHandle) {
+	var tree *browserProcessTree
+	if handle.BrowserPID > 0 {
+		tree = recordBrowserProcessTree(handle.BrowserPID, handle.BrowserStartedAt)
+	}
+	if tree != nil {
+		defer tree.release()
+	}
+	if askToExit(ctx, handle.CDPURL) != nil || tree == nil {
+		return
+	}
+	ticker := time.NewTicker(exitPollInterval)
+	defer ticker.Stop()
+	deadline := time.NewTimer(browserExitTimeout)
+	defer deadline.Stop()
+	for !tree.exited() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-deadline.C:
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// askToExit asks the browser at cdpURL to exit over DevTools, giving up on
+// the request after exitRequestTimeout.
+func askToExit(ctx context.Context, cdpURL string) error {
+	_, err := boundCall(ctx, exitRequestTimeout, func(ctx context.Context) (struct{}, error) {
+		return struct{}{}, browserhost.CloseBrowser(ctx, cdpURL)
+	})
+	return err
 }
 
 // closeBrowser terminates a launched browser with closeRuntime. The browser's
@@ -1214,6 +1561,10 @@ func (e *stagehandEngine) release(ctx context.Context) error {
 		errs = append(errs, e.responses.Close())
 		e.responses = nil
 	}
+	if e.loads != nil {
+		errs = append(errs, e.loads.Close())
+		e.loads = nil
+	}
 	if e.blocked != nil {
 		errs = append(errs, e.blocked.Close())
 		e.blocked = nil
@@ -1251,8 +1602,8 @@ func boundCall[T any](ctx context.Context, limit time.Duration, call func(contex
 	return result, err
 }
 
-func actOptions(variables map[string]string, timeout time.Duration) *stagehand.StagehandClientActOptions {
-	options := &stagehand.StagehandClientActOptions{Timeout: new(float64(timeout.Milliseconds()))}
+func actOptions(page *stagehand.Page, variables map[string]string, timeout time.Duration) *stagehand.StagehandClientActOptions {
+	options := &stagehand.StagehandClientActOptions{Page: page, Timeout: new(float64(timeout.Milliseconds()))}
 	if len(variables) > 0 {
 		options.Variables = make(stagehand.Variables, len(variables))
 		for name, value := range variables {

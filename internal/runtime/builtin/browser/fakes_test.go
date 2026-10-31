@@ -121,6 +121,9 @@ type fakeEngine struct {
 	visible  []string
 	// snapshot is the page's accessibility tree; its URL is the page's.
 	snapshot pageSnapshot
+	// opener is the title of the page that opened the window operations
+	// work on; empty when no open page opened it.
+	opener string
 	// downloads and downloadErr script what the next download wait reports,
 	// and lateDownloads what only a wait that allows them to begin does.
 	downloads     []string
@@ -427,6 +430,14 @@ func (e *fakeEngine) Screenshot(context.Context) ([]byte, error) {
 	return []byte("png"), nil
 }
 
+func (e *fakeEngine) Opener(context.Context) (string, bool, error) {
+	return e.opener, e.opener != "", nil
+}
+
+func (e *fakeEngine) OpenerScreenshot(context.Context) ([]byte, error) {
+	return []byte("opener png"), nil
+}
+
 func (e *fakeEngine) CurrentURL(context.Context) (string, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -585,6 +596,72 @@ func pageModel(extracts map[string]string, trueStatements ...string) func(req *l
 		}
 		return "", errors.New("unexpected request: " + text)
 	}
+}
+
+// serveSilentBrowser serves the DevTools endpoint of a browser that takes
+// commands without ever answering them, and keeps running.
+func serveSilentBrowser(t *testing.T) string {
+	t.Helper()
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/json/version" {
+			wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/silent"
+			_ = json.NewEncoder(w).Encode(map[string]string{"webSocketDebuggerUrl": wsURL})
+			return
+		}
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.CloseNow() }()
+		// Read until the client hangs up, answering nothing.
+		for {
+			if _, _, err := conn.Read(r.Context()); err != nil {
+				return
+			}
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL
+}
+
+// serveExitingBrowser serves the DevTools endpoint of a browser that, asked
+// to close, acknowledges the request and stops accepting DevTools connections
+// at once, as Chrome does early in its exit, and then calls exit to finish
+// exiting.
+func serveExitingBrowser(t *testing.T, exit func()) string {
+	t.Helper()
+	var server *httptest.Server
+	server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/json/version" {
+			wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/exiting"
+			_ = json.NewEncoder(w).Encode(map[string]string{"webSocketDebuggerUrl": wsURL})
+			return
+		}
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.CloseNow() }()
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+		var request struct {
+			ID int `json:"id"`
+		}
+		_ = json.Unmarshal(data, &request)
+		response, _ := json.Marshal(map[string]any{"id": request.ID, "result": map[string]any{}})
+		_ = conn.Write(r.Context(), websocket.MessageText, response)
+		_ = server.Listener.Close()
+		go exit()
+	}))
+	// A kept-alive connection would let a request reach the browser after it
+	// stopped accepting connections.
+	server.Config.SetKeepAlivesEnabled(false)
+	server.Start()
+	t.Cleanup(server.Close)
+	return server.URL
 }
 
 // serveHungBrowser serves the DevTools endpoint of a browser that

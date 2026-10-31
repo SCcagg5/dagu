@@ -515,6 +515,7 @@ steps:
       template: "Hello, {{ .name }}!"
       data:
         name: Alice
+      output: hello.txt
 `,
 		},
 		{
@@ -547,6 +548,18 @@ steps:
     with:
       template: "Hello"
       template_ref: ${env.TEMPLATE}
+`,
+			wantErr: "did not validate",
+		},
+		{
+			name: "RejectTemplateRenderUnknownField",
+			spec: `
+steps:
+  - action: template.render
+    with:
+      template: "Hello, {{ .name }}!"
+      datas:
+        name: Alice
 `,
 			wantErr: "did not validate",
 		},
@@ -2742,6 +2755,51 @@ steps:
 `)
 			err := resolved.Validate(doc)
 			if valid {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestDAGSchemaLLMProviderOrder(t *testing.T) {
+	t.Parallel()
+
+	resolved := mustResolveDAGSchema(t)
+	for name, tc := range map[string]struct {
+		llm   string
+		valid bool
+	}{
+		"shared list": {llm: `
+  provider: openrouter
+  model: openai/gpt-6.1-terra
+  provider_order: [azure/eu, openai]`, valid: true},
+		"shared scalar": {llm: `
+  provider: openrouter
+  model: openai/gpt-6.1-terra
+  provider_order: azure/eu`},
+		"entry list": {llm: `
+  model:
+    - provider: openrouter
+      name: openai/gpt-6.1-terra
+      provider_order: [azure/eu, openai]`, valid: true},
+		"entry scalar": {llm: `
+  model:
+    - provider: openrouter
+      name: openai/gpt-6.1-terra
+      provider_order: azure/eu`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			doc := mustParseYAMLDocument(t, "llm:"+tc.llm+`
+steps:
+  - action: chat.completion
+    with:
+      prompt: Hello.
+`)
+			err := resolved.Validate(doc)
+			if tc.valid {
 				require.NoError(t, err)
 				return
 			}

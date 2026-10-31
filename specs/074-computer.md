@@ -158,6 +158,15 @@ When several models are listed, an `act` moves to the next model only when a
 model fails before any action ran. `extract` and conditions try the models in
 order for every request.
 
+`extract` and conditions ask for a `respond` tool call whose parameters are
+the answer schema. A reply without a tool call is accepted when its text is
+valid JSON. Any other reply gets one correction: the next request to the same
+model carries the rejected reply as an assistant message, followed by a user
+message stating why it was rejected, and the step log shows the rejected reply
+after `warning: <provider>/<model> answer rejected: <reason>`. When the
+corrected reply is also unusable, that model has failed and the next listed
+model is tried. Tokens of every call count, the rejected reply's included.
+
 ### Act
 
 An `act` shows the model a screenshot scaled to what the model accepts and
@@ -351,7 +360,19 @@ recording ends with its landmarks: the window in front and up to three of
 the elements the act touched last that were still there.
 
 A later run of the same step on the same host replays a recording without
-a model request when the operation position and instruction match. Each
+a model request when the operation position and instruction match, and the
+recording fits the run's values. A recording fits only where it does what
+the instruction asks for each variable the instruction names: a variable no
+recorded action types, chooses, or finds its element by, such as an item a
+pop-up already showed on the row the recording was made on, is kept with a
+salted digest of the value it had, never the value. A run in which such a
+variable holds another value, or whose recording keeps no digest of it,
+does not replay: the model works the act and records afresh, and under
+`never` the act fails with `its recording does nothing with %item%, so it
+fits only the value %item% had when it was recorded`. A variable an
+instruction names only to say where the act works, which its actions never
+need, costs a model request for each new value, so an instruction names only
+the variables its actions use. Each
 turn replays by its elements when every pointer action of the turn has one
 and the application in front is the recorded one: each element is found again,
 with the recorded path breaking a tie between equal matches, and the action
@@ -546,10 +567,16 @@ scroll more than 30% of the element's width or height from its centre
 (except on a text field), since a pin acts at the centre, a move alone, a
 held key, or a button pressed or released alone. An act with one lists each such action
 with its turn and why, instead of steps, since a pin that skipped an action
-would report success without doing the task. An extract's bindings become
-its fields. `--format json` prints `{"operations": [...]}`, each with
-`step`, `op`, `kind`, `system`, `saved_at`, and `recorded`, `fields`, or
-`unpinnable`, whose items carry `turn`, `action`, `reason`, and a `code` for
+would report success without doing the task. An act whose recording never
+used a variable its instruction names (see Replay cache) says so in a
+comment above its steps, since pinned steps run for every value and would
+leave that variable's field as each run finds it; an act recorded before
+recordings noted those variables (format version 4 or older) says to check
+that its steps use each variable the task names. An extract's bindings
+become its fields. `--format json` prints `{"operations": [...]}`, each with
+`step`, `op`, `kind`, `system`, `saved_at`, `assumes`, which names those
+variables, `assumes_unknown`, set for such an older act, and `recorded`,
+`fields`, or `unpinnable`, whose items carry `turn`, `action`, `reason`, and a `code` for
 a program: `no_element`, `edge_click`, `click_with_keys`, `click`,
 `no_field`, `keys`, `edge_scroll`, `scroll`, `move`, `drag`, `hold_key`,
 `button`, or `unsupported`.
