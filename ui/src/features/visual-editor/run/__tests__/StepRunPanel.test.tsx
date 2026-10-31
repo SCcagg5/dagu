@@ -370,7 +370,8 @@ describe('StepRunPanel', () => {
     });
     expect(last().dagRun).toMatchObject({ dagRunId: 'r1' });
 
-    last().onClose();
+    act(() => last().onClose());
+    expect(last()).toMatchObject({ isOpen: false });
   });
 
   it('opens the log viewer for the stream the drawer asks for', () => {
