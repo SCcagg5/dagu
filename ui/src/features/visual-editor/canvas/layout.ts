@@ -771,9 +771,9 @@ export function reformRouting(
 }
 
 /**
- * Key of everything that decides the layout: node keys, lanes and routes,
- * edge ids, direction and the compact flag. It ignores labels, issues and
- * run state.
+ * Key of everything that decides the layout: node keys, lanes, card shapes
+ * and routes, edge ids, direction and the compact flag. It ignores labels,
+ * issues and run state.
  */
 export function graphShapeKey(
   graph: CanvasGraph,
@@ -789,6 +789,10 @@ export function graphShapeKey(
     graph.nodes.map((node) => [
       node.key,
       node.lane,
+      // The card shape that nodeSize picks.
+      node.kind === 'agent',
+      node.kind === 'router' || node.action === 'router.route',
+      Boolean((node as CanvasNodeWithRoutes).tool),
       node.routes ?? null,
       // The hub grows with the tasks that it lists.
       (node as CanvasNodeWithRoutes).hub?.tasks.length ?? null,

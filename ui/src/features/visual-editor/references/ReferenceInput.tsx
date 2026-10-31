@@ -115,7 +115,13 @@ export function ReferenceInput({
     const pos = Math.min(el.selectionStart ?? value.length, value.length);
     const open = findOpenReference(value, pos);
     if (!open) return;
-    apply(insertReference(value, open.from, pos, candidate.token));
+    // Inside a closed token, the pick replaces the whole token.
+    const closed = findReferenceTokens(value).find(
+      (t) => t.from === open.from && pos < t.to
+    );
+    apply(
+      insertReference(value, open.from, closed?.to ?? pos, candidate.token)
+    );
   };
 
   const pickFromButton = (candidate: ReferenceCandidate) => {
@@ -135,12 +141,16 @@ export function ReferenceInput({
 
   const toggleButtonPicker = () => {
     if (disabled) return;
+    if (buttonOpen) {
+      closeButtonPicker();
+      return;
+    }
     const el = fieldRef.current;
     selectionRef.current = {
       start: el?.selectionStart ?? value.length,
       end: el?.selectionEnd ?? value.length,
     };
-    setButtonOpen((open) => !open);
+    setButtonOpen(true);
   };
 
   const fieldProps = {
