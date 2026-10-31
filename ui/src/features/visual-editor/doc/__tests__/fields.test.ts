@@ -485,6 +485,22 @@ describe('opRenameStep', () => {
     );
   });
 
+  // The server reads a number in a list of names as its text.
+  it('updates a number in a depends list', () => {
+    const input =
+      'steps:\n  - name: "1"\n    run: x\n  - name: b\n    depends: [1]\n    run: y\n';
+    const out = textOf(input, rename(input, 'steps[0]', 'first'));
+    expect(out).toContain('depends: [first]');
+  });
+
+  // The server trims a name, so `depends` names it without the blanks.
+  it('updates the depends of a name with blanks around it', () => {
+    const input =
+      'steps:\n  - name: " build "\n    run: x\n  - name: b\n    depends: build\n    run: y\n';
+    const out = textOf(input, rename(input, 'steps[0]', 'compile'));
+    expect(out).toContain('depends: compile');
+  });
+
   it('keeps the quote style of a scalar depends', () => {
     const input =
       'steps:\n  - name: a\n    run: x\n  - name: b\n    depends: "a"\n    run: y\n  - name: c\n    depends: \'a\'\n    run: z\n';
