@@ -111,6 +111,15 @@ steps:
     );
   });
 
+  // The server reads integers exactly, beyond the float precision.
+  it('keeps an integer beyond the float precision', () => {
+    const text =
+      'steps:\n  - name: a\n    env:\n      CHANNEL: 9007199254740993\n';
+    expect(copyStepsYaml(parseDagDoc(text), ['steps[0]'])).toBe(
+      '- name: a\n  env:\n    CHANNEL: 9007199254740993\n'
+    );
+  });
+
   it('gives nothing without a step or with broken YAML', () => {
     expect(copyStepsYaml(parseDagDoc(yamlArraySteps), [])).toBe('');
     expect(copyStepsYaml(parseDagDoc(yamlArraySteps), ['steps[9]'])).toBe('');
@@ -192,6 +201,35 @@ steps:
     depends: fetch
     run: echo \${steps.fetch.outputs.body}
 `);
+  });
+
+  it('keeps an integer beyond the float precision', () => {
+    const doc = parseDagDoc(yamlChain);
+    const result = done(
+      pasteStepsOp(
+        doc,
+        '- name: big\n  env:\n    ID: 9007199254740993\n',
+        null
+      ),
+      yamlChain
+    );
+    expect(result.text).toContain('    env:\n      ID: 9007199254740993\n');
+  });
+
+  // Like the server, a step named by a number is named by its text.
+  it('renames a step named by a number and the depends on it', () => {
+    const text = 'steps:\n  - name: 7\n    run: x\n';
+    const result = done(
+      pasteStepsOp(
+        parseDagDoc(text),
+        '- name: 7\n  run: y\n- name: b\n  depends: [7]\n  run: z\n',
+        null
+      ),
+      text
+    );
+    expect(result.text).toBe(
+      `${text}  - name: 7_2\n    run: y\n  - name: b\n    depends: [7_2]\n    run: z\n`
+    );
   });
 
   it('pastes into map form, keyed by the name', () => {
@@ -372,6 +410,18 @@ steps:
     depends: [fetch]
     run: echo \${steps.fetch.outputs.body} \${fetch.stdout}
 `);
+  });
+
+  // The server trims names and ids: "task " and "task" are one step.
+  it('renames a copy whose name or id differs by outer spaces only', () => {
+    const text = 'steps:\n  - name: "task "\n    id: " job"\n    run: x\n';
+    const result = done(
+      duplicateStepsOp(parseDagDoc(text), ['steps[0]']),
+      text
+    );
+    expect(result.text).toBe(
+      `${text}  - name: "task_2"\n    id: "job_2"\n    run: x\n`
+    );
   });
 
   it('refuses a handler', () => {
