@@ -197,10 +197,11 @@ export function planRun(p: {
 /**
  * Whether the run that a cache entry names can still give the step: 'ok' when
  * the run exists and its node of the step succeeded, 'gone' when it does not
- * (removed, or a test run that expired) and 'checking' while the server has
- * not answered.
+ * (removed, or a test run that expired), 'active' while the run has not
+ * finished (the server reuses outputs of a finished run only) and 'checking'
+ * while the server has not answered.
  */
-export type RunCheck = 'ok' | 'gone' | 'checking';
+export type RunCheck = 'ok' | 'gone' | 'active' | 'checking';
 
 /** What the cache of the browser gives to the previous steps of a step run. */
 export interface CacheCover {
@@ -267,6 +268,7 @@ export function coverFromCache(p: {
       gone.push(name);
       continue;
     }
+    if (state === 'active') continue;
     cached.push(name);
     capturedAt =
       capturedAt === null

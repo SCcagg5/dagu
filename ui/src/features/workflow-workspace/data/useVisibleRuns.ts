@@ -228,9 +228,8 @@ export function useVisibleRuns({
   });
   const [settings] = useRunViewSettings();
   const preset = settings.range.preset;
-  const rangeNow = useMinuteClock(
-    enabled && settings.mode === 'range' && preset !== 'custom'
-  );
+  // A custom range has fixed ends, but a running run lasts until now.
+  const rangeNow = useMinuteClock(enabled && settings.mode === 'range');
 
   const { mode, count, range, showTests, showCached, hiddenTypes } = settings;
   const bounds = useMemo(

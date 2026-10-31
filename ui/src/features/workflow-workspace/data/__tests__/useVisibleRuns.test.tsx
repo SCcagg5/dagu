@@ -196,6 +196,27 @@ describe('useVisibleRuns', () => {
     expect(ids(result.current.runs)).toEqual(['n1', 't1']);
   });
 
+  // A running run lasts until now, not until the page opened.
+  it('keeps a running run in a custom range that it reaches now', () => {
+    const live = run('live', [], Status.Running, {
+      startedAt: '2026-03-02T11:50:00Z',
+    });
+    h.history = { runs: [live, ...HISTORY], isLoading: false };
+    const view = renderHook(() => ({
+      visible: useVisibleRuns({ enabled: true }),
+      settings: useRunViewSettings(),
+    }));
+    vi.setSystemTime(NOW + 3_600_000);
+    act(() =>
+      view.result.current.settings[1].setRange({
+        preset: 'custom',
+        from: Date.parse('2026-03-02T12:30:00Z'),
+        to: Date.parse('2026-03-02T13:00:00Z'),
+      })
+    );
+    expect(ids(view.result.current.visible.runs)).toEqual(['live']);
+  });
+
   it('reads nothing while disabled', () => {
     renderHook(() => useVisibleRuns({ enabled: false }));
     expect(h.args[0]).toMatchObject({ enabled: false });

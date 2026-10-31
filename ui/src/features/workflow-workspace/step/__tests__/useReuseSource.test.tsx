@@ -505,6 +505,28 @@ describe('useReuseSource', () => {
       expect(view.result.current.gone).toEqual(['a']);
     });
 
+    // The server reuses outputs of a finished run only: an entry of a run
+    // that is still active covers nothing until the run ends.
+    it('does not cover a step from a run that is still active', async () => {
+      h.history = [runOf('r0', Status.Running)];
+      cacheStep('a', SPEC);
+      cacheStep('b', SPEC);
+      const view = render({ liveText: SPEC });
+      await waitFor(() => expect(view.result.current.loading).toBe(false));
+      expect(view.result.current.cached).toEqual([]);
+      expect(view.result.current.gone).toEqual([]);
+      expect(view.result.current.options.some((o) => o.id === 'cache')).toBe(
+        false
+      );
+      h.history = [runOf('r0')];
+      view.rerender();
+      await waitFor(() =>
+        expect(view.result.current.options.some((o) => o.id === 'cache')).toBe(
+          true
+        )
+      );
+    });
+
     it('hashes the live text and does not read the saved definition', async () => {
       h.history = [];
       cacheStep('a', SPEC);
@@ -598,6 +620,17 @@ describe('the choice of the run', () => {
     await waitFor(() =>
       expect(view.result.current.source?.dagRunId).toBe('new')
     );
+  });
+
+  // The history lists the newest runs only: a chosen run that newer runs
+  // pushed out of it stays the source.
+  it('keeps a chosen run that the history no longer lists', async () => {
+    h.details = { older: runOf('older') };
+    choose('older');
+    const view = render({ liveText: SPEC });
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    expect(view.result.current.source?.dagRunId).toBe('older');
+    expect(view.result.current.selectedOptionId).toBe('run:older');
   });
 
   // A stored choice of the cache gives way once no fresh entry backs it, as

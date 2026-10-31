@@ -223,18 +223,8 @@ export function useReuseSource(p: {
   const current = picked?.key === evaluation ? picked : null;
   const autoSource = current?.pick.source ?? null;
 
-  // The run that the user chose, when it still exists and holds the reads.
   const scope = useCacheScope(p.fileName);
   const [choice, setChoice] = useSourceChoice(scope);
-  const chosenRun = useMemo((): ReuseRun | null => {
-    if (choice.kind !== 'run') return null;
-    const found: ReuseRun | undefined =
-      history.runs.find((r) => r.dagRunId === choice.runId) ??
-      (selected?.dagRunId === choice.runId ? selected : undefined);
-    return found && !isActive(found) && missingIn(found, p.reads).length === 0
-      ? found
-      : null;
-  }, [choice, history.runs, selected, p.reads]);
 
   const previous = useMemo(
     () => p.previous.filter((name) => name !== p.step),
@@ -253,19 +243,22 @@ export function useReuseSource(p: {
     enabled: hasEntries,
   });
 
-  // The runs that the entries name must still exist. The history says so for
-  // the runs that it lists; the others are asked once (a removed run, or a
-  // test run that expired, answers 404).
+  // The runs that the entries and the choice name must still exist. The
+  // history says so for the runs that it lists; the others are asked once (a
+  // removed run, or a test run that expired, answers 404).
   const [asked, setAsked] = useState<
     Record<string, ReuseRun | 'gone' | 'unknown'>
   >({});
   const runIds = useMemo(
     () => [
-      ...new Set(
-        previous.flatMap((name) => (entries[name] ? [entries[name].runId] : []))
-      ),
+      ...new Set([
+        ...(choice.kind === 'run' ? [choice.runId] : []),
+        ...previous.flatMap((name) =>
+          entries[name] ? [entries[name].runId] : []
+        ),
+      ]),
     ],
-    [entries, previous]
+    [choice, entries, previous]
   );
   const listed = history.runs;
   const runOfId = useCallback(
@@ -313,11 +306,22 @@ export function useReuseSource(p: {
       if (found === undefined) return 'checking';
       if (found === 'gone') return 'gone';
       if (found === 'unknown') return 'ok';
+      if (isActive(found)) return 'active';
       const node = (found.nodes ?? []).find((n) => n.step.name === step);
       return nodeHoldsOutputs(node) ? 'ok' : 'gone';
     },
     [runOfId]
   );
+
+  // The run that the user chose, when it still exists and holds the reads.
+  const chosen = choice.kind === 'run' ? runOfId(choice.runId) : null;
+  const chosenRun =
+    typeof chosen === 'object' &&
+    chosen !== null &&
+    !isActive(chosen) &&
+    missingIn(chosen, p.reads).length === 0
+      ? chosen
+      : null;
 
   // The cached values that the picker offers: the fresh entries, with the
   // runs that they were read from.
@@ -492,6 +496,7 @@ export function useReuseSource(p: {
       current === null ||
       current.runs !== keptRuns ||
       history.isLoading ||
+      chosen === undefined ||
       (source !== null && diff === null) ||
       (hasEntries && hashes === null) ||
       cover.checking ||
