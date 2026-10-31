@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Clock, AlertCircle } from 'lucide-react';
 import type { components } from '../../../api/v1/schema';
 import RelativeTime from '@/components/ui/relative-time';
@@ -6,7 +7,6 @@ import { cn } from '../../../lib/utils';
 import WorkerHealth from './WorkerHealth';
 import { useRemoteNode } from '../../../contexts/RemoteNodeContext';
 import { buildRunningTaskURL } from '../../dag-runs/lib/dagRunUrls';
-import { useOpenPage } from '../../dag-runs/lib/useOpenPage';
 import { I18nText } from '@/i18n/I18nText';
 
 type Worker = components['schemas']['Worker'];
@@ -208,7 +208,6 @@ function UtilizationBar({ busy, total }: { busy: number; total: number }) {
 
 function TaskRow({ task }: { task: RunningTask }) {
   const remoteNode = useRemoteNode();
-  const openPage = useOpenPage();
   const duration = React.useMemo(() => {
     if (!task.startedAt) return '';
     const start = new Date(task.startedAt).getTime();
@@ -223,15 +222,10 @@ function TaskRow({ task }: { task: RunningTask }) {
   const isNestedTask =
     task.rootDagRunName && task.rootDagRunName !== task.dagName;
 
-  // A task opens its run on the workflow page; Cmd or Ctrl opens a new tab.
-  const handleClick = (e: React.MouseEvent) => {
-    openPage(buildRunningTaskURL(task, remoteNode), e);
-  };
-
   return (
-    <div
+    <Link
+      to={buildRunningTaskURL(task, remoteNode)}
       className="flex items-center gap-3 p-1.5 rounded bg-background/50 cursor-pointer hover:bg-background/80 transition-colors"
-      onClick={handleClick}
     >
       <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
       <div className="flex-1 min-w-0">
@@ -260,7 +254,7 @@ function TaskRow({ task }: { task: RunningTask }) {
       <div className="text-xs text-muted-foreground whitespace-nowrap">
         {duration}
       </div>
-    </div>
+    </Link>
   );
 }
 
