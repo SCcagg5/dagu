@@ -1442,6 +1442,20 @@ describe('dependency cycles', () => {
     expect(failed(add(text, 'steps[0]', 'steps[1]')).code).toBe('cycle');
   });
 
+  // The server orders a step after each step whose outputs it reads by id.
+  it('follows a step-output reference', () => {
+    const text =
+      'steps:\n  - name: a\n    id: a\n    run: a\n  - name: b\n    run: echo ${steps.a.outputs.x}\n';
+    expect(failed(add(text, 'steps[0]', 'steps[1]')).code).toBe('cycle');
+    const described = text.replace(
+      'run: echo ${steps.a.outputs.x}',
+      'description: reads ${steps.a.outputs.x}\n    run: b'
+    );
+    expect(
+      done(add(described, 'steps[0]', 'steps[1]'), described, 1).text
+    ).toContain('depends: [b]');
+  });
+
   it('follows the targets of a router', () => {
     const text = `steps:
   - name: pick

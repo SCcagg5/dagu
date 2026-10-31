@@ -59,6 +59,35 @@ describe('RouteTable', () => {
     expect(onSetTargets).not.toHaveBeenCalled();
   });
 
+  // A step name can hold a comma: an untouched field keeps it one target.
+  it('keeps a target with a comma when the field did not change', () => {
+    const onSetTargets = vi.fn();
+    render(
+      <RouteTable
+        routes={{ ok: ['Build, test'] }}
+        readOnly={false}
+        onSetTargets={onSetTargets}
+      />
+    );
+    fireEvent.blur(screen.getByLabelText('Targets of ok'));
+    expect(onSetTargets).not.toHaveBeenCalled();
+  });
+
+  it('sends targets that differ only in where the commas split them', () => {
+    const onSetTargets = vi.fn();
+    render(
+      <RouteTable
+        routes={{ ok: ['a,b'] }}
+        readOnly={false}
+        onSetTargets={onSetTargets}
+      />
+    );
+    const input = screen.getByLabelText('Targets of ok');
+    fireEvent.change(input, { target: { value: 'a, b' } });
+    fireEvent.blur(input);
+    expect(onSetTargets).toHaveBeenCalledWith('ok', ['a', 'b']);
+  });
+
   it('removes a pattern with an empty target list', () => {
     const onSetTargets = vi.fn();
     render(

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   NodeStatus,
   NodeStatusLabel,
+  ReusedInputVia,
   Status,
   type components,
 } from '@/api/v1/schema';
@@ -61,9 +62,15 @@ function makeNode(name: string, extra: Partial<Node> = {}): Node {
   } as Node;
 }
 
-function setRun(nodes: Node[] | undefined, extra: object = {}) {
+function setRun(
+  nodes: Node[] | undefined,
+  extra: object = {},
+  details: object = {}
+) {
   useQueryMock.mockReturnValue({
-    data: nodes && { dagRunDetails: { name: 'dag', dagRunId: 'r1', nodes } },
+    data: nodes && {
+      dagRunDetails: { name: 'dag', dagRunId: 'r1', nodes, ...details },
+    },
     error: undefined,
     isLoading: false,
     ...extra,
@@ -220,16 +227,37 @@ describe('StepRunPanel', () => {
     expect(screen.queryByText('Reused from an earlier run')).toBeNull();
   });
 
-  it('labels a seeded skipped step as reused and shows its outputs', () => {
+  // The runner gives a step whose precondition failed a finish time too.
+  it('says a skipped step that the run does not carry did not run', () => {
     setRun([
       makeNode('fetch', {
         status: NodeStatus.Skipped,
         statusLabel: NodeStatusLabel.skipped,
-        startedAt: '2026-01-15T02:00:00Z',
         finishedAt: '2026-01-15T02:00:03Z',
-        doneCount: 1,
       }),
     ]);
+    render(<StepRunPanel dagName="dag" runId="r1" stepName="fetch" />);
+    expect(screen.getByText('Not run in this run')).toBeTruthy();
+    expect(screen.queryByText('Reused from an earlier run')).toBeNull();
+    expect(useStepOutputsMock).toHaveBeenCalledWith('dag', 'r1', null);
+  });
+
+  it('labels a seeded skipped step as reused and shows its outputs', () => {
+    setRun(
+      [
+        makeNode('fetch', {
+          status: NodeStatus.Skipped,
+          statusLabel: NodeStatusLabel.skipped,
+          startedAt: '2026-01-15T02:00:00Z',
+          finishedAt: '2026-01-15T02:00:03Z',
+          doneCount: 1,
+        }),
+      ],
+      {},
+      {
+        reusedInputs: [{ step: 'fetch', runId: 'r0', via: ReusedInputVia.run }],
+      }
+    );
     useStepOutputsMock.mockReturnValue({
       data: stepOutputsSample,
       error: undefined,
@@ -282,6 +310,21 @@ describe('StepRunPanel', () => {
       ]);
       render(<StepRunPanel dagName="dag" runId="r1" stepName="fetch" />);
       expect(screen.getByTestId('step-run-running')).toBeTruthy();
+      expect(useStepOutputsMock).toHaveBeenLastCalledWith('dag', 'r1', null);
+    });
+
+    // The outputs of a human task come when it completes, and the request
+    // key stays the same: an early read would stay empty.
+    it('asks for no output while the step waits', () => {
+      setActiveRun([
+        makeNode('fetch', {
+          status: NodeStatus.Waiting,
+          statusLabel: NodeStatusLabel.waiting,
+          startedAt: '2026-01-15T02:00:00Z',
+        }),
+      ]);
+      render(<StepRunPanel dagName="dag" runId="r1" stepName="fetch" />);
+      expect(screen.getByText('Waiting')).toBeTruthy();
       expect(useStepOutputsMock).toHaveBeenLastCalledWith('dag', 'r1', null);
     });
 
