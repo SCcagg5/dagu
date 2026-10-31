@@ -260,6 +260,15 @@ vi.mock('@/features/visual-editor', () => ({
         <button type="button" onClick={() => props.onFormVisibleChange?.(true)}>
           Open form
         </button>
+        {/* Sends its text on blur, as the fields of the step form do. */}
+        <input
+          aria-label="Form field"
+          onBlur={(event) => {
+            if (event.target.value) {
+              props.onTextChange(`${props.text}# ${event.target.value}\n`);
+            }
+          }}
+        />
       </div>
     );
   },
@@ -1224,6 +1233,20 @@ describe('DAGSpec visual view', () => {
     expect(
       screen.queryByRole('dialog', { name: 'Review changes' })
     ).not.toBeInTheDocument();
+  });
+
+  // Ctrl+S in a form field of a clean document saves what the field holds,
+  // which reaches the text only on blur.
+  it('takes the text of the focused form field on Ctrl+S', async () => {
+    await renderSpec();
+    const field = screen.getByLabelText('Form field');
+    field.focus();
+    fireEvent.change(field, { target: { value: 'typed' } });
+
+    fireEvent.keyDown(field, { key: 's', ctrlKey: true });
+    await settle();
+
+    expect(screen.getByTestId('diff-edited')).toHaveTextContent('# typed');
   });
 
   // An agent DAG is edited on the same canvas as every other DAG.

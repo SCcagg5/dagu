@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { workspaceNameFromLabels } from '@/lib/workspace';
 import { AlertTriangle, FileCode, Save } from 'lucide-react';
 import React, { useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import type { KeyedMutator } from 'swr';
 import type { components, paths } from '../../../../api/v1/schema';
 import { Button } from '@/components/ui/button';
@@ -197,6 +198,17 @@ function changedLineCount(before: string, after: string): number {
     tail++;
   }
   return Math.max(a.length - head - tail, b.length - head - tail);
+}
+
+/**
+ * Sends the text of the focused field, which a field of the step form sends
+ * only on blur, and gives the field its focus back.
+ */
+function commitFocusedField(): void {
+  const field = document.activeElement;
+  if (!(field instanceof HTMLElement) || field === document.body) return;
+  flushSync(() => field.blur());
+  field.focus({ preventScroll: true });
 }
 
 // The last text that draftStepTitle parsed: a render parses it once.
@@ -1176,6 +1188,7 @@ function DAGSpec({
       // Check for Ctrl+S (Windows/Linux) or Cmd+S (macOS)
       if ((event.ctrlKey || event.metaKey) && event.key === 's') {
         event.preventDefault(); // Prevent browser's default save dialog
+        commitFocusedField();
 
         // Call the save handler if available
         if (saveHandlerRef.current) {

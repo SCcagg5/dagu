@@ -138,8 +138,9 @@ export function ValueOrReferenceField(props: FieldProps): ReactElement {
         disabled={locked}
         onChange={(event) => {
           const text = event.target.value;
-          const number =
-            kind === 'integer' ? Number.parseInt(text, 10) : Number(text);
+          // A number input accepts 1e3. A fraction in an integer field
+          // stays as typed, and the step check reports it.
+          const number = Number(text);
           send(text === '' || Number.isNaN(number) ? undefined : number);
         }}
       />
