@@ -63,6 +63,20 @@ export function readEnv(value: unknown): EnvModel {
   return { form: 'other', entries: {} };
 }
 
+/**
+ * The position of the item that `readEnv` reads a key from, in a list of
+ * one-key maps: the last item with the key, as a later entry wins.
+ */
+function itemOf(
+  items: readonly Record<string, unknown>[],
+  key: string
+): number {
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (Object.keys(items[i]!)[0] === key) return i;
+  }
+  return -1;
+}
+
 function sameKeys(
   a: Record<string, string>,
   b: Record<string, string>
@@ -93,14 +107,15 @@ export function envOps(
       return toFieldOps(step, diffFormData(current.entries, next, ['env']));
     case 'maps':
       if (sameKeys(current.entries, next)) {
-        return Object.keys(next).flatMap((key, index) =>
+        const items = value as Record<string, unknown>[];
+        return Object.keys(next).flatMap((key) =>
           current.entries[key] === next[key]
             ? []
             : [
                 {
                   kind: 'setStepField',
                   step,
-                  path: ['env', index, key],
+                  path: ['env', itemOf(items, key), key],
                   value: next[key],
                 },
               ]

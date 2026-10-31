@@ -89,7 +89,8 @@ export function stepIssues(
   step: StepView,
   translate?: IssueTranslate
 ): StepIssues {
-  const byField: Record<string, ValidationIssue[]> = {};
+  // No prototype: a field can be named `constructor`.
+  const byField: Record<string, ValidationIssue[]> = Object.create(null);
   const general: ValidationIssue[] = [];
   for (const raw of issues) {
     const issue = translate ? refineIssue(raw, translate) : raw;

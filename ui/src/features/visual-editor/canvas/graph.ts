@@ -158,11 +158,11 @@ function buildNode(
   const { names, issues, overlay } = input;
   const serverName = own(names.byKey, step.key);
   const stepIssues = own(issues.byStep, step.key);
+  const name = filled(step.explicitName) ?? filled(serverName);
   const node: CanvasNodeWithRoutes = {
     key: step.key,
     label:
-      filled(step.explicitName) ??
-      filled(serverName) ??
+      name ??
       (step.broken !== undefined
         ? invalidLabel(step)
         : (filled(step.id) ?? step.key)),
@@ -170,6 +170,9 @@ function buildNode(
     lane,
     issues: countIssues(stepIssues),
   };
+  if (name === undefined && step.broken !== undefined) {
+    node.placeholderLabel = true;
+  }
   const issueMessages = collectIssueMessages(stepIssues);
   if (issueMessages) {
     node.issueMessages = issueMessages;
