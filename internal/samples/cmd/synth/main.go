@@ -74,6 +74,15 @@ func run() error {
 	if *years <= 0 || *years > 30 {
 		return fmt.Errorf("--years must be in (0, 30], got %v", *years)
 	}
+	// Backfill checks the interval and the window too, but only after the DAG
+	// and the run are written.
+	iv := *interval
+	if iv <= 0 || iv%time.Millisecond != 0 {
+		return fmt.Errorf("--interval must be a positive whole count of milliseconds, got %v", iv)
+	}
+	if iv < time.Minute && time.Minute%iv != 0 || iv >= time.Minute && iv%time.Minute != 0 {
+		return fmt.Errorf("--interval must divide a minute or be a whole count of minutes, got %v", iv)
+	}
 	ctx := context.Background()
 	begin := time.Now()
 
@@ -81,6 +90,9 @@ func run() error {
 	rawStart := now.Add(-26 * time.Hour).Truncate(time.Hour)
 	start := now.Add(-time.Duration(*years * 365 * 24 * float64(time.Hour))).Truncate(time.Hour)
 	runID := fmt.Sprintf("synth-%d", *seed)
+	if !start.Before(rawStart) {
+		return fmt.Errorf("--years %v leaves no history before the last 26 hours", *years)
+	}
 
 	dagFile := filepath.Join(*dir, "dags", *dagName+".yaml")
 	if err := writeDAG(dagFile, *dagName, *interval); err != nil {
