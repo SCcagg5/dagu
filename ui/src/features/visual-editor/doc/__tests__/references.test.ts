@@ -19,6 +19,7 @@ const rewritten: Array<[string, string]> = [
   ['${fetch.outputs}', '${load.outputs}'],
   ['${fetch.stdout:0:5}', '${load.stdout:0:5}'],
   ['${fetch.stdout:3}', '${load.stdout:3}'],
+  ['${fetch.stdout:0:}', '${load.stdout:0:}'],
   ['${fetch.output.items[0]}', '${load.output.items[0]}'],
   ['${fetch.outputs.body.items[0].id}', '${load.outputs.body.items[0].id}'],
   ['${fetch.outputs[0]}', '${load.outputs[0]}'],

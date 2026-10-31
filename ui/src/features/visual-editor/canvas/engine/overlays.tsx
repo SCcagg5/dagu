@@ -23,6 +23,7 @@ import {
   createWheelStepper,
   stepZoom,
   visibleRect,
+  wheelDeltaUnit,
   zoomAt,
   type FitOptions,
   type Rect,
@@ -637,6 +638,9 @@ export function MiniMap({
   const last = useRef(viewport);
   const storeRef = useRef(store);
   storeRef.current = store;
+  const onUserMoveRef = useRef(onUserMove);
+  onUserMoveRef.current = onUserMove;
+  const [surface, setSurface] = useState<HTMLDivElement | null>(null);
   const seenMoves = useRef(store.userMoves());
   // One timer for a whole pan: it re-arms for the time left, so that a frame
   // of the pan sets no new timer. A fit or a reveal during the delay does not
@@ -663,6 +667,38 @@ export function MiniMap({
     },
     []
   );
+
+  // The wheel zooms around the centre of the view. React listens as passive,
+  // so this listener is native, to be able to stop the page from scrolling.
+  useEffect(() => {
+    if (!surface) {
+      return;
+    }
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const step = wheelStep.current(
+        -event.deltaY * wheelDeltaUnit(event.deltaMode) * 0.002,
+        event.timeStamp
+      );
+      if (step === 0) {
+        return;
+      }
+      const flow = storeRef.current;
+      const current = flow.getViewport();
+      flow.noteUserMove();
+      onUserMoveRef.current?.();
+      flow.setViewport(
+        zoomAt(
+          current,
+          stepZoom(current.zoom, step, flow.zoomLimits),
+          { x: flow.size.width / 2, y: flow.size.height / 2 },
+          flow.zoomLimits
+        )
+      );
+    };
+    surface.addEventListener('wheel', onWheel, { passive: false });
+    return () => surface.removeEventListener('wheel', onWheel);
+  }, [surface]);
 
   // Keyed on the values: an equal view set again must not cancel the fade.
   // Only a move of the user shows it: a fit or a reveal does not.
@@ -718,6 +754,12 @@ export function MiniMap({
     });
   };
 
+  // A cancelled gesture, such as a system gesture on a touch screen, ends the
+  // drag as a release does.
+  const stopDragging = () => {
+    dragging.current = false;
+  };
+
   const visible = moving || hovered || persistent;
   return (
     <Panel
@@ -729,6 +771,7 @@ export function MiniMap({
       )}
     >
       <div
+        ref={setSurface}
         role="img"
         aria-label={ts('Overview of the workflow')}
         data-testid="flow-minimap"
@@ -747,30 +790,11 @@ export function MiniMap({
             centerOn(event);
           }
         }}
-        onPointerUp={() => {
-          dragging.current = false;
-        }}
+        onPointerUp={stopDragging}
+        onPointerCancel={stopDragging}
+        onLostPointerCapture={stopDragging}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
-        onWheel={(event) => {
-          const step = wheelStep.current(
-            -event.deltaY * 0.002,
-            event.timeStamp
-          );
-          if (step === 0) {
-            return;
-          }
-          const current = store.getViewport();
-          onUserMove?.();
-          store.setViewport(
-            zoomAt(
-              current,
-              stepZoom(current.zoom, step, store.zoomLimits),
-              { x: size.width / 2, y: size.height / 2 },
-              store.zoomLimits
-            )
-          );
-        }}
       >
         <MiniMapCanvas
           rects={rects}
