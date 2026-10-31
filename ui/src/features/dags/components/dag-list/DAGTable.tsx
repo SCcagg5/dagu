@@ -1797,7 +1797,7 @@ function DAGTable({
               placeholder="Filter by workflow name..."
               value={searchText}
               onChange={(e) => handleSearchTextChange(e.target.value)}
-              className="w-[200px]"
+              className="w-[180px]"
             />
           </I18nProps>
           <Button asChild variant="outline" className="px-4 font-medium">
@@ -1814,7 +1814,7 @@ function DAGTable({
               onLabelsChange={handleSearchLabelsChange}
               availableLabels={availableLabels}
               placeholder="Filter by labels..."
-              className="h-9 min-w-[170px] max-w-[220px]"
+              className="h-9 min-w-[150px] max-w-[180px]"
             />
           </I18nProps>
 

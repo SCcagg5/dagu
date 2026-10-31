@@ -1323,7 +1323,7 @@ function DAGRuns() {
                 onValueChange={setSearchText}
                 onEnterPress={() => handleSearch()}
                 suggestions={dagNameSuggestions}
-                className="w-[200px]"
+                className="w-[180px]"
               />
             </I18nProps>
             <I18nProps>
@@ -1333,12 +1333,12 @@ function DAGRuns() {
                 onValueChange={setDagRunId}
                 onEnterPress={() => handleSearch()}
                 suggestions={dagRunIdSuggestions}
-                className="w-[180px]"
+                className="w-[140px]"
               />
             </I18nProps>
             <Select value={status} onValueChange={handleStatusChange}>
               <I18nProps>
-                <SelectTrigger aria-label="Status" className="w-[150px]">
+                <SelectTrigger aria-label="Status" className="w-[130px]">
                   <I18nProps>
                     <SelectValue placeholder="Status">
                       <StatusSelectDisplay status={status} />
@@ -1371,7 +1371,7 @@ function DAGRuns() {
                 onLabelsChange={updateLabels}
                 availableLabels={availableLabels}
                 placeholder="Filter by labels..."
-                className="h-9 min-w-[170px] max-w-[220px]"
+                className="h-9 min-w-[150px] max-w-[180px]"
               />
             </I18nProps>
             <Select
@@ -1388,7 +1388,7 @@ function DAGRuns() {
               }}
             >
               <I18nProps>
-                <SelectTrigger aria-label="Period" className="w-[160px]">
+                <SelectTrigger aria-label="Period" className="w-[140px]">
                   <I18nProps>
                     <SelectValue placeholder="Select period" />
                   </I18nProps>
