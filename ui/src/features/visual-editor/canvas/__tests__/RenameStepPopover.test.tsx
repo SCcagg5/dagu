@@ -94,6 +94,18 @@ describe('RenameStepPopover', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  // Enter and Escape during an IME composition belong to the IME.
+  it('ignores Enter and Escape while a composition is active', () => {
+    const { onSubmit, onCancel } = renderPopover();
+    fireEvent.change(nameField()!, { target: { value: 'ビルド' } });
+    fireEvent.keyDown(nameField()!, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(nameField()!, { key: 'Escape', isComposing: true });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+    fireEvent.keyDown(nameField()!, { key: 'Enter' });
+    expect(onSubmit).toHaveBeenCalledWith('ビルド');
+  });
+
   it('cancels on blur', () => {
     const blurred = renderPopover();
     fireEvent.blur(nameField()!);

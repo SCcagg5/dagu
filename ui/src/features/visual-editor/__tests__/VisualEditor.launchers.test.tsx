@@ -30,6 +30,9 @@ vi.mock('@/hooks/useDAGRunSSE', () => ({
   }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({ useCanExecute: () => true }));
+vi.mock('@/contexts/ConfigContext', () => ({
+  useConfig: () => ({ tz: 'UTC' }),
+}));
 vi.mock('@/contexts/RemoteNodeContext', () => ({
   useRemoteNode: () => 'local',
 }));

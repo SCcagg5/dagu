@@ -24,6 +24,13 @@ describe('Dependencies', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
   });
 
+  it('shows the issues of one dependency', () => {
+    renderPart(Dependencies, runStep, {
+      fieldIssues: { 'depends[1]': [issuesSample[0]!] },
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('unknown dependency');
+  });
+
   it('tells when there is no dependency', () => {
     renderPart(Dependencies, { ...runStep, depends: [] });
     expect(screen.getByText('No dependencies')).toBeInTheDocument();
