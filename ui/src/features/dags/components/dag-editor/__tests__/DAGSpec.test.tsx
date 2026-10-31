@@ -137,8 +137,26 @@ vi.mock('../AgentSpecOverview', () => ({
   AgentSpecOverview: () => <div>Agent overview</div>,
 }));
 vi.mock('../ExternalChangeDialog', () => ({
-  default: ({ visible }: { visible: boolean }) =>
-    visible ? <div role="dialog">External Changes Detected</div> : null,
+  default: ({
+    visible,
+    onDiscard,
+    onIgnore,
+  }: {
+    visible: boolean;
+    onDiscard(): void;
+    onIgnore(): void;
+  }) =>
+    visible ? (
+      <div role="dialog">
+        External Changes Detected
+        <button type="button" onClick={onDiscard}>
+          Discard & Reload
+        </button>
+        <button type="button" onClick={onIgnore}>
+          Ignore
+        </button>
+      </div>
+    ) : null,
 }));
 vi.mock('../../dag-details', () => ({ DAGStepTable: () => null }));
 vi.mock('../../value-reference-notices', () => ({
@@ -1267,6 +1285,25 @@ describe('DAGSpec visual view', () => {
       expect(save).toBeEnabled();
     });
 
+    // The editor of the parent comes back when the picked sub-DAG is
+    // renamed or removed in the file.
+    it.each([
+      ['renamed', [{ ...localDags[0]!, name: 'renamed' }]],
+      ['removed', []],
+    ])('falls back to the parent when the sub-DAG is %s', async (_, next) => {
+      const view = await renderSpec({ localDags });
+      fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+        target: { value: 'child' },
+      });
+      await settle();
+
+      view.rerender(specTree({ localDags: next }));
+      await settle();
+
+      expect(screen.getByTestId('visual-editor-mock')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    });
+
     it('shows no selector for a file with one document', async () => {
       await renderSpec();
 
@@ -1323,6 +1360,89 @@ describe('DAGSpec draft recovery', () => {
     expect(
       screen.queryByRole('status', { name: 'Unsaved draft' })
     ).not.toBeInTheDocument();
+  });
+
+  it('stores the hash of the saved spec with the draft', async () => {
+    const sha = 'a'.repeat(64);
+    mocks.useQuery.mockReturnValue(specData({ sha256: sha }));
+    const view = await renderSpec();
+    fireEvent.change(screen.getByLabelText('DAG spec'), {
+      target: { value: savedSpec + '# draft\n' },
+    });
+    view.unmount();
+
+    expect(JSON.parse(localStorage.getItem(draftKey) ?? '{}')).toMatchObject({
+      text: savedSpec + '# draft\n',
+      baseSha256: sha,
+    });
+  });
+
+  it('stores no hash while a newer version waits in the conflict dialog', async () => {
+    mocks.useQuery.mockReturnValue(specData({ sha256: 'a'.repeat(64) }));
+    const view = await renderSpec();
+    const editor = screen.getByLabelText('DAG spec');
+    fireEvent.change(editor, { target: { value: savedSpec + '# mine\n' } });
+
+    mocks.useQuery.mockReturnValue(
+      specData({ spec: savedSpec + '# theirs\n', sha256: 'b'.repeat(64) })
+    );
+    fireEvent.change(editor, { target: { value: savedSpec + '# mine!\n' } });
+    expect(screen.getByRole('dialog')).toHaveTextContent('External Changes');
+    view.unmount();
+
+    const stored = JSON.parse(localStorage.getItem(draftKey) ?? '{}');
+    expect(stored.text).toBe(savedSpec + '# mine!\n');
+    expect(stored).not.toHaveProperty('baseSha256');
+  });
+
+  // A draft of an older version would replace the newer one on save: the
+  // restore asks first, as for a change on disk during an edit.
+  describe('of an older version', () => {
+    const draftText = savedSpec + '# draft\n';
+
+    beforeEach(() => {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          text: draftText,
+          savedAt: 1,
+          baseSha256: 'a'.repeat(64),
+        })
+      );
+      mocks.useQuery.mockReturnValue(specData({ sha256: 'b'.repeat(64) }));
+    });
+
+    const restore = () =>
+      fireEvent.click(
+        within(screen.getByRole('status', { name: 'Unsaved draft' })).getByRole(
+          'button',
+          { name: 'Restore' }
+        )
+      );
+
+    it('restores the draft only when the newer version is ignored', async () => {
+      await renderSpec();
+      restore();
+
+      expect(screen.getByRole('dialog')).toHaveTextContent('External Changes');
+      expect(screen.getByLabelText('DAG spec')).toHaveValue(savedSpec);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Ignore' }));
+      expect(screen.getByLabelText('DAG spec')).toHaveValue(draftText);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('keeps the newer version and drops the draft on reload', async () => {
+      await renderSpec();
+      restore();
+      fireEvent.click(screen.getByRole('button', { name: 'Discard & Reload' }));
+
+      expect(screen.getByLabelText('DAG spec')).toHaveValue(savedSpec);
+      expect(localStorage.getItem(draftKey)).toBeNull();
+      expect(
+        screen.queryByRole('status', { name: 'Unsaved draft' })
+      ).not.toBeInTheDocument();
+    });
   });
 });
 

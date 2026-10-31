@@ -291,6 +291,16 @@ function DAGSpec({
     [closeSpecStepDetails]
   );
 
+  // A renamed or removed sub-DAG gives the parent back.
+  React.useEffect(() => {
+    if (
+      activeTab !== 'parent' &&
+      !localDags?.some((localDag) => localDag.name === activeTab)
+    ) {
+      handleActiveTabChange('parent');
+    }
+  }, [activeTab, handleActiveTabChange, localDags]);
+
   // Reference to save function and refresh callback for keyboard shortcut
   const saveHandlerRef = React.useRef<(() => Promise<void>) | null>(null);
   const refreshCallbackRef = React.useRef<(() => void) | null>(null);
@@ -358,8 +368,19 @@ function DAGSpec({
     serverText: serverSpec ?? undefined,
     currentText: currentValue ?? undefined,
     isDirty: localHasUnsavedChanges,
+    // Edits that a newer version waits to replace have no known base.
+    baseSha256: conflict.hasConflict ? undefined : data?.sha256,
     isSame: isSameYaml,
   });
+  // A draft of an older version is restored only when the user ignores the
+  // newer one, which its save would replace.
+  const [staleDraftOpen, setStaleDraftOpen] = React.useState(false);
+  const restoreDraft = React.useCallback(() => {
+    if (draft) {
+      setCurrentValue(draft.text);
+      discardDraft();
+    }
+  }, [discardDraft, draft, setCurrentValue]);
 
   // Hash of the newest server version, sent with a save so that the server
   // refuses to overwrite a file that changed on disk in the meantime.
@@ -1820,6 +1841,17 @@ function DAGSpec({
                 onDiscard={() => resolveConflict('discard')}
                 onIgnore={() => resolveConflict('ignore')}
               />
+              <ExternalChangeDialog
+                visible={staleDraftOpen}
+                onDiscard={() => {
+                  setStaleDraftOpen(false);
+                  discardDraft();
+                }}
+                onIgnore={() => {
+                  setStaleDraftOpen(false);
+                  restoreDraft();
+                }}
+              />
               <ConfirmModal
                 title={ts('Discard changes')}
                 buttonText={ts('Discard')}
@@ -1908,8 +1940,11 @@ function DAGSpec({
                                   <DraftRecoveryCard
                                     savedAt={draft.savedAt}
                                     onRestore={() => {
-                                      setCurrentValue(draft.text);
-                                      discardDraft();
+                                      if (draft.baseSha256 !== data.sha256) {
+                                        setStaleDraftOpen(true);
+                                      } else {
+                                        restoreDraft();
+                                      }
                                     }}
                                     onDiscard={discardDraft}
                                   />
