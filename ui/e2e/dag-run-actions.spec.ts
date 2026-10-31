@@ -153,7 +153,7 @@ steps:
     expect(contents).toMatch(/line 100000\n$/);
   });
 
-  test('opens the run of the progress card on its page', async ({
+  test('opens the run of the progress card on the workflow page', async ({
     page,
     request,
   }) => {
@@ -206,6 +206,14 @@ steps:
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Run ID (optional)').fill(runId);
     await dialog.getByRole('button', { name: 'Start', exact: true }).click();
+    // Start selects the new run in the one tab of the workflow.
+    await expect
+      .poll(() => {
+        const url = new URL(page.url());
+        return [url.pathname, url.searchParams.get('run')];
+      })
+      .toEqual([`/dags/${encodeURIComponent(fileName)}`, runId]);
+
     await expect(
       page.getByRole('dialog', { name: 'Run progress' })
     ).toHaveCount(0);
@@ -214,16 +222,19 @@ steps:
     });
     await expect(progressCard).toBeVisible();
     // A click on the card opens no dialog: it removes the card and shows the
-    // run on its page.
+    // run on the page of the workflow.
     await progressCard.click();
     await expect(progressCard).toHaveCount(0);
     await expect(
       page.getByRole('dialog', { name: 'Run progress' })
     ).toHaveCount(0);
+    await expect(page).toHaveURL(
+      new RegExp(`/dags/${dagName}\\.yaml\\?remoteNode=local&run=${runId}`)
+    );
     try {
-      await expect
-        .poll(() => new URL(page.url()).pathname)
-        .toBe(`/dag-runs/${dagName}/${runId}`);
+      await expect(
+        page.getByTestId('ww-run-chip').getByTestId('ww-run-progress')
+      ).toBeVisible({ timeout: 30_000 });
     } finally {
       await Promise.all([
         writeFile(releaseFirst, ''),
@@ -232,7 +243,10 @@ steps:
     }
   });
 
-  test('stops a running distributed DAG run from the UI', async ({ page, request }) => {
+  test('stops a running distributed DAG run from the UI', async ({
+    page,
+    request,
+  }) => {
     const stack = await loadStack();
     const token = await loginViaAPI(
       request,
@@ -255,14 +269,26 @@ steps:
 
     await waitForDAGAvailable(request, token, fileName);
     const dagRunId = await startDAG(request, token, fileName);
-    await waitForRunStatus(request, token, dagName, dagRunId, ['running'], 'local', 30_000);
+    await waitForRunStatus(
+      request,
+      token,
+      dagName,
+      dagRunId,
+      ['running'],
+      'local',
+      30_000
+    );
 
-    await page.goto(`/dag-runs/${dagName}/${dagRunId}`);
-    await page.getByRole('button', { name: 'Stop' }).click();
+    // The workflow page shows the run with its actions.
+    await page.goto(`/dags/${encodeURIComponent(fileName)}?run=${dagRunId}`);
+    await page
+      .getByTestId('ww-run-actions')
+      .getByRole('button', { name: 'Stop', exact: true })
+      .click();
 
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('dialog', { name: 'Stop this run?' });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Stop' }).click();
+    await dialog.getByRole('button', { name: 'Stop', exact: true }).click();
 
     const stoppedRun = await waitForRunStatus(
       request,
