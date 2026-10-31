@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from './button';
 import { Spinner } from './spinner';
@@ -24,6 +24,11 @@ export const RefreshButton: React.FC<RefreshButtonProps> = ({
   const { t } = useI18n();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const busy = isRefreshing || isLoading;
+  // The feedback timer must not outlive the button.
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
+  useEffect(() => () => clearTimeout(feedbackTimer.current), []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -31,7 +36,7 @@ export const RefreshButton: React.FC<RefreshButtonProps> = ({
       await onRefresh();
     } finally {
       // Brief visual feedback
-      setTimeout(() => setIsRefreshing(false), 500);
+      feedbackTimer.current = setTimeout(() => setIsRefreshing(false), 500);
     }
   };
 
