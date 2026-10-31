@@ -253,9 +253,11 @@ one element for each sample.
 
 ## Constraints
 
-- Disk use for one continuous step grows by at most 3 MiB for each day of the
-  raw tier, then by a constant that does not depend on the sample rate for
-  each older day.
+- The raw tier of one continuous step uses at most 3 MiB of disk for each
+  86 400 samples that it holds, which is one day at one sample each second,
+  plus 1 KiB for each failed sample. Each day older than the raw tier adds a
+  constant that does not depend on the sample rate. Events are outside this
+  bound.
 - Memory use of the runner and of the server does not grow with the count of
   samples.
 - An API request of this spec answers in 500 ms at most for a run of three
