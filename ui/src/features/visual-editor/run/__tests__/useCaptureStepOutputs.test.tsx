@@ -19,6 +19,9 @@ const h = vi.hoisted(() => ({
   runSpec: undefined as string | undefined,
   /** The saved definition answers. */
   saved: true,
+  /** The parameters of the run, and the defaults of the workflow. */
+  runParams: '',
+  defaultParams: '',
   paths: [] as string[],
 }));
 
@@ -28,6 +31,12 @@ vi.mock('@/hooks/api', () => ({
     if (init === null || h.spec === undefined) return { data: undefined };
     if (path === '/dags/{fileName}/spec') {
       return h.saved ? { data: { spec: h.spec } } : { data: undefined };
+    }
+    if (path === '/dag-runs/{name}/{dagRunId}') {
+      return { data: { dagRunDetails: { params: h.runParams } } };
+    }
+    if (path === '/dags/{fileName}') {
+      return { data: { dag: { defaultParams: h.defaultParams } } };
     }
     return { data: { spec: h.runSpec ?? h.spec } };
   },
@@ -81,6 +90,8 @@ beforeEach(() => {
   h.spec = SPEC;
   h.runSpec = undefined;
   h.saved = true;
+  h.runParams = '';
+  h.defaultParams = '';
   h.paths = [];
 });
 
@@ -211,6 +222,18 @@ describe('useCaptureStepOutputs', () => {
     h.runSpec = undefined;
     view.rerender({ data: outputs(), runId: 'new' });
     expect(outputCache.entries(SCOPE)['fetch']?.runId).toBe('new');
+  });
+
+  // A step run uses the defaults: the outputs of a run with other
+  // parameters are not what it would get.
+  it('keeps nothing from a run with other parameters than the defaults', () => {
+    h.defaultParams = 'ENV=dev';
+    h.runParams = 'ENV=prod';
+    const view = capture({ data: outputs(), runId: 'prod' });
+    expect(outputCache.entries(SCOPE)['fetch']).toBeUndefined();
+    h.runParams = 'ENV=dev';
+    view.rerender({ data: outputs(), runId: 'dev' });
+    expect(outputCache.entries(SCOPE)['fetch']?.runId).toBe('dev');
   });
 
   it('waits for the saved definition', () => {

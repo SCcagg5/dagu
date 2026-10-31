@@ -3,6 +3,7 @@
 
 import { useEffect } from 'react';
 import { NodeStatus } from '@/api/v1/schema';
+import { useQuery } from '@/hooks/api';
 import type { StepOutputs } from '../contracts';
 import {
   isCacheable,
@@ -11,6 +12,7 @@ import {
   type CacheEntry,
   type CacheScope,
 } from './outputCache';
+import { paramsDiffer } from './reuseSource';
 import { useCacheScope, useOutputCacheEntries } from './useOutputCacheEntries';
 import { useLiveStepHashes, useRunStepHashes } from './useStepHashes';
 
@@ -53,10 +55,13 @@ export function forgetCaptures(scope: CacheScope, step: string): void {
  * Keeps the outputs of a step that succeeded in the cache of the workflow,
  * with the hash of the step as the run saw it. The caller passes the data
  * that it already loaded (`useStepOutputs`): this hook makes no request for
- * outputs. It reads the definition of the run once, for the hash. Nothing
- * happens without a file name. Every entry names the run that it was read from.
- * An entry that is fresh for the saved definition is not replaced by the step
- * of an older run that the user looks at.
+ * outputs. It reads the definition and the parameters of the run, and the
+ * defaults of the workflow, once. Nothing happens without a file name. Every
+ * entry names the run that it was read from. An entry that is fresh for the
+ * saved definition is not replaced by the step of an older run that the user
+ * looks at. A run with other parameters than the defaults of the workflow is
+ * not kept: a step run uses the defaults, and the hash does not cover the
+ * parameters of a run.
  */
 export function useCaptureStepOutputs(p: {
   /** The workflow file; no capture without it. */
@@ -82,6 +87,32 @@ export function useCaptureStepOutputs(p: {
     fileName: fileName ?? '',
     enabled: values !== null && !!fileName,
   });
+  const { remoteNode } = scope;
+  const run = useQuery(
+    '/dag-runs/{name}/{dagRunId}',
+    values !== null && fileName && dagName && runId
+      ? {
+          params: {
+            path: { name: dagName, dagRunId: runId },
+            query: { remoteNode },
+          },
+        }
+      : null
+  );
+  const workflow = useQuery(
+    '/dags/{fileName}',
+    values !== null && fileName
+      ? { params: { path: { fileName }, query: { remoteNode } } }
+      : null
+  );
+  // Null until the run and the workflow answer.
+  const ranWithDefaults =
+    run.data && workflow.data
+      ? !paramsDiffer(
+          run.data.dagRunDetails.params,
+          workflow.data.dag?.defaultParams
+        )
+      : null;
   const held = entries[step];
   const hash = hashes?.get(step);
   const savedHash = saved?.get(step);
@@ -90,6 +121,7 @@ export function useCaptureStepOutputs(p: {
     // Wait for the saved definition, so that a stale read never replaces a
     // fresh entry for a moment.
     if (saved === null) return;
+    if (ranWithDefaults !== true) return;
     if (
       held !== undefined &&
       savedHash !== undefined &&
@@ -118,6 +150,7 @@ export function useCaptureStepOutputs(p: {
     hash,
     savedHash,
     saved === null,
+    ranWithDefaults,
     JSON.stringify(values),
     held,
   ]);
