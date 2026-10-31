@@ -27,6 +27,8 @@ describe('actionTitle', () => {
     ['jq.filter', 'Jq filter'],
     ['send-slack', 'Send slack'],
     ['noop', 'Noop'],
+    // A key that every object has is a word, not an acronym.
+    ['constructor.run', 'Constructor run'],
   ])('%s gives %s', (name, title) => {
     expect(actionTitle(name)).toBe(title);
   });
