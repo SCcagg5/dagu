@@ -131,7 +131,7 @@ type RunState =
   | { phase: 'idle' }
   | { phase: 'confirming' }
   | { phase: 'posting' }
-  | { phase: 'started'; dagRunId: string; dagName: string }
+  | { phase: 'started'; dagRunId: string; fileName: string }
   | { phase: 'error' };
 
 type Props = {
@@ -211,7 +211,7 @@ export function DaguRunBlock({ source }: Props) {
     setRunState({
       phase: 'started',
       dagRunId: data.dagRunId,
-      dagName: lookup.dagName,
+      fileName: lookup.fileName,
     });
     showToast(
       parsed.mode === 'enqueue' ? 'DAG run enqueued' : 'DAG run started'
@@ -249,7 +249,7 @@ export function DaguRunBlock({ source }: Props) {
         <div className="mt-1 text-xs">
           <Link
             to={buildDAGPageURL({
-              fileName: runState.dagName,
+              fileName: runState.fileName,
               remoteNode: live.remoteNode,
               run: runState.dagRunId,
             })}

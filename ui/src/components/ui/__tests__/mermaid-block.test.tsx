@@ -152,4 +152,31 @@ describe('MermaidBlock', () => {
     expect(mermaidMock.initialize).not.toHaveBeenCalled();
     expect(mermaidMock.render).not.toHaveBeenCalled();
   });
+
+  it('loads mermaid again when the code changes after a failed load', async () => {
+    let attempts = 0;
+    vi.resetModules();
+    vi.doMock('mermaid', () => {
+      attempts++;
+      if (attempts === 1) throw new Error('chunk load failed');
+      return { default: mermaidMock };
+    });
+    const fresh = await import('../mermaid-block');
+
+    const { container, rerender } = render(
+      <fresh.MermaidBlock code="graph TD; A-->B;" />
+    );
+    await waitFor(() =>
+      expect(container.querySelector('pre code')).toHaveTextContent(
+        'graph TD; A-->B;'
+      )
+    );
+
+    rerender(<fresh.MermaidBlock code="graph TD; C-->D;" />);
+    const call = await nextRender(0);
+    call.resolve({ svg: '<svg data-testid="diagram"></svg>' });
+
+    expect(await screen.findByTestId('diagram')).toBeInTheDocument();
+    expect(container.querySelector('pre')).not.toBeInTheDocument();
+  });
 });

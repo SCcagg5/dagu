@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { type Config, ConfigContext } from '@/contexts/ConfigContext';
 import { DateKanbanList } from '../DateKanbanList';
 import { useInfiniteKanban } from '../../hooks/useInfiniteKanban';
 
@@ -18,18 +19,21 @@ vi.mock('../DateKanbanSection', () => ({
     onCardClick,
   }: {
     date: string;
-    onCardClick: (run: unknown) => void;
+    onCardClick: (run: unknown, event: React.MouseEvent) => void;
   }) => (
     <div>
       <span>{date}</span>
       <button
         type="button"
-        onClick={() =>
-          onCardClick({
-            dagRunId: 'run-with-artifacts',
-            name: 'artifact-dag',
-            artifactsAvailable: true,
-          })
+        onClick={(event) =>
+          onCardClick(
+            {
+              dagRunId: 'run-with-artifacts',
+              name: 'artifact-dag',
+              artifactsAvailable: true,
+            },
+            event
+          )
         }
       >
         Open run {date}
@@ -65,6 +69,7 @@ const useInfiniteKanbanMock = useInfiniteKanban as unknown as {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe('DateKanbanList', () => {
@@ -119,5 +124,36 @@ describe('DateKanbanList', () => {
     expect(screen.getByTestId('location')).toHaveTextContent(
       '/dags/artifact-dag?remoteNode=local&run=run-with-artifacts&dock=artifacts'
     );
+  });
+
+  it('opens a Ctrl-clicked run in a new tab', () => {
+    const openMock = vi.spyOn(window, 'open').mockImplementation(() => null);
+    useInfiniteKanbanMock.mockReturnValue({
+      loadedDates: ['2026-03-21'],
+      todayStr: '2026-03-21',
+      hasMore: false,
+      loadNextDate: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/cockpit']}>
+        <ConfigContext.Provider value={{ basePath: '' } as Config}>
+          <DateKanbanList selectedWorkspace="ops" />
+        </ConfigContext.Provider>
+        <LocationProbe />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open run 2026-03-21' }),
+      { ctrlKey: true }
+    );
+
+    expect(openMock).toHaveBeenCalledWith(
+      '/dags/artifact-dag?remoteNode=local&run=run-with-artifacts&dock=artifacts',
+      '_blank',
+      'noopener'
+    );
+    expect(screen.getByTestId('location')).toHaveTextContent('/cockpit');
   });
 });

@@ -46,14 +46,15 @@ export function BucketKanbanList({
 
   // A card opens its run on the workflow page, on the Artifacts tab when the run has artifacts.
   const handleCardClick = useCallback(
-    (run: DAGRunSummary) => {
+    (run: DAGRunSummary, event?: React.MouseEvent) => {
       openPage(
         buildDAGPageURL({
           fileName: run.name,
           remoteNode,
           run: run.dagRunId,
           dock: run.artifactsAvailable ? 'artifacts' : undefined,
-        })
+        }),
+        event
       );
     },
     [openPage, remoteNode]

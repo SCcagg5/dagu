@@ -15,6 +15,7 @@ type CapturedProps = {
   toStr: string;
   isLive: boolean;
   filters?: KanbanFilters;
+  onCardClick: (run: unknown, event?: { ctrlKey?: boolean }) => void;
 };
 const sectionProps: CapturedProps[] = [];
 
@@ -43,6 +44,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe('BucketKanbanList', () => {
@@ -83,5 +85,25 @@ describe('BucketKanbanList', () => {
     // The next bucket ends one interval (3 days) before the first bucket.
     expect(dayjs(firstTo).diff(dayjs(older.toStr), 'day')).toBe(3);
     expect(older.isLive).toBe(false);
+  });
+
+  it('opens a Ctrl-clicked card in a new tab', () => {
+    const openMock = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(
+      <MemoryRouter>
+        <BucketKanbanList intervalDays={3} filters={{}} resetKey="v1" />
+      </MemoryRouter>
+    );
+
+    sectionProps[0]!.onCardClick(
+      { name: 'etl', dagRunId: 'run-1' },
+      { ctrlKey: true }
+    );
+
+    expect(openMock).toHaveBeenCalledWith(
+      '/dags/etl?remoteNode=local&run=run-1',
+      '_blank',
+      'noopener'
+    );
   });
 });

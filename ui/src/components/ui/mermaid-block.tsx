@@ -112,18 +112,20 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
     };
   }, [code, idPrefix]);
 
-  if (error) {
-    return (
-      <pre className="text-xs p-2 rounded bg-muted overflow-x-auto font-mono">
-        <code>{code}</code>
-      </pre>
-    );
-  }
-
+  // The container stays mounted under the fallback so that a later code
+  // change can render into it again.
   return (
-    <div
-      ref={containerRef}
-      className="my-1 overflow-x-auto [&>svg]:max-w-full"
-    />
+    <>
+      {error && (
+        <pre className="text-xs p-2 rounded bg-muted overflow-x-auto font-mono">
+          <code>{code}</code>
+        </pre>
+      )}
+      <div
+        ref={containerRef}
+        hidden={error !== null}
+        className="my-1 overflow-x-auto [&>svg]:max-w-full"
+      />
+    </>
   );
 }
