@@ -201,6 +201,26 @@ describe('useRunHistory with the test runs', () => {
       expect(historyCalls().length).toBeGreaterThan(first);
     });
 
+    // SWR restarts the poll timer when its interval changes: a caller that
+    // renders more often than the poll must not hold the poll off.
+    it('keeps polling while the caller renders more often than the poll', async () => {
+      withTest();
+      const view = renderWorkspace(() =>
+        useRunHistory({
+          enabled: true,
+          includeEphemeral: true,
+          pollTestRuns: true,
+        })
+      );
+      await waitFor(() => expect(historyCalls().length).toBeGreaterThan(0));
+      const first = historyCalls().length;
+      for (let elapsed = 0; elapsed <= TEST_RUN_POLL_MS; elapsed += 1000) {
+        await poll(1000);
+        view.rerender();
+      }
+      expect(historyCalls().length).toBeGreaterThan(first);
+    });
+
     it('does not poll without a test run in the list or in this tab', async () => {
       renderWorkspace(() =>
         useRunHistory({
