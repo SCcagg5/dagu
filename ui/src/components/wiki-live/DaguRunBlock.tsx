@@ -202,7 +202,9 @@ export function DaguRunBlock({ source }: Props) {
       : client.POST('/dags/{fileName}/start', request));
     if (error || !data?.dagRunId) {
       setRunState({ phase: 'error' });
-      showToast(error?.message || 'Failed to start DAG run');
+      showToast(error?.message || 'Failed to start DAG run', {
+        variant: 'error',
+      });
       return;
     }
     setRunState({
