@@ -110,6 +110,11 @@ const WHEEL_STEP = 0.2;
 /** A pause that makes the next wheel move start from zero, in ms. */
 const WHEEL_IDLE_MS = 250;
 
+/** The pixels of one unit of a wheel delta, by `deltaMode`: a line or a page. */
+export function wheelDeltaUnit(deltaMode: number): number {
+  return deltaMode === 1 ? 16 : deltaMode === 2 ? 400 : 1;
+}
+
 /**
  * Turns the deltas of a wheel or of a pinch into steps of the ladder. Each
  * call gives 1, -1 or 0: the deltas add up, and a step starts when their

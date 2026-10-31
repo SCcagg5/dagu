@@ -70,7 +70,7 @@ const MAX_BASE_BYTES = 200;
 
 function sanitizeBase(base: string): string {
   const cleaned = base
-    .replace(/[^\p{L}\p{N}_]+/gu, '_')
+    .replace(/[^\p{L}\p{M}\p{N}_]+/gu, '_')
     .replace(/^_+|_+$/g, '');
   let out = '';
   let bytes = 0;
@@ -86,9 +86,9 @@ function sanitizeBase(base: string): string {
 /**
  * Returns a valid step name that is not in `taken`: the sanitized `base`, else
  * `base_2`, `base_3` and so on. Sanitizing replaces each run of characters
- * other than letters, digits and `_` with one `_` (`http.request` gives
- * `http_request`). The caller puts step names and ids in `taken`, because a
- * name must differ from every id.
+ * other than letters, combining marks, digits and `_` with one `_`
+ * (`http.request` gives `http_request`). The caller puts step names and ids
+ * in `taken`, because a name must differ from every id.
  */
 export function uniqueStepName(base: string, taken: Iterable<string>): string {
   const used = new Set(taken);

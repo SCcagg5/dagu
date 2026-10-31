@@ -152,7 +152,11 @@ export function parseInputLabel(label: string): InputProvenance | null {
   const [kind, seconds, name, run, ...rest] = label
     .slice(INPUT_LABEL_PREFIX.length)
     .split('/');
-  const known = kind === undefined ? undefined : KIND_OF[kind];
+  // A label can say `constructor`: only an own key of the table is a kind.
+  const known =
+    kind !== undefined && Object.prototype.hasOwnProperty.call(KIND_OF, kind)
+      ? KIND_OF[kind]
+      : undefined;
   if (!known || rest.length > 0 || !/^\d+$/.test(seconds ?? '')) return null;
   const step = decodeLabelName(name ?? '');
   if (step === null) return null;
@@ -205,8 +209,7 @@ export function isEphemeralRun(
 const EPHEMERAL_LABEL_OLD = 'dagu.ephemeral=true';
 
 function finishedAtMs(node: Node): number | null {
-  const time = Date.parse(node.finishedAt);
-  return Number.isFinite(time) ? time : null;
+  return nodeTime(node.finishedAt);
 }
 
 function isoMs(value: string | undefined): number | null {

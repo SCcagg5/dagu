@@ -182,8 +182,9 @@ export function createOutputCache(
 ): OutputCache {
   const memory = new Map<string, CacheEntries>();
   const listeners = new Set<() => void>();
+  // Each part is encoded: a name can hold the separator.
   const storageKey = (scope: CacheScope) =>
-    `${KEY_PREFIX}${scope.remoteNode}:${scope.fileName}`;
+    `${KEY_PREFIX}${encodeURIComponent(scope.remoteNode)}:${encodeURIComponent(scope.fileName)}`;
   const memoryKey = (scope: CacheScope) =>
     `${scope.remoteNode}\u0000${scope.fileName}`;
   function tryStorage<T>(use: (s: StorageLike) => T): T | undefined {

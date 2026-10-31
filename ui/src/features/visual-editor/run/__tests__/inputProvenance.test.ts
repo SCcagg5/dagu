@@ -149,6 +149,9 @@ describe('inputLabel and parseInputLabel', () => {
       'dagu.input=cache/1/slow/extra',
       'dagu.input=run/1/slow',
       'dagu.input=run/1/slow/r1/extra',
+      // Names of the prototype of an object are no kind.
+      'dagu.input=constructor/1/slow',
+      'dagu.input=__proto__/1/slow',
       'team=a',
     ]) {
       expect(parseInputLabel(label)).toBeNull();
@@ -227,6 +230,19 @@ describe('runInputProvenance', () => {
       capturedAt: Date.parse('2026-10-01T00:00:05Z'),
       startedAt: null,
       finishedAt: Date.parse('2026-10-01T00:00:05Z'),
+    });
+  });
+
+  it('reads the zero time of the server as no time', () => {
+    const found = runInputProvenance({
+      labels: ['dagu.outputs-from=r1'],
+      nodes: [
+        node('slow', { doneCount: 1, finishedAt: '0001-01-01T00:00:00Z' }),
+      ],
+    });
+    expect(found.get('slow')).toMatchObject({
+      capturedAt: null,
+      finishedAt: null,
     });
   });
 
