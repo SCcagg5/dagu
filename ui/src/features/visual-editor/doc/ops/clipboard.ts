@@ -472,6 +472,10 @@ export function duplicateStepsOp(doc: DagDoc, steps: StepKey[]): EditResult {
   for (const key of steps) {
     const step = findStep(source, key);
     if (!step) return fail('unknownStep', `No step has the key ${key}.`);
+    // A copy of a handler would be pasted as a step that runs on every run.
+    if (step.loc.form === 'handler') {
+      return fail('noop', 'A handler cannot be duplicated.');
+    }
     if (!last || filePosition(step) >= filePosition(last)) last = step;
   }
   const yaml = copyStepsYaml(doc, steps);
