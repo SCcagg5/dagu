@@ -165,7 +165,7 @@ function renderSubRuns(
   return { openOnStack };
 }
 
-const CHILD_PAGE = '/dags/example?remoteNode=edge&run=run-1';
+const CHILD_PAGE = '/dags/example?remoteNode=edge&run=run-1&subRun=c-1';
 
 beforeEach(() => {
   subRunsApi.calls = [];
@@ -280,6 +280,24 @@ describe('StepSubRuns with several children', () => {
     );
   });
 
+  // The sub-run list can lag behind the step, for a child that is queued.
+  it('keeps a child that the sub-run list does not have yet, last', () => {
+    subRunsApi.rows = subRunsApi.rows.filter((r) => r.dagRunId !== 'w-3');
+    renderSubRuns(THREE);
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Multiple executions: 3 sub DAG runs/,
+      })
+    );
+
+    expect(
+      screen
+        .getAllByRole('button', { name: /^#0\d: worker$/ })
+        .map((r) => r.textContent)
+    ).toEqual(['#02: worker', '#01: worker', '#03: worker']);
+  });
+
   it('hides the filters when every child has one status', () => {
     subRunsApi.rows = subRunsApi.rows.map((r) => ({
       ...r,
@@ -314,7 +332,7 @@ describe('StepSubRuns with several children', () => {
       metaKey: true,
     });
     expect(open).toHaveBeenCalledWith(
-      '/dags/example?remoteNode=edge&run=run-1',
+      '/dags/example?remoteNode=edge&run=run-1&subRun=w-3',
       '_blank'
     );
     expect(openOnStack).toHaveBeenCalledTimes(1);
