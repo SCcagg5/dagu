@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { Layers, List, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import dayjs from '@/lib/dayjs';
@@ -23,11 +23,9 @@ import { AppBarContext } from '../../contexts/AppBarContext';
 import { useCanWriteForWorkspace } from '../../contexts/AuthContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useSearchState } from '../../contexts/SearchStateContext';
-import { useUserPreferences } from '../../contexts/UserPreference';
 import { useHideBreadcrumb } from '@/contexts/LayoutChromeContext';
-import { WorkflowsModeToggle } from '../../features/dags/components/dag-list/WorkflowsModeToggle';
+import DAGListHeader from '../../features/dags/components/dag-list/DAGListHeader';
 import DAGRunBatchActions from '../../features/dag-runs/components/common/DAGRunBatchActions';
-import DAGRunGroupedView from '../../features/dag-runs/components/dag-run-list/DAGRunGroupedView';
 import DAGRunTable from '../../features/dag-runs/components/dag-run-list/DAGRunTable';
 import { usePaginatedDAGRuns } from '../../features/dag-runs/hooks/dagRunPagination';
 import {
@@ -52,7 +50,6 @@ import {
   workspaceSelectionQuery,
 } from '../../lib/workspace';
 import StatusChip from '@/components/ui/status-chip';
-import Title from '@/components/ui/title';
 import { I18nText } from '@/i18n/I18nText';
 import { useI18n } from '@/i18n/I18nProvider';
 import { LoadErrorState } from '@/components/PageStates';
@@ -175,7 +172,6 @@ function DAGRuns() {
   const navigate = useNavigate();
   const appBarContext = React.useContext(AppBarContext);
   const config = useConfig();
-  const { preferences, updatePreference } = useUserPreferences();
   const searchState = useSearchState();
   const remoteKey = appBarContext.selectedRemoteNode || 'local';
   const workspaceSelection = appBarContext.workspaceSelection;
@@ -340,9 +336,6 @@ function DAGRuns() {
   }, [location.search, navigate, remoteKey]);
   const loadMoreSentinelRef = React.useRef<HTMLDivElement>(null);
   const autoLoadPendingRef = React.useRef(false);
-
-  // View mode comes from user preferences (local storage)
-  const viewMode = preferences.dagRunsViewMode;
 
   // Date range mode: 'preset', 'specific', or 'custom'
   const [dateRangeMode, setDateRangeMode] = React.useState<
@@ -1110,6 +1103,34 @@ function DAGRuns() {
     }
   };
 
+  const handleRenameRunView = async (
+    viewId: string,
+    name: string
+  ): Promise<void> => {
+    const target = scopedRunViews.find((view) => view.id === viewId);
+    if (!target) {
+      return;
+    }
+    setRunViewError(null);
+    try {
+      await updateView(
+        target.id,
+        buildRunViewSpec(
+          name,
+          dagRunsFilterSetFromView(target),
+          target.isDefault ?? false,
+          target.pinned ?? false,
+          runViewScope
+        )
+      );
+    } catch (error) {
+      setRunViewError(
+        error instanceof Error ? error.message : 'Failed to rename run view'
+      );
+      throw error;
+    }
+  };
+
   const handleDeleteRunView = async (viewId: string): Promise<void> => {
     const deletingActiveView = viewId === activeRunViewId;
     setRunViewError(null);
@@ -1138,11 +1159,6 @@ function DAGRuns() {
     updateSearchParams({
       labels: searchOverrideKey(newLabels.join(',')),
     });
-  };
-
-  const handleViewModeChange = (value: string) => {
-    const newViewMode = value as 'list' | 'grouped';
-    updatePreference('dagRunsViewMode', newViewMode);
   };
 
   const handleDatePresetChange = (preset: string) => {
@@ -1265,71 +1281,41 @@ function DAGRuns() {
   const isAllRunsView =
     activeRunViewId === null && areFiltersEqual(currentFilters, defaultFilters);
 
+  const areRunFiltersSaved = runViews.some((view) =>
+    areFiltersEqual(resolveRunViewFilters(view.filters), currentFilters)
+  );
+
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <Title>
-            <I18nText text={'Workflows'} />
-          </Title>
-          <WorkflowsModeToggle mode="runs" />
-          <ViewSelector
-            kind="run"
-            views={runViews}
-            activeViewId={activeRunViewId}
-            defaultViewId={defaultRunViewId}
-            isAllView={isAllRunsView}
-            isActiveViewEdited={isRunViewEdited}
-            canManageViews={canManageRunViews}
-            error={runViewError}
-            onSelectView={handleSelectRunView}
-            onShowAll={handleShowAllRuns}
-            onResetView={handleResetRunView}
-            onSaveView={handleSaveRunView}
-            onUpdateView={handleUpdateRunView}
-            onSetDefault={handleSetDefaultRunView}
-            onSetPinned={handleSetPinnedRunView}
-            onDeleteView={handleDeleteRunView}
-          />
-        </div>
-        <I18nProps>
-          <ToggleGroup aria-label="View mode" className="h-9 p-0.5">
-            <I18nProps>
-              <ToggleButton
-                value="list"
-                groupValue={viewMode}
-                onClick={() => handleViewModeChange('list')}
-                position="first"
-                aria-label="List view"
-                className="h-8 px-3"
-              >
-                <List size={16} className="sm:mr-1.5" />
-                <span className="hidden sm:inline">
-                  <I18nText text={'List'} />
-                </span>
-              </ToggleButton>
-            </I18nProps>
-            <I18nProps>
-              <ToggleButton
-                value="grouped"
-                groupValue={viewMode}
-                onClick={() => handleViewModeChange('grouped')}
-                position="last"
-                aria-label="Grouped view"
-                className="h-8 px-3"
-              >
-                <Layers size={16} className="sm:mr-1.5" />
-                <span className="hidden sm:inline">
-                  <I18nText text={'Grouped'} />
-                </span>
-              </ToggleButton>
-            </I18nProps>
-          </ToggleGroup>
-        </I18nProps>
-      </div>
+      <DAGListHeader
+        mode="runs"
+        resultCount={dagRuns.length}
+        hasMore={hasMore}
+        onRefresh={() => refreshDagRuns()}
+      />
       <div>
-        <div className="mb-4 space-y-2">
+        <div data-testid="workflow-controls" className="mb-4 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
+            <ViewSelector
+              kind="run"
+              views={runViews}
+              activeViewId={activeRunViewId}
+              defaultViewId={defaultRunViewId}
+              isAllView={isAllRunsView}
+              isActiveViewEdited={isRunViewEdited}
+              canManageViews={canManageRunViews}
+              error={runViewError}
+              onSelectView={handleSelectRunView}
+              onShowAll={handleShowAllRuns}
+              onResetView={handleResetRunView}
+              onSaveView={handleSaveRunView}
+              onUpdateView={handleUpdateRunView}
+              onSetDefault={handleSetDefaultRunView}
+              onSetPinned={handleSetPinnedRunView}
+              onDeleteView={handleDeleteRunView}
+              onRenameView={handleRenameRunView}
+              filtersAlreadySaved={areRunFiltersSaved}
+            />
             <I18nProps>
               <AutocompleteInput
                 placeholder="Filter by workflow name..."
@@ -1392,6 +1378,15 @@ function DAGRuns() {
               <Search className="mr-1.5 h-4 w-4" />
               <I18nText text={'Search'} />
             </Button>
+            <DAGRunBatchActions
+              inline
+              selectedRuns={selectedRuns}
+              loadedCount={dagRuns.length}
+              onSelectAllLoaded={selectAllLoaded}
+              onClearSelection={clearSelection}
+              onReplaceSelection={replaceSelection}
+              onActionComplete={refreshDagRuns}
+            />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <I18nProps>
@@ -1536,33 +1531,21 @@ function DAGRuns() {
             )}
           </div>
         </div>
-        <DAGRunBatchActions
-          selectedRuns={selectedRuns}
-          loadedCount={dagRuns.length}
-          onSelectAllLoaded={selectAllLoaded}
-          onClearSelection={clearSelection}
-          onReplaceSelection={replaceSelection}
-          onActionComplete={refreshDagRuns}
-        />
         {dagRunsError && dagRuns.length === 0 && !isInitialLoading ? (
           <LoadErrorState
             title={ts("Couldn't load runs")}
             error={dagRunsError}
             onRetry={() => void refreshDagRuns()}
           />
-        ) : viewMode === 'list' ? (
+        ) : (
           <DAGRunTable
             dagRuns={dagRuns}
             isLoading={isInitialLoading}
             selectedRunKeys={selectedKeys}
             onToggleBulkSelect={toggleSelection}
-          />
-        ) : (
-          <DAGRunGroupedView
-            dagRuns={dagRuns}
-            isLoading={isInitialLoading}
-            selectedRunKeys={selectedKeys}
-            onToggleBulkSelect={toggleSelection}
+            onSelectAll={(checked) =>
+              checked ? selectAllLoaded() : clearSelection()
+            }
           />
         )}
         <div className="mt-3 flex flex-col items-center gap-2">

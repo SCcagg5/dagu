@@ -8,13 +8,19 @@ import { WorkflowsModeToggle } from './WorkflowsModeToggle';
 
 interface DAGListHeaderProps {
   onRefresh?: () => void | Promise<void>;
-  /** The workflows that match the filters, on the server. */
+  /** The workflows (or runs) that match the filters. */
   resultCount?: number;
+  /** The count has more behind it: the list loads more as it scrolls. */
+  hasMore?: boolean;
+  /** The mode of the page: its list of workflows, or its list of runs. */
+  mode?: 'workflows' | 'runs';
 }
 
 const DAGListHeader: React.FC<DAGListHeaderProps> = ({
   onRefresh,
   resultCount,
+  hasMore = false,
+  mode = 'workflows',
 }) => {
   const { ts } = useI18n();
   return (
@@ -28,12 +34,21 @@ const DAGListHeader: React.FC<DAGListHeaderProps> = ({
             data-testid="workflow-count"
             className="text-xs text-muted-foreground"
           >
-            {ts(resultCount === 1 ? '{count} workflow' : '{count} workflows', {
-              count: resultCount.toLocaleString(),
-            })}
+            {ts(
+              mode === 'runs'
+                ? resultCount === 1 && !hasMore
+                  ? '{count} run'
+                  : '{count} runs'
+                : resultCount === 1
+                  ? '{count} workflow'
+                  : '{count} workflows',
+              {
+                count: `${resultCount.toLocaleString()}${hasMore ? '+' : ''}`,
+              }
+            )}
           </span>
         )}
-        <WorkflowsModeToggle mode="workflows" />
+        <WorkflowsModeToggle mode={mode} />
       </div>
       <div className="flex gap-2">
         <CreateDAGButton />

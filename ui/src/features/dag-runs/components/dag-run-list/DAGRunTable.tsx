@@ -39,6 +39,8 @@ interface DAGRunTableProps {
   isLoading?: boolean;
   selectedRunKeys?: Set<string>;
   onToggleBulkSelect?: (dagRun: DAGRunSelectionItem) => void;
+  /** Selects all the loaded runs, or clears the selection. */
+  onSelectAll?: (checked: boolean) => void;
 }
 
 function isInteractiveEventTarget(target: EventTarget | null): boolean {
@@ -62,6 +64,7 @@ function DAGRunTable({
   isLoading = false,
   selectedRunKeys,
   onToggleBulkSelect,
+  onSelectAll,
 }: DAGRunTableProps) {
   const config = useConfig();
   const remoteNode = useRemoteNode();
@@ -311,7 +314,7 @@ function DAGRunTable({
                           dagRunId: dagRun.dagRunId,
                         })
                       }
-                      className="h-5 w-5 pointer-events-none"
+                      className="size-3.5 pointer-events-none"
                     />
                   </div>
                 )}
@@ -447,12 +450,28 @@ function DAGRunTable({
         <TableHeader>
           <TableRow>
             {onToggleBulkSelect && (
-              <TableHead className="w-10">
-                <I18nText text={'Select'} />
+              <TableHead className="w-10 px-0">
+                <div className="flex h-8 items-center justify-center">
+                  <Checkbox
+                    className="size-3.5"
+                    aria-label="Select all loaded runs"
+                    disabled={!onSelectAll || dagRuns.length === 0}
+                    checked={
+                      dagRuns.some(isBulkSelected)
+                        ? dagRuns.every(isBulkSelected)
+                          ? true
+                          : 'indeterminate'
+                        : false
+                    }
+                    onCheckedChange={(checked) =>
+                      onSelectAll?.(checked === true)
+                    }
+                  />
+                </div>
               </TableHead>
             )}
             <TableHead>
-              <I18nText text={'Workflow name'} />
+              <I18nText text={'Name'} />
             </TableHead>
             <TableHead>
               <I18nText text={'Run ID'} />
@@ -498,9 +517,9 @@ function DAGRunTable({
               }}
             >
               {onToggleBulkSelect && (
-                <TableCell className="py-1 px-2">
+                <TableCell className="py-1 px-0">
                   <div
-                    className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-muted focus-within:ring-2 focus-within:ring-ring"
+                    className="flex h-8 w-10 items-center justify-center rounded-md transition-colors hover:bg-muted focus-within:ring-2 focus-within:ring-ring"
                     onClick={(event) => {
                       event.stopPropagation();
                       if (event.target !== event.currentTarget) {
