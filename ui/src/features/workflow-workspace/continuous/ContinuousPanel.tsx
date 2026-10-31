@@ -32,6 +32,7 @@ import {
   type View,
 } from './sampleBars';
 import {
+  useReadAtEnd,
   useStepAvailability,
   useStepSamples,
   type ContinuousTarget,
@@ -121,6 +122,8 @@ export function ContinuousPanel({
     points,
     polled
   );
+  useReadAtEnd(active, availability.mutate);
+  useReadAtEnd(active, samples.mutate);
 
   const choose = (id: RangePresetId) => {
     setSelected(null);

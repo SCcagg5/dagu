@@ -47,11 +47,13 @@ describe('pointsFor', () => {
 });
 
 describe('pointsForWindow', () => {
-  it('keeps pointsFor, and asks a bucket for each day for a window of years', () => {
+  // The day buckets start at midnight UTC: a window that starts at another
+  // time touches one day bucket more than its span holds.
+  it('keeps pointsFor, and asks a bucket for each day that a window of years touches', () => {
     expect(pointsForWindow(800, DAY)).toBe(200);
     expect(pointsForWindow(800, 30 * DAY)).toBe(200);
-    expect(pointsForWindow(800, 365 * DAY)).toBe(365);
-    expect(pointsForWindow(800, 3 * 365 * DAY)).toBe(1095);
+    expect(pointsForWindow(800, 365 * DAY)).toBe(366);
+    expect(pointsForWindow(800, 3 * 365 * DAY)).toBe(1096);
     expect(pointsForWindow(800, 30 * 365 * DAY)).toBe(2000);
   });
 });

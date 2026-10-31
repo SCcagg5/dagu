@@ -32,12 +32,18 @@ const h = vi.hoisted(() => ({
     points: number;
     poll: boolean;
   }>,
+  /** The paths that the panel read again with mutate. */
+  reads: [] as string[],
 }));
 
-function answer(data: unknown) {
+function answer(data: unknown, path: string) {
+  const mutate = () => {
+    h.reads.push(path);
+    return Promise.resolve(undefined);
+  };
   return data === null
-    ? { data: undefined, error: new Error('failed') }
-    : { data, error: undefined };
+    ? { data: undefined, error: new Error('failed'), mutate }
+    : { data, error: undefined, mutate };
 }
 
 vi.mock('@/hooks/api', () => ({
@@ -53,7 +59,7 @@ vi.mock('@/hooks/api', () => ({
             init.params.query
           )
         : h.responses[path];
-    return answer(data);
+    return answer(data, path);
   },
 }));
 // The samples hook has tests of its own: here it records what the panel asks.
@@ -66,7 +72,7 @@ vi.mock('../useContinuousData', async (importOriginal) => ({
     poll: boolean
   ) => {
     h.samples.push({ window, points, poll });
-    return answer(h.responses[SAMPLES]);
+    return answer(h.responses[SAMPLES], SAMPLES);
   },
 }));
 vi.mock('@/contexts/RemoteNodeContext', () => ({
@@ -159,8 +165,8 @@ function lastSamples() {
 
 const STARTED_MS = Date.parse('2026-10-01T00:00:00Z');
 
-function renderPanel(active = false) {
-  return render(
+function panel(active: boolean) {
+  return (
     <UserPreferencesProvider>
       <I18nProvider>
         <ContinuousPanel
@@ -173,6 +179,10 @@ function renderPanel(active = false) {
       </I18nProvider>
     </UserPreferencesProvider>
   );
+}
+
+function renderPanel(active = false) {
+  return render(panel(active));
 }
 
 beforeEach(() => {
@@ -188,6 +198,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   h.calls.length = 0;
   h.samples.length = 0;
+  h.reads.length = 0;
   h.responses = {};
 });
 afterEach(() => {
@@ -526,5 +537,23 @@ describe('ContinuousPanel', () => {
       vi.advanceTimersByTime(60_000);
     });
     expect(h.calls).toHaveLength(0);
+  });
+
+  // A run can end between two polls, and nothing polls after it: the end of
+  // the run (its last samples, the stopped event) is read once more.
+  it('reads the step once more when the run ends', () => {
+    h.responses = {
+      [AVAIL]: availability,
+      [SAMPLES]: samples(5),
+      [EVENTS]: events,
+    };
+    const view = renderPanel(true);
+    expect(h.reads).toEqual([]);
+
+    view.rerender(panel(false));
+    expect([...h.reads].sort()).toEqual([AVAIL, EVENTS, SAMPLES].sort());
+
+    view.rerender(panel(false));
+    expect(h.reads).toHaveLength(3);
   });
 });

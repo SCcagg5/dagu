@@ -25,11 +25,14 @@ export function pointsFor(widthPx: number): number {
 /**
  * The `points` to ask for a window of `spanMs`. It is pointsFor, unless even
  * the day tier needs more buckets than that for the window: then one for each
- * day, up to POINTS_MAX, so that a window of years is not cut by the server.
+ * day bucket that the window touches, up to POINTS_MAX, so that a window of
+ * years is not cut by the server.
  */
 export function pointsForWindow(widthPx: number, spanMs: number): number {
   const base = pointsFor(widthPx);
-  const days = Math.ceil(spanMs / 86_400_000);
+  // The day buckets start at midnight UTC: a window that starts at another
+  // time touches one bucket more than its span holds.
+  const days = Math.ceil(spanMs / 86_400_000) + 1;
   return days > base ? Math.min(POINTS_MAX, days) : base;
 }
 

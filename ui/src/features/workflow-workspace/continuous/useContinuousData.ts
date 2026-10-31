@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import { useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { useRemoteNode } from '@/contexts/RemoteNodeContext';
 import { useClient, useQuery } from '@/hooks/api';
@@ -17,6 +18,18 @@ export interface ContinuousTarget {
 export const POLL_MS = 10_000;
 
 const iso = (ms: number) => new Date(ms).toISOString();
+
+/**
+ * Calls `read` once each time `active` turns false, so that the end of a
+ * run that stopped between two polls shows.
+ */
+export function useReadAtEnd(active: boolean, read: () => unknown): void {
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (wasActive.current && !active) void read();
+    wasActive.current = active;
+  }, [active, read]);
+}
 
 function pathOf(target: ContinuousTarget) {
   return {

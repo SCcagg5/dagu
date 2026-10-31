@@ -12,7 +12,11 @@ import { formatAbsoluteTime } from '@/lib/dagRunTiming';
 import { formatExactCount } from '@/lib/formatCompactCount';
 import { sameContent } from '../data/sameContent';
 import { formatSpanMs } from './format';
-import { useStepEventsPage, type ContinuousTarget } from './useContinuousData';
+import {
+  useReadAtEnd,
+  useStepEventsPage,
+  type ContinuousTarget,
+} from './useContinuousData';
 
 type StepEvent = components['schemas']['StepEvent'];
 type Window = { from: number; to: number } | null;
@@ -115,11 +119,12 @@ function EventsPage({
 }): ReactElement {
   const { ts } = useI18n();
   const [more, setMore] = useState(false);
-  const { data, error } = useStepEventsPage(
+  const { data, error, mutate } = useStepEventsPage(
     target,
     { before, window, limit: EVENTS_PAGE },
     poll
   );
+  useReadAtEnd(poll, mutate);
   if (error && !data) {
     return (
       <PanelMessage tone="error" align="start" className="p-0">
