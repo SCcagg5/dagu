@@ -778,6 +778,44 @@ describe('parallel step and restored link on text', () => {
     expect(after.edges.map((edge) => edge.kind)).toEqual(['depends']);
   });
 
+  // b reads ${steps.a.outputs.x} and lists no depends: the insert must still
+  // make b wait for the new step, as the ghost on the edge shows.
+  it('inserts a step on an inferred edge before its target', () => {
+    const text = [
+      'name: g',
+      'steps:',
+      '  - name: a',
+      '    run: echo a',
+      '    output: x',
+      '  - name: b',
+      '    run: echo ${steps.a.outputs.x}',
+      '',
+    ].join('\n');
+    const model = parseDagDoc(text);
+    const graph = buildCanvasGraph({
+      model,
+      names: resolveStepNames(model),
+      issues: { byStep: {}, dag: [] },
+      details: { steps: [{ name: 'b', inferredDepends: ['a'] }] } as never,
+    });
+    const inferred = graph.edges.find((edge) => edge.kind === 'inferred');
+    expect(inferred).toBeDefined();
+    const op = paletteTargetOp(
+      graph,
+      null,
+      { mode: 'insert', edgeId: inferred!.id },
+      entry
+    );
+    const result = applyEdit(text, op!);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const steps = parseDagDoc(result.text).steps;
+    const added = steps[1]!.explicitName!;
+    expect(steps[1]!.depends).toEqual(['a']);
+    expect(steps[2]!.depends).toEqual([added]);
+    expect(result.text).toContain('run: echo ${steps.a.outputs.x}');
+  });
+
   it('gives no restore op in a chain DAG', () => {
     const chain: CanvasGraph = {
       ...graphOf(yamlChainText),

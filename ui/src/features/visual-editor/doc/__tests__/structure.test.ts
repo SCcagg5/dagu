@@ -698,11 +698,12 @@ steps:
 `);
   });
 
-  it('only adds the step when the target does not list the source', () => {
+  // The edge comes from a reference, as b reading ${steps.a.outputs.x}.
+  it('makes a target that does not list the source wait for the step', () => {
     const text = 'steps:\n  - name: a\n    run: a\n  - name: b\n    run: b\n';
     const result = done(between(text, 'steps[0]', 'steps[1]'), text);
     expect(result.text).toBe(
-      'steps:\n  - name: a\n    run: a\n  - name: mid\n    depends: [a]\n    run: echo mid\n  - name: b\n    run: b\n'
+      'steps:\n  - name: a\n    run: a\n  - name: mid\n    depends: [a]\n    run: echo mid\n  - name: b\n    depends: [mid]\n    run: b\n'
     );
   });
 
