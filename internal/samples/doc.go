@@ -42,9 +42,10 @@
 //
 // The histogram has 16 bins for each octave of the duration in microseconds.
 // Bin 0 holds the durations below 1 us. Bin i (i >= 1) holds the durations d
-// with (i-1)/16 <= log2(d/1us) < i/16. The durations up to about 12 days have
-// their own bin; longer durations go to the last bin. Two histograms add bin by
-// bin, so the aggregate of a bucket is the sum of the aggregates of its parts.
+// with (i-1)/16 <= log2(d/1us) < i/16. The last bin starts at 2^54 us, above
+// the longest time.Duration, so every duration has a bin of finite width. Two
+// histograms add bin by bin, so the aggregate of a bucket is the sum of the
+// aggregates of its parts.
 //
 // A percentile is the bin that holds the sample of the nearest rank. The value
 // is the geometric middle of the bin, limited to the least and the greatest of

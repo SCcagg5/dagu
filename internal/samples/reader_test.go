@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -186,4 +187,32 @@ func TestStreakOldFailure(t *testing.T) {
 	require.EqualValues(t, 89, av.Streak)
 	require.Equal(t, t0.Add(10*time.Minute), av.LastFailureAt)
 	require.EqualValues(t, 100, av.TotalCount)
+}
+
+// The streak reads a raw hour without holding its samples in memory.
+func TestStreakMemory(t *testing.T) {
+	dir := t.TempDir()
+	const n = 200_000
+	var b []byte
+	var lastMsg string
+	for i := range n {
+		exit := 0
+		if i == 0 {
+			exit = 1
+		}
+		b = appendRaw(b, int64(i)*10, 1000, exit, "x", &lastMsg)
+	}
+	path := newStore(dir).path(TierRaw, t0.Unix())
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	require.NoError(t, os.WriteFile(path, b, 0o600))
+
+	var ms0, ms1 runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&ms0)
+	av, err := OpenReader(dir).Availability(context.Background(), t0.Add(time.Hour))
+	runtime.ReadMemStats(&ms1)
+	require.NoError(t, err)
+	require.EqualValues(t, n-1, av.Streak)
+	require.Equal(t, t0, av.LastFailureAt)
+	require.Less(t, ms1.TotalAlloc-ms0.TotalAlloc, uint64(1<<20), "the reader does not hold the samples")
 }

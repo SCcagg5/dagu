@@ -394,24 +394,25 @@ func (v *view) streak() (uint64, time.Time, error) {
 		if err := v.ctx.Err(); err != nil {
 			return 0, time.Time{}, err
 		}
-		type rec struct {
-			ms   int64
-			fail bool
-		}
-		var recs []rec
+		// after counts the samples after the last failed sample of the file.
+		var after uint64
+		var lastFail int64
+		failed := false
 		err := scanRaw(rawFile, func(ms, _ int64, exit int) bool {
-			recs = append(recs, rec{ms, exit != 0})
+			if exit != 0 {
+				lastFail, failed, after = ms, true, 0
+			} else {
+				after++
+			}
 			return true
 		})
 		if err != nil {
 			return 0, time.Time{}, err
 		}
-		for _, rec := range slices.Backward(recs) {
-			if rec.fail {
-				return streak, time.UnixMilli(rec.ms).UTC(), nil
-			}
-			streak++
+		if failed {
+			return streak + after, time.UnixMilli(lastFail).UTC(), nil
 		}
+		streak += after
 	}
 	if len(rawFiles) > 0 {
 		oldest = rawFiles[0].start
