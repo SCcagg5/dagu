@@ -3,14 +3,12 @@
 
 import type { APIRequestContext } from '@playwright/test';
 import {
-  loadStack,
-  loginViaAPI,
   startDAG,
   uniqueName,
   waitForDAGAvailable,
   writeLocalDAG,
 } from '../helpers/e2e';
-import { expect, signIn, test } from './fixtures';
+import { adminToken, expect, signIn, test } from './fixtures';
 
 // Spec 083: a run with a continuous step has a Continuous tab in the Run
 // panel. The tab does not depend on recorded samples: its first state, with
@@ -35,15 +33,6 @@ steps:
   - name: hello
     run: echo hello
 `;
-
-async function adminToken(request: APIRequestContext): Promise<string> {
-  const stack = await loadStack();
-  return loginViaAPI(
-    request,
-    stack.auth.adminUsername,
-    stack.auth.adminPassword
-  );
-}
 
 function headers(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
@@ -114,7 +103,7 @@ test.describe('workspace continuous tab', () => {
     const panel = dock.getByTestId('continuous-panel');
     await expect(panel).toBeVisible({ timeout: 30_000 });
     await expect(panel).toHaveAttribute('data-step', 'heartbeat');
-    await expect(panel.getByTestId('continuous-empty')).toContainText(
+    await expect(panel.getByTestId('continuous-empty')).toHaveText(
       'No samples yet'
     );
     // The chart draws nothing for no bucket.

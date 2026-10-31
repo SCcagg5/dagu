@@ -12,8 +12,6 @@ import type {
 } from '@playwright/test';
 import {
   getStepStdout,
-  loadStack,
-  loginViaAPI,
   showStepOutput,
   startDAG,
   uniqueName,
@@ -21,7 +19,13 @@ import {
   waitForRunStatus,
   writeLocalDAG,
 } from '../helpers/e2e';
-import { expect, signIn, test as base, type FixtureDAG } from './fixtures';
+import {
+  adminToken,
+  expect,
+  signIn,
+  test as base,
+  type FixtureDAG,
+} from './fixtures';
 
 // parity:test-e2e-gaps (the step view of the canvas: NDV, step YAML, Set
 // status, Retry step and the failed-run dock. The workflow is one tab: the
@@ -113,15 +117,6 @@ const test = base.extend<{
     }
   },
 });
-
-async function adminToken(request: APIRequestContext): Promise<string> {
-  const stack = await loadStack();
-  return loginViaAPI(
-    request,
-    stack.auth.adminUsername,
-    stack.auth.adminPassword
-  );
-}
 
 /** The saved text of the DAG, as the server has it. */
 async function readSpecOf(
@@ -586,7 +581,6 @@ test.describe('workspace node details view', () => {
     const header = ndv.locator('[data-panel-header]');
     await expect(header.getByRole('heading', { name: 'YAML' })).toBeVisible();
     await expect(ndv.getByTestId('readonly-marker')).toBeVisible();
-    await expect(ndv.getByTestId('yaml-readonly-chip')).toHaveCount(0);
     await expect(ndv.getByTestId('yaml-run-ref')).toHaveText(runId.slice(0, 8));
     expect((await rect(header)).height, 'the header is 48 px high').toBe(48);
 

@@ -1,11 +1,9 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import type { APIRequestContext, Locator, Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
   getStepStdout,
-  loadStack,
-  loginViaAPI,
   showStepOutput,
   startDAG,
   uniqueName,
@@ -13,7 +11,13 @@ import {
   waitForRunStatus,
   writeLocalDAG,
 } from '../helpers/e2e';
-import { expect, signIn, test as base, type FixtureDAG } from './fixtures';
+import {
+  adminToken,
+  expect,
+  signIn,
+  test as base,
+  type FixtureDAG,
+} from './fixtures';
 
 // parity:test-e2e-gaps (approve, push back and complete a human task from the
 // step view of the workspace)
@@ -84,15 +88,6 @@ const test = base.extend<{
     }
   },
 });
-
-async function adminToken(request: APIRequestContext): Promise<string> {
-  const stack = await loadStack();
-  return loginViaAPI(
-    request,
-    stack.auth.adminUsername,
-    stack.auth.adminPassword
-  );
-}
 
 /**
  * Opens the workflow on a run and opens the step view of a step with a double
