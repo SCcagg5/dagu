@@ -91,7 +91,11 @@ export function useStepSamples(
   );
 }
 
-/** One page of events. `before` is the cursor of the page before; `window` limits the times. */
+/**
+ * One page of events. `before` is the cursor of the page before; `window`
+ * limits the times. The old events stay on the screen until the new ones
+ * come.
+ */
 export function useStepEventsPage(
   target: ContinuousTarget,
   page: {
@@ -117,6 +121,9 @@ export function useStepEventsPage(
         },
       },
     },
-    { refreshInterval: poll && !page.before ? POLL_MS : 0 }
+    {
+      keepPreviousData: true,
+      refreshInterval: poll && !page.before ? POLL_MS : 0,
+    }
   );
 }

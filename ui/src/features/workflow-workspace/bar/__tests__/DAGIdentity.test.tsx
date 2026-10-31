@@ -269,6 +269,25 @@ describe('DAGIdentity description', () => {
     expect(screen.queryByTestId('ww-description-panel')).toBeNull();
   });
 
+  // The panel sits above dialogs. Focus that leaves it, such as a tab to
+  // the Rename button, closes it so the rename dialog opens alone.
+  it('closes the panel when focus moves outside it', async () => {
+    renderIdentity();
+    fireEvent.click(screen.getByRole('button', { name: 'Show description' }));
+    const rename = screen.getByRole('button', { name: 'Rename' });
+    act(() => rename.focus());
+    expect(screen.queryByTestId('ww-description-panel')).toBeNull();
+
+    fireEvent.click(rename);
+    await screen.findByRole('dialog', { name: 'Rename workflow' });
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    });
+    expect(
+      screen.queryByRole('dialog', { name: 'Rename workflow' })
+    ).toBeNull();
+  });
+
   it('has no info button without a description', () => {
     renderIdentity({
       dag: { name: 'etl', description: '  ' } as ApiDAGDetails,

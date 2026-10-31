@@ -7,16 +7,20 @@ import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   POLL_MS,
+  useStepEventsPage,
   useStepSamples,
   type SamplesWindow,
 } from '../useContinuousData';
 
 const h = vi.hoisted(() => ({ GET: vi.fn() }));
 
-vi.mock('@/hooks/api', () => ({
-  useClient: () => ({ GET: h.GET }),
-  useQuery: vi.fn(),
-}));
+vi.mock('@/hooks/api', async () => {
+  const { createQueryHook } = await import('swr-openapi');
+  return {
+    useClient: () => ({ GET: h.GET }),
+    useQuery: createQueryHook({ GET: h.GET } as never, '/'),
+  };
+});
 vi.mock('@/contexts/RemoteNodeContext', () => ({
   useRemoteNode: () => 'local',
 }));
@@ -98,5 +102,47 @@ describe('useStepSamples', () => {
       to: new Date(to).toISOString(),
       points: 100,
     });
+  });
+});
+
+describe('useStepEventsPage', () => {
+  // A poll of the first page moves its cursor: a later page keeps its
+  // events on the screen while it asks again with the new cursor.
+  it('keeps the events of a page while a new cursor loads', async () => {
+    const page = { events: [], nextCursor: 'c3' };
+    h.GET.mockImplementation(
+      async (
+        _path: string,
+        init: { params: { query: { before?: string } } }
+      ) =>
+        init.params.query.before === 'c1'
+          ? { data: page }
+          : new Promise(() => undefined)
+    );
+    const view = renderHook(
+      ({ before }) =>
+        useStepEventsPage(target, { before, window: null, limit: 50 }, false),
+      {
+        initialProps: { before: 'c1' },
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <SWRConfig value={{ provider: () => new Map() }}>
+            {children}
+          </SWRConfig>
+        ),
+      }
+    );
+    await waitFor(() => expect(view.result.current.data).toEqual(page));
+
+    view.rerender({ before: 'c2' });
+    await tick(0);
+    expect(h.GET).toHaveBeenLastCalledWith(
+      '/dag-runs/{name}/{dagRunId}/steps/{stepName}/events',
+      expect.objectContaining({
+        params: expect.objectContaining({
+          query: expect.objectContaining({ before: 'c2' }),
+        }),
+      })
+    );
+    expect(view.result.current.data).toEqual(page);
   });
 });

@@ -144,7 +144,7 @@ export function RunStatusSection({
   );
 }
 
-/** The steps done of the total, as a thin bar, while the run is active. */
+/** The steps that succeeded, as a thin bar, while the run is active. */
 export function RunProgressSection({
   details,
 }: {
@@ -162,7 +162,7 @@ export function RunProgressSection({
         aria-valuemin={0}
         aria-valuemax={nodes.length}
         aria-valuenow={done}
-        aria-valuetext={ts('{done} of {total} done', {
+        aria-valuetext={ts('{done} of {total} succeeded', {
           done,
           total: nodes.length,
         })}

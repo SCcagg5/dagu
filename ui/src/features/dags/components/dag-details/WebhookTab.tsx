@@ -20,6 +20,7 @@ import {
   WebhookOff,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSWRConfig } from 'swr';
 import {
   components,
   WebhookAuthMode as WebhookAuthModeValue,
@@ -130,6 +131,7 @@ function WebhookTab({
   const remoteNode = useRemoteNode();
   const client = useClient();
   const isAdmin = useIsAdmin();
+  const { mutate } = useSWRConfig();
 
   // State
   const [webhook, setWebhook] = useState<WebhookDetails | null>(null);
@@ -197,6 +199,18 @@ function WebhookTab({
   const getRemoteNodeQueryValue = useCallback(() => {
     return encodeURIComponent(getRemoteNodeParam());
   }, [getRemoteNodeParam]);
+
+  // Other views, such as the chip of the workflow bar, read the webhook
+  // through SWR. A create, a toggle or a delete refreshes them.
+  const refreshSharedWebhook = useCallback(() => {
+    void mutate(
+      (key) =>
+        Array.isArray(key) &&
+        key[1] === '/dags/{fileName}/webhook' &&
+        (key[2] as { params?: { path?: { fileName?: string } } } | undefined)
+          ?.params?.path?.fileName === fileName
+    );
+  }, [mutate, fileName]);
 
   // Fetch webhook
   const fetchWebhook = useCallback(async () => {
@@ -271,6 +285,7 @@ function WebhookTab({
       const data = await response.json();
       setWebhook(data.webhook);
       setSecretReveal({ kind: 'token', value: data.token });
+      refreshSharedWebhook();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create webhook');
     } finally {
@@ -300,6 +315,7 @@ function WebhookTab({
       setWebhook(null);
       setSecretReveal(null);
       setShowDeleteConfirm(false);
+      refreshSharedWebhook();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete webhook');
     } finally {
@@ -365,6 +381,7 @@ function WebhookTab({
 
       const data = await response.json();
       setWebhook(data);
+      refreshSharedWebhook();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to toggle webhook');
     } finally {

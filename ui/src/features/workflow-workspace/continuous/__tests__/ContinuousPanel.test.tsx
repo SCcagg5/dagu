@@ -411,6 +411,29 @@ describe('ContinuousPanel', () => {
     expect(window.to).toBeLessThan(NOW);
   });
 
+  // A horizontal swipe has no vertical delta: it neither zooms nor ends
+  // the live preset, and the page keeps the scroll.
+  it('ignores a wheel without a vertical delta', () => {
+    h.responses = {
+      [AVAIL]: availability,
+      [SAMPLES]: samples(5),
+      [EVENTS]: events,
+    };
+    renderPanel();
+    const before = lastSamples().window;
+    const chart = screen.getByTestId('continuous-chart');
+    chart.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 44 + 572, height: 124 }) as DOMRect;
+    expect(
+      fireEvent.wheel(chart, { deltaX: 80, deltaY: 0, clientX: 300 })
+    ).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(lastSamples().window).toEqual(before);
+    expect(before).toHaveProperty('preset');
+  });
+
   // A drag pans on each move: the window is asked for once the drag rests,
   // so the moves leave no request and no cache entry of their own.
   it('asks for a dragged window once it rests', () => {

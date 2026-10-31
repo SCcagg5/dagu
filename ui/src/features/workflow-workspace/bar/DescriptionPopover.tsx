@@ -13,7 +13,8 @@ const MARGIN = 8;
 
 /**
  * The (i) button of the workflow bar. A click opens a panel with the
- * description under the button. Esc and a pointer down outside close it.
+ * description under the button. Esc, and a pointer down or focus outside,
+ * close it.
  */
 export function DescriptionPopover({
   description,
@@ -50,7 +51,7 @@ export function DescriptionPopover({
 
   useEffect(() => {
     if (!open) return;
-    const onPointerDown = (event: Event) => {
+    const onOutside = (event: Event) => {
       const target = event.target as Node;
       if (
         panelRef.current?.contains(target) ||
@@ -67,10 +68,12 @@ export function DescriptionPopover({
       setOpen(false);
       buttonRef.current?.focus();
     };
-    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('pointerdown', onOutside);
+    document.addEventListener('focusin', onOutside);
     document.addEventListener('keydown', onKeyDown, true);
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('pointerdown', onOutside);
+      document.removeEventListener('focusin', onOutside);
       document.removeEventListener('keydown', onKeyDown, true);
     };
   }, [open]);

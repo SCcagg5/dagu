@@ -99,7 +99,8 @@ export function SamplesChart({
       // The ratio is over the plot, right of the latency labels.
       const rect = element.getBoundingClientRect();
       const plot = rect.width - AXIS_PX;
-      if (plot <= 0) return;
+      // A horizontal swipe is not a zoom.
+      if (plot <= 0 || event.deltaY === 0) return;
       event.preventDefault();
       const ratio = Math.min(
         1,
