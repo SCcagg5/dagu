@@ -195,6 +195,33 @@ describe('DAGRunHeader', () => {
       expect(screen.getByTestId('location')).toHaveTextContent(before ?? '');
     });
 
+    // A modified click follows the href, so the href must hold the base path.
+    it('puts the base path of the app in the links to the workflow', () => {
+      render(
+        <MemoryRouter
+          basename="/dagu"
+          initialEntries={['/dagu/dag-runs/nightly/run-42']}
+        >
+          <RemoteNodeProvider remoteNode="edge">
+            <DAGRunHeader
+              dagRun={{ ...dagRun, sourceFileName: 'nightly.yaml' } as never}
+              refreshFn={vi.fn()}
+            />
+          </RemoteNodeProvider>
+        </MemoryRouter>
+      );
+
+      expect(
+        screen.getByRole('link', { name: 'View workflow definition' })
+      ).toHaveAttribute('href', '/dagu/dags/nightly.yaml?remoteNode=edge');
+      expect(
+        screen.getByRole('link', { name: 'Show in workflow' })
+      ).toHaveAttribute(
+        'href',
+        '/dagu/dags/nightly.yaml?remoteNode=edge&run=run-42'
+      );
+    });
+
     it('navigates inside the app on a plain click', () => {
       renderHeader({ ...dagRun, sourceFileName: 'nightly.yaml' });
 

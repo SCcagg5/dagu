@@ -3,7 +3,7 @@
 
 import { Check, FileText, Link2, Workflow } from 'lucide-react';
 import React, { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { components, Status } from '../../../../api/v1/schema';
 import { useConfig } from '../../../../contexts/ConfigContext';
 import { useRemoteNode } from '../../../../contexts/RemoteNodeContext';
@@ -221,44 +221,28 @@ const DAGRunHeader: React.FC<DAGRunHeaderProps> = ({
             )}
           </button>
           {dagRun.sourceFileName && (
-            <a
-              href={buildDAGPageURL({
+            <Link
+              to={buildDAGPageURL({
                 fileName: dagRun.sourceFileName,
                 remoteNode,
                 workspace,
               })}
-              onClick={(e) => {
-                if (e.metaKey || e.ctrlKey) return;
-                e.preventDefault();
-                navigate(
-                  buildDAGPageURL({
-                    fileName: dagRun.sourceFileName!,
-                    remoteNode,
-                    workspace,
-                  })
-                );
-              }}
               className={iconButton}
               title={ts('View workflow definition')}
               aria-label={ts('View workflow definition')}
             >
               <FileText className="h-3.5 w-3.5" />
-            </a>
+            </Link>
           )}
           {showInWorkflowURL && (
-            <a
-              href={showInWorkflowURL}
-              onClick={(e) => {
-                if (e.metaKey || e.ctrlKey) return;
-                e.preventDefault();
-                navigate(showInWorkflowURL);
-              }}
+            <Link
+              to={showInWorkflowURL}
               className={iconButton}
               title={ts('Show in workflow')}
               aria-label={ts('Show in workflow')}
             >
               <Workflow className="h-3.5 w-3.5" />
-            </a>
+            </Link>
           )}
           <span className="sr-only" aria-live="polite">
             {lastCopy === 'runId' ? (
