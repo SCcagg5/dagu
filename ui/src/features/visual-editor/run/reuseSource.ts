@@ -78,7 +78,9 @@ export function staleUpstream(p: {
 export function nodeHoldsOutputs(node: Node | undefined): boolean {
   return (
     node !== undefined &&
-    (node.status === NodeStatus.Success || isReusedNode(node))
+    (node.status === NodeStatus.Success ||
+      node.status === NodeStatus.PartialSuccess ||
+      isReusedNode(node))
   );
 }
 
