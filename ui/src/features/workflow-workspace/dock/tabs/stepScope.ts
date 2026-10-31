@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import type { ApiDAGRunDetails } from '../../contracts';
+import { HANDLER_EVENTS } from '../../data/handlerMapping';
 import { dockFacts, dockTabsFor } from '../dockTabs';
 import type { DockTab } from '../../state/workspaceUrl';
 
@@ -24,15 +25,6 @@ export function stepViewTabs(tabs: readonly DockTab[]): DockTab[] {
   return tabs.filter((tab) => tab !== 'timeline');
 }
 
-const HANDLER_FIELDS = [
-  'onInit',
-  'onSuccess',
-  'onFailure',
-  'onAbort',
-  'onExit',
-  'onWait',
-] as const;
-
 /**
  * The run as one step sees it: the node of the step and nothing else of the
  * steps. Every tab body and the tab strip of a host that shows one step read
@@ -50,7 +42,7 @@ export function scopeDetailsToStep(
   step: string
 ): ApiDAGRunDetails {
   const node = (details.nodes ?? []).find((n) => n.step.name === step);
-  const handler = HANDLER_FIELDS.find(
+  const handler = HANDLER_EVENTS.find(
     (field) => details[field]?.step.name === step
   );
   const owner = node ?? (handler ? details[handler] : undefined);
@@ -66,7 +58,7 @@ export function scopeDetailsToStep(
   // Absent, not empty: a run with no list is not an agent run.
   delete scoped.agentEvents;
   delete scoped.agentTasks;
-  for (const field of HANDLER_FIELDS) {
+  for (const field of HANDLER_EVENTS) {
     if (field !== handler) delete scoped[field];
   }
   return scoped;

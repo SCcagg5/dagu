@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useEffect, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { components } from '@/api/v1/schema';
 import { useQuery } from '@/hooks/api';
 import { whenEnabled } from '@/hooks/queryUtils';
@@ -81,6 +81,20 @@ export function useRunHistory({
   const historySSE = useDAGHistorySSE(fileName, active, remoteNode);
   const startedAt = useTestRunStartedAt(fileName);
   const base = sseFallbackOptions(historySSE);
+  const baseInterval = base.refreshInterval;
+  // SWR restarts its poll timer when this function changes, so it changes
+  // only when the poll can: a list that gains a test run (holdsTestRun) must
+  // restart a poll that stopped. A new function at each render would hold
+  // the poll off while the caller renders more often than the poll.
+  const [holdsTestRun, setHoldsTestRun] = useState(false);
+  const testRunInterval = useCallback(
+    (latest?: { dagRuns?: ApiDAGRunDetails[] }) =>
+      (startedAt !== undefined && Date.now() - startedAt < START_GRACE_MS) ||
+      latest?.dagRuns?.some((run) => run.ephemeral)
+        ? TEST_RUN_POLL_MS
+        : baseInterval,
+    [startedAt, baseInterval, holdsTestRun]
+  );
   const { data, isLoading, mutate } = useQuery(
     '/dags/{fileName}/dag-runs',
     whenEnabled(active, {
@@ -94,17 +108,12 @@ export function useRunHistory({
     {
       ...base,
       ...(includeEphemeral && pollTestRuns
-        ? {
-            refreshInterval: (latest?: { dagRuns?: ApiDAGRunDetails[] }) =>
-              (startedAt !== undefined &&
-                Date.now() - startedAt < START_GRACE_MS) ||
-              latest?.dagRuns?.some((run) => run.ephemeral)
-                ? TEST_RUN_POLL_MS
-                : base.refreshInterval,
-          }
+        ? { refreshInterval: testRunInterval }
         : {}),
     }
   );
+  const holds = data?.dagRuns?.some((run) => run.ephemeral) ?? false;
+  if (holds !== holdsTestRun) setHoldsTestRun(holds);
   // The feed has no test run: it must not replace the list that has them.
   useSSECacheSync(
     historySSE,
