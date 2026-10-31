@@ -423,7 +423,7 @@ function WikiPageEditor({
           <button
             type="button"
             onClick={() => copyName(title)}
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all shrink-0"
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
             title={
               nameCopied
                 ? ts('Name copied')
@@ -449,7 +449,7 @@ function WikiPageEditor({
           <button
             type="button"
             onClick={() => setHistoryOpen(true)}
-            className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title="Revision history"
           >
             <History className="h-3 w-3" />
@@ -465,7 +465,7 @@ function WikiPageEditor({
             type="button"
             onClick={() => copyContent(currentValue ?? '')}
             disabled={!currentValue}
-            className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Copy content"
           >
             {copiedContent ? (

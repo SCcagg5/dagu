@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import { parse as parseYAML } from 'yaml';
 import { DagStatusChip } from './DagStatusChip';
 import { useWikiLive } from './context';
+import { buildDAGPageURL } from '@/features/dag-runs/lib/dagRunUrls';
 import { useI18n } from '@/i18n/I18nProvider';
 import { I18nText } from '@/i18n/I18nText';
 
@@ -247,7 +248,11 @@ export function DaguRunBlock({ source }: Props) {
       {runState.phase === 'started' && (
         <div className="mt-1 text-xs">
           <Link
-            to={`/dag-runs/${encodeURIComponent(runState.dagName)}/${encodeURIComponent(runState.dagRunId)}`}
+            to={buildDAGPageURL({
+              fileName: runState.dagName,
+              remoteNode: live.remoteNode,
+              run: runState.dagRunId,
+            })}
             className="text-primary hover:underline"
           >
             <I18nText text={'View run →'} />
