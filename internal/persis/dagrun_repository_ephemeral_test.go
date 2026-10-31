@@ -119,6 +119,40 @@ func TestEphemeralRunAttemptsFollowTheRoot(t *testing.T) {
 	require.Empty(t, listed)
 }
 
+// The ephemeral option applies only to a new root run: a retry and a child of
+// a history run stay in the history with their root.
+func TestEphemeralOptionFollowsHistoryRoot(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	dag, err := spec.LoadYAML(ctx, []byte("name: eph\nsteps:\n  - run: echo hi\n"))
+	require.NoError(t, err)
+	repo := newEphemeralTestRepository(t, nil)
+	writeTestRun(t, repo, dag, "root", ir.Failed, time.Now(), false)
+	root := ir.NewDAGRunRef(dag.Name, "root")
+
+	retry, err := repo.CreateAttempt(ctx, dag, time.Now(), "root", persis.DAGRunCreateAttemptOptions{Retry: true, Ephemeral: true})
+	require.NoError(t, err)
+	require.NoError(t, retry.Open(ctx))
+	require.NoError(t, retry.Write(ctx, ir.NewStatusBuilder(dag).Create("root", ir.Succeeded, 0, time.Now(),
+		ir.WithAttemptID(retry.ID()), ir.WithFinishedAt(time.Now()))))
+	require.NoError(t, retry.Close(ctx))
+
+	child, err := repo.CreateAttempt(ctx, dag, time.Now(), "child", persis.DAGRunCreateAttemptOptions{RootDAGRun: root, Ephemeral: true})
+	require.NoError(t, err)
+	require.NoError(t, child.Open(ctx))
+	require.NoError(t, child.Write(ctx, ir.NewStatusBuilder(dag).Create("child", ir.Succeeded, 0, time.Now(),
+		ir.WithAttemptID(child.ID()), ir.WithHierarchyRefs(root, root))))
+	require.NoError(t, child.Close(ctx))
+
+	listed, err := repo.ListStatuses(ctx, persis.DAGRunListOptions{AllHistory: true, Unbounded: true})
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	require.Equal(t, ir.Succeeded, listed[0].Status)
+	_, err = repo.FindSubAttempt(ctx, root, "child")
+	require.NoError(t, err)
+}
+
 // The cleanup removes an ephemeral run once it has ended for the TTL, and
 // never removes a run that has not ended.
 func TestRemoveEndedEphemeralRuns(t *testing.T) {
