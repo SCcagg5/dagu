@@ -5,6 +5,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -190,6 +191,9 @@ func (a *API) GetDAGRunStepEvents(ctx context.Context, request api.GetDAGRunStep
 	}
 
 	page, err := reader.Events(ctx, query)
+	if errors.Is(err, samples.ErrInvalidCursor) {
+		return nil, badRequest("invalid cursor")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error reading events: %w", err)
 	}
@@ -206,11 +210,11 @@ func toStepEvents(page samples.EventPage) api.StepEvents {
 		if e.Message != "" {
 			ev.Message = ptrOf(e.Message)
 		}
-		if e.FailedCount > 0 {
+		if e.FailedCount > 0 && (e.Kind == samples.EventFailed || e.Kind == samples.EventRecovered) {
 			ev.FailedCount = ptrOf(countInt64(e.FailedCount))
 		}
 		if e.Kind == samples.EventRecovered {
-			ev.OutageSeconds = ptrOf(int64(e.Outage / time.Second))
+			ev.OutageSeconds = new(int64(e.Outage / time.Second))
 		}
 		events = append(events, ev)
 	}
@@ -258,7 +262,7 @@ func toStepAvailability(av samples.Availability) api.StepAvailability {
 		stat := stats[w.window]
 		out := api.AvailabilityWindow{Window: w.api, Count: countInt64(stat.Count), Failures: countInt64(stat.Failures)}
 		if stat.Count > 0 {
-			out.Availability = ptrOf(float64(stat.Count-min(stat.Failures, stat.Count)) / float64(stat.Count))
+			out.Availability = new(float64(stat.Count-min(stat.Failures, stat.Count)) / float64(stat.Count))
 		}
 		windows = append(windows, out)
 	}
