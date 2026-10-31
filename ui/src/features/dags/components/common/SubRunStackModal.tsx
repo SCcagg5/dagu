@@ -30,6 +30,8 @@ export type SubRunStackEntry = {
   name: string;
   /** Child DAG-run ID. */
   dagRunId: string;
+  /** A step of the child DAG-run to show when it opens. */
+  step?: string;
 };
 
 /**
@@ -201,7 +203,12 @@ export function SubRunStackModal({
         );
       })}
 
+      {/* An open dialog to the layers below, so they leave Escape to it. */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={top.name}
+        data-state="open"
         className={cn(
           'bg-background fixed top-0 right-0 bottom-0 flex h-screen w-full flex-col border-l border-indigo-500/30 transition-transform ease-out md:w-3/4',
           panelZ,
@@ -279,6 +286,7 @@ export function SubRunStackModal({
                   dagRun={shown}
                   refreshFn={refresh}
                   fillHeight
+                  initialStepName={top.step}
                 />
               ) : (
                 <LoadingIndicator />

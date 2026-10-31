@@ -1,7 +1,14 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useCallback, useContext, useEffect, useMemo } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+} from 'react';
 import { cn } from '@/lib/utils';
 import { WorkspaceLoading } from '../../../features/workflow-workspace/WorkspaceLoading';
 import {
@@ -44,6 +51,14 @@ import { isNotFoundQueryError } from '@/lib/queryErrors';
 import { WorkflowWorkspace } from '@/features/workflow-workspace';
 import { LogPopoutPage } from '@/features/workflow-workspace/popout/LogPopoutPage';
 import { useLegacyRedirect } from '@/features/workflow-workspace/state/useLegacyRedirect';
+
+// The run view of a workflow file that is gone reaches Mermaid, which the
+// page keeps out of its static imports.
+const DAGRunDetailsContent = lazy(() =>
+  import('@/features/dag-runs/components/dag-run-details').then((m) => ({
+    default: m.DAGRunDetailsContent,
+  }))
+);
 
 type Params = {
   fileName: string;
@@ -137,10 +152,19 @@ function DAGDetails() {
   }, [dagTitle, setTitle]);
 
   // A run link names the workflow by the DAG name of the run, which finds no
-  // file when the DAG name differs from the file name. The run gives its file.
+  // file, or the file of another DAG, when the DAG name differs from the file
+  // name. The run gives its file.
   const linkedRunId = searchParams.get('run');
-  const lookUpRunFile = Boolean(linkedRunId) && isNotFoundQueryError(dagError);
-  const { data: linkedRun, error: linkedRunError } = useQuery(
+  const lookUpRunFile =
+    Boolean(linkedRunId) &&
+    (isNotFoundQueryError(dagError) ||
+      (!!dagData?.dag &&
+        dagData.dag.name !== fileName.replace(/\.ya?ml$/, '')));
+  const {
+    data: linkedRun,
+    error: linkedRunError,
+    mutate: mutateLinkedRun,
+  } = useQuery(
     '/dag-runs/{name}/{dagRunId}',
     whenEnabled(lookUpRunFile, {
       params: {
@@ -156,6 +180,12 @@ function DAGDetails() {
       : null;
   const resolvingRunFile =
     lookUpRunFile && !linkedRunError && (!linkedRun || !!runFileRedirect);
+  // The source file of the run is gone (deleted, or renamed with the DAG name
+  // kept): the run shows on its own.
+  const fileLessRun =
+    isNotFoundQueryError(dagError) && !linkedRunFile
+      ? (linkedRun?.dagRunDetails ?? null)
+      : null;
 
   // Links from older versions and bookmarks redirect before a body mounts.
   const legacy = useLegacyRedirect(
@@ -292,14 +322,15 @@ function DAGDetails() {
     [refreshData, fileName, dagRunName]
   );
 
-  const showBody =
-    !!dagData?.dag && dagMatchesWorkspace && legacy !== 'pending';
+  // The workflow waits for its redirects: a legacy link or the run file.
+  const redirecting = legacy === 'pending' || resolvingRunFile;
+  const showBody = !!dagData?.dag && dagMatchesWorkspace && !redirecting;
   useFullBleed(showBody);
   // The workspace bar is the first row of the page.
   useHideBreadcrumb(showBody);
   // The bar and the loader stand in the place of the workspace until it shows.
   const loadingFrame =
-    (!dagData?.dag && !dagError) || (!!dagData?.dag && legacy === 'pending');
+    (!dagData?.dag && !dagError) || (!!dagData?.dag && redirecting);
   const legacyHistoryIdx =
     typeof legacy === 'object' ? legacy.needsHistory : null;
 
@@ -317,7 +348,17 @@ function DAGDetails() {
           >
             {runFileRedirect && <Navigate replace to={runFileRedirect} />}
             {!dagData?.dag &&
-              (dagError && !resolvingRunFile ? (
+              (fileLessRun ? (
+                <Suspense fallback={null}>
+                  <DAGRunDetailsContent
+                    name={fileLessRun.name}
+                    dagRun={fileLessRun}
+                    dagRunId={fileLessRun.dagRunId}
+                    refreshFn={() => void mutateLinkedRun()}
+                    fillHeight
+                  />
+                </Suspense>
+              ) : dagError && !resolvingRunFile ? (
                 isNotFoundQueryError(dagError) ? (
                   <NotFoundState
                     title={ts('Workflow not found')}
@@ -342,7 +383,7 @@ function DAGDetails() {
               ) : (
                 <WorkspaceLoading fileName={fileName} />
               ))}
-            {dagData?.dag && legacy === 'pending' && (
+            {dagData?.dag && redirecting && (
               <WorkspaceLoading fileName={fileName} />
             )}
             {showBody && popout && dagData && (
@@ -365,7 +406,7 @@ function DAGDetails() {
                 legacyHistoryIdx={legacyHistoryIdx}
               />
             )}
-            {dagData?.dag && !dagMatchesWorkspace && legacy !== 'pending' && (
+            {dagData?.dag && !dagMatchesWorkspace && !redirecting && (
               <div className="space-y-3 p-6 text-sm text-muted-foreground">
                 <p>
                   <I18nText

@@ -32,15 +32,31 @@ describe('dagRunUrls', () => {
     ).toBe('/dags/etl_file?remoteNode=local&run=r1');
   });
 
-  it('opens the root run for a sub-DAG run, as the workflow page has no sub-run address', () => {
+  // The step of a sub-run link is a step of the sub-run.
+  it('opens a sub-DAG run on the page of its root run with ?subRun', () => {
     expect(
       buildDAGRunPageURL({
         rootDAGRunName: 'root-dag',
         rootDAGRunId: 'root-run',
         remoteNode: 'edge-a',
         subDAGRunId: 'child-run',
+        step: 'build',
       })
-    ).toBe('/dags/root-dag?remoteNode=edge-a&run=root-run');
+    ).toBe(
+      '/dags/root-dag?remoteNode=edge-a&run=root-run&subRun=child-run&step=build'
+    );
+  });
+
+  // A parent link passes the parent as the sub-run, which can be the root.
+  it('opens the root run when the sub-run is the root run', () => {
+    expect(
+      buildDAGRunPageURL({
+        rootDAGRunName: 'root-dag',
+        rootDAGRunId: 'root-run',
+        remoteNode: 'local',
+        subDAGRunId: 'root-run',
+      })
+    ).toBe('/dags/root-dag?remoteNode=local&run=root-run');
   });
 
   it('keeps the workspace, step and dock tab of a run URL', () => {

@@ -38,14 +38,14 @@ const ROWS: Row[] = [
     url: '/status?dagRunId=X',
     expected: { kind: 'runPage', path: '/dags/flow.yaml', query: { run: 'X' } },
   },
-  // The root run opens: the step of the sub-run is not one of its steps.
+  // The root run opens with the sub-run on top; the step is of the sub-run.
   {
     rule: 'R1',
     url: '?dagRunId=X&dagRunName=root&subDAGRunId=Y&step=s',
     expected: {
       kind: 'runPage',
       path: '/dags/root',
-      query: { run: 'X' },
+      query: { run: 'X', subRun: 'Y', step: 's' },
     },
   },
   {
@@ -68,7 +68,7 @@ const ROWS: Row[] = [
     expected: {
       kind: 'runPage',
       path: '/dags/flow.yaml',
-      query: { run: 'X' },
+      query: { run: 'X', subRun: 'Y' },
     },
   },
   {
