@@ -71,6 +71,26 @@ describe('getActionWithSchema', () => {
     });
   });
 
+  // The server reads a ref of a custom input schema inside that schema.
+  it('resolves the refs of a custom action in its input schema', () => {
+    const page: EditorCustomActionHint = {
+      name: 'fetch-page',
+      inputSchema: {
+        type: 'object',
+        allOf: [{ $ref: '#/$defs/fields' }],
+        $defs: {
+          fields: {
+            required: ['url'],
+            properties: { url: { type: 'string' } },
+          },
+        },
+      },
+    };
+    const schema = getActionWithSchema(schemaSample, 'fetch-page', [page]);
+    expect(schema?.required).toEqual(['url']);
+    expect(schema?.properties).toEqual({ url: { type: 'string' } });
+  });
+
   it('prefers the builtin rule over a custom action of the same name', () => {
     expect(
       getActionWithSchema(schemaSample, 'http.request', custom)?.properties?.url

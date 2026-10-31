@@ -152,6 +152,16 @@ describe('layoutGraph one component', () => {
       expect(Number.isInteger(p.y)).toBe(true);
     }
   });
+
+  // The graph of a DAG that the editor does not edit has step names as keys.
+  it('places a step named __proto__', () => {
+    const positions = layoutGraph(
+      graphOf(['__proto__', 'b'], ['__proto__>b']),
+      'LR'
+    );
+    expect(Object.keys(positions)).toEqual(['__proto__', 'b']);
+    expect(positions['__proto__']).toEqual({ x: 0, y: 0 });
+  });
 });
 
 function boxOf(graph: CanvasGraph, positions: NodePositions, key: string) {

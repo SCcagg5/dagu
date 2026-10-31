@@ -84,6 +84,18 @@ describe('Preconditions', () => {
     expect(screen.queryByLabelText('New condition')).toBeNull();
   });
 
+  // The server refuses `condition` next to `eval`.
+  it('shows an eval precondition read-only', () => {
+    renderPart(Preconditions, {
+      ...runStep,
+      value: {
+        preconditions: [{ eval: '$(printf ready)', expected: 'ready' }],
+      },
+    });
+    expect(screen.getByText('Edit this field in YAML')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Condition')).toBeNull();
+  });
+
   it('emits nothing when read-only', () => {
     const { onEdit, edit } = renderPart(Preconditions, withConditions, {
       readOnly: true,

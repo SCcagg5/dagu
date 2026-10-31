@@ -77,6 +77,24 @@ describe('RunEditor', () => {
     });
   });
 
+  // A legacy step with `script:` only keeps that key.
+  it('shows and edits the script of a step that uses `script`', () => {
+    const onEdit = setup({
+      ...oneLine,
+      value: { name: 'greet', script: 'echo hello' },
+    });
+    const input = screen.getByRole('textbox', { name: 'Command' });
+    expect(input).toHaveValue('echo hello');
+    fireEvent.change(input, { target: { value: 'echo bye' } });
+    fireEvent.blur(input);
+    expect(onEdit).toHaveBeenCalledWith({
+      kind: 'setStepField',
+      step: 'steps[2]',
+      path: ['script'],
+      value: 'echo bye',
+    });
+  });
+
   it('shows a list under `command` read-only', () => {
     setup({ ...oneLine, value: { command: ['make a', 'make b'] } });
     expect(screen.getByText('make b')).toBeInTheDocument();
@@ -112,9 +130,33 @@ describe('RunEditor', () => {
     expect(await screen.findByTestId('monaco')).toHaveValue('make build');
   });
 
-  it('sets and removes the shell', () => {
+  // The server refuses a top-level `shell` next to `run`.
+  it('sets and removes the shell in with', () => {
     const onEdit = setup(oneLine);
     const select = screen.getByRole('combobox');
+    fireEvent.change(select, { target: { value: 'bash' } });
+    expect(onEdit).toHaveBeenLastCalledWith({
+      kind: 'setStepField',
+      step: 'steps[2]',
+      path: ['with', 'shell'],
+      value: 'bash',
+    });
+    fireEvent.change(select, { target: { value: '' } });
+    expect(onEdit).toHaveBeenLastCalledWith({
+      kind: 'setStepField',
+      step: 'steps[2]',
+      path: ['with', 'shell'],
+      value: undefined,
+    });
+  });
+
+  it('sets the top-level shell of a step that uses `command`', () => {
+    const onEdit = setup({
+      ...oneLine,
+      value: { command: 'sleep 90', shell: 'sh' },
+    });
+    const select = screen.getByRole('combobox');
+    expect(select).toHaveValue('sh');
     fireEvent.change(select, { target: { value: 'bash' } });
     expect(onEdit).toHaveBeenLastCalledWith({
       kind: 'setStepField',
@@ -122,17 +164,10 @@ describe('RunEditor', () => {
       path: ['shell'],
       value: 'bash',
     });
-    fireEvent.change(select, { target: { value: '' } });
-    expect(onEdit).toHaveBeenLastCalledWith({
-      kind: 'setStepField',
-      step: 'steps[2]',
-      path: ['shell'],
-      value: undefined,
-    });
   });
 
   it('offers a custom shell of the step', () => {
-    setup({ ...oneLine, value: { run: 'x', shell: 'fish' } });
+    setup({ ...oneLine, value: { run: 'x', with: { shell: 'fish' } } });
     expect(screen.getByRole('combobox')).toHaveValue('fish');
   });
 

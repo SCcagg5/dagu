@@ -75,6 +75,24 @@ describe('planActionChange', () => {
     });
   });
 
+  // The `with` of a `run:` step holds its shell settings only.
+  it('asks before it replaces the with of a command step', () => {
+    expect(
+      planActionChange(
+        { ...runStep, value: { run: 'x', with: { shell: 'bash' } } },
+        httpEntry
+      )
+    ).toEqual({
+      confirm: true,
+      ops: [
+        set('steps[2]', ['run'], undefined),
+        set('steps[2]', ['action'], 'http.request'),
+        set('steps[2]', ['with'], undefined),
+        set('steps[2]', ['with'], { method: 'GET', url: '' }),
+      ],
+    });
+  });
+
   it('removes a classic command key when a step becomes an action', () => {
     expect(
       planActionChange({ ...runStep, value: { command: 'x' } }, httpEntry)

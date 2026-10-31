@@ -76,6 +76,19 @@ describe('StepYamlSection', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  // The anchor of an alias can be elsewhere in the DAG.
+  it('applies a change with an alias that the step does not define', async () => {
+    const { onEdit, type } = await setup();
+    const yaml = 'id: fetch\nname: fetch\nrun: echo hi\nretry_policy: *retry';
+    type(yaml);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(onEdit).toHaveBeenCalledWith({
+      kind: 'replaceStepYaml',
+      step: 'steps[0]',
+      yaml,
+    });
+  });
+
   it('applies a change with schema warnings and lists them', async () => {
     const { onEdit, type } = await setup();
     type('id: fetch\nname: fetch\nrun: echo hi\ncolour: red');

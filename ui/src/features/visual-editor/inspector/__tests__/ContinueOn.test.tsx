@@ -12,6 +12,8 @@ describe('continueOnObject', () => {
   it.each<[unknown, Record<string, unknown>]>([
     ['failed', { failure: true }],
     ['skipped', { skipped: true }],
+    [' Failed ', { failure: true }],
+    ['SKIPPED', { skipped: true }],
     [
       { failure: true, exit_code: [1] },
       { failure: true, exit_code: [1] },
@@ -27,7 +29,7 @@ describe('ContinueOn', () => {
   it('sets one key of the object form', () => {
     const { onEdit } = renderPart(ContinueOn, {
       ...runStep,
-      value: { continue_on: { failure: true } },
+      value: { continue_on: { failure: true, exit_code: [1] } },
     });
     expect(
       screen.getByRole('switch', { name: 'Continue on failure' })
@@ -67,7 +69,38 @@ describe('ContinueOn', () => {
     );
   });
 
-  it('removes the shorthand when its switch goes off', () => {
+  it('reads the shorthand in any case', () => {
+    const { onEdit } = renderPart(ContinueOn, {
+      ...runStep,
+      value: { continue_on: ' SKIPPED ' },
+    });
+    expect(
+      screen.getByRole('switch', { name: 'Continue when skipped' })
+    ).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Continue on failure' })
+    );
+    expect(onEdit).toHaveBeenCalledWith(
+      fieldOp(['continue_on'], { skipped: true, failure: true })
+    );
+  });
+
+  // A step without continue_on takes defaults.continue_on, so the last
+  // switch that goes off stays as an explicit false.
+  it('keeps the last key as false when its switch goes off', () => {
+    const { onEdit } = renderPart(ContinueOn, {
+      ...runStep,
+      value: { continue_on: { failure: true } },
+    });
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Continue on failure' })
+    );
+    expect(onEdit.mock.calls).toEqual([
+      [fieldOp(['continue_on', 'failure'], false)],
+    ]);
+  });
+
+  it('keeps the shorthand as false when its switch goes off', () => {
     const { onEdit } = renderPart(ContinueOn, {
       ...runStep,
       value: { continue_on: 'skipped' },
@@ -75,7 +108,9 @@ describe('ContinueOn', () => {
     fireEvent.click(
       screen.getByRole('switch', { name: 'Continue when skipped' })
     );
-    expect(onEdit).toHaveBeenCalledWith(fieldOp(['continue_on'], undefined));
+    expect(onEdit).toHaveBeenCalledWith(
+      fieldOp(['continue_on'], { skipped: false })
+    );
   });
 
   // The server reads `failed` in the map as `failure`.
@@ -88,6 +123,7 @@ describe('ContinueOn', () => {
     expect(failure).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(failure);
     expect(onEdit.mock.calls).toEqual([
+      [fieldOp(['continue_on', 'failure'], false)],
       [fieldOp(['continue_on', 'failed'], undefined)],
     ]);
   });

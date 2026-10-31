@@ -24,11 +24,26 @@ describe('Outputs', () => {
   });
 
   it('removes an output', () => {
-    const { onEdit } = renderPart(Outputs, runStep);
+    const { onEdit } = renderPart(Outputs, {
+      ...runStep,
+      value: {
+        ...runStep.value,
+        outputs: [{ name: 'artifact' }, { name: 'log' }],
+      },
+    });
     fireEvent.click(
       screen.getByRole('button', { name: 'Remove output artifact' })
     );
     expect(onEdit).toHaveBeenCalledWith(fieldOp(['outputs', 0], undefined));
+  });
+
+  // The server refuses an empty list of outputs.
+  it('removes the list with the last output', () => {
+    const { onEdit } = renderPart(Outputs, runStep);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove output artifact' })
+    );
+    expect(onEdit).toHaveBeenCalledWith(fieldOp(['outputs'], undefined));
   });
 
   it('appends an output', () => {

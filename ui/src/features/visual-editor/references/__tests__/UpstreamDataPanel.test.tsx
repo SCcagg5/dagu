@@ -382,6 +382,52 @@ describe('UpstreamDataPanel run values', () => {
     expect(screen.getByText('rv')).toBeInTheDocument();
   });
 
+  // ${RESULT} and ${steps.fetch.outputs.RESULT} can hold different values.
+  it('shows an output variable apart from a named output of the same name', () => {
+    const scope: ReferenceScope = {
+      ...scopeHttpJq,
+      steps: [
+        {
+          name: 'fetch',
+          id: 'fetch',
+          stepPath: 'steps[0]',
+          upstream: [],
+          outputsKnown: ReferenceScopeStepOutputsKnown.static,
+          outputs: [
+            {
+              name: 'RESULT',
+              reference: '${steps.fetch.outputs.RESULT}',
+              source: ReferenceScopeOutputSource.declared,
+            },
+            {
+              name: 'RESULT',
+              reference: '${RESULT}',
+              source: ReferenceScopeOutputSource.outputVariable,
+            },
+          ],
+        },
+        { ...scopeHttpJq.steps[1]!, upstream: ['fetch'] },
+      ],
+    };
+    hook.results.fetch = {
+      data: {
+        ...stepOutputsSample,
+        outputs: [
+          { name: 'RESULT', value: 'named', truncated: false, size: 5 },
+        ],
+        outputVariable: {
+          name: 'RESULT',
+          value: 'variable',
+          truncated: false,
+          size: 8,
+        },
+      },
+    };
+    renderPanel({ scope, runId: 'run-1' });
+    expect(screen.getByText('named')).toBeInTheDocument();
+    expect(screen.getByText('variable')).toBeInTheDocument();
+  });
+
   it('shows a note on a request error and keeps the declared outputs', () => {
     hook.results.fetch = { error: new Error('404') };
     renderPanel({ runId: 'run-1' });

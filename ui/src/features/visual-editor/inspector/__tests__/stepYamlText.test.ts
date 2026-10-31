@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { describe, expect, it } from 'vitest';
-import { modelArraySteps } from '../../testing/fixtures';
+import { applyEdit, parseDagDoc } from '../../doc';
+import {
+  modelArraySteps,
+  yamlHandlers,
+  yamlMapSteps,
+} from '../../testing/fixtures';
 import { parseStepYaml, stepYamlFromModel } from '../stepYamlText';
 import { httpStep, jqStep, modelHttpJq } from './fixtures';
 
@@ -30,6 +35,28 @@ describe('stepYamlFromModel', () => {
         step.value
       );
     }
+  });
+
+  // `replaceStepYaml` replaces the value of a map entry or a handler, so the
+  // text leaves out its key.
+  it.each([
+    ['map entry', yamlMapSteps, 'wc -l data.csv', 'wc -c data.csv'],
+    ['handler', yamlHandlers, 'echo ok', 'echo done'],
+    ['handler with a comment', yamlHandlers, './notify.sh', './alert.sh'],
+  ])('gives the value of a %s', (_, text, before, after) => {
+    const model = parseDagDoc(text);
+    const step = [...model.steps, ...model.handlers].find(
+      (item) => item.runPreview === before
+    )!;
+    const yaml = stepYamlFromModel(model, step);
+    expect(parseStepYaml(yaml).value).toEqual(step.value);
+    expect(
+      applyEdit(text, {
+        kind: 'replaceStepYaml',
+        step: step.key,
+        yaml: yaml.replace(before, after),
+      })
+    ).toMatchObject({ ok: true, text: text.replace(before, after) });
   });
 });
 
