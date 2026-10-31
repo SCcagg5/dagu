@@ -40,6 +40,7 @@ import { useRemoteNode } from '@/contexts/RemoteNodeContext';
 import { buildDAGPageURL } from '@/features/dag-runs/lib/dagRunUrls';
 import { useClient, useQuery } from '@/hooks/api';
 import { whenEnabled } from '@/hooks/queryUtils';
+import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import dayjs from '@/lib/dayjs';
 import { formatBytes } from '@/lib/formatBytes';
 import { I18nProps } from '@/i18n/I18nProps';
@@ -113,7 +114,7 @@ function WebhookPublicURLCard({
   const [pendingAction, setPendingAction] = useState<
     'disable' | 'regenerate' | null
   >(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy: handleCopy } = useCopyFeedback(1500);
   const [sender, setSender] = useState<string>(ANYONE);
   const [secret, setSecret] = useState('');
   const [events, setEvents] = useState('');
@@ -230,16 +231,6 @@ function WebhookPublicURLCard({
         throw new Error(error.message || 'Failed to dismiss');
       }
     }, 'Failed to dismiss');
-
-  const handleCopy = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard API might not be available
-    }
-  };
 
   const keepsSecret =
     !!settings?.secretConfigured && settings.sender === sender;
