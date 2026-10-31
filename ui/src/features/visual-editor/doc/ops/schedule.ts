@@ -42,7 +42,9 @@ const BEFORE_SCHEDULE = [
   'schedule',
 ];
 
+// The start of the map form can be one object, such as a one-off run.
 function readEntries(node: unknown): Omit<ScheduleView, 'present'> {
+  if (isMap(node)) return { expressions: [], others: 1 };
   if (isScalar(node)) {
     return typeof node.value === 'string' && node.value.trim() !== ''
       ? { expressions: [node.value.trim()], others: 0 }
@@ -107,6 +109,7 @@ function startNode(
 }
 
 function keepOthers(node: unknown): unknown[] {
+  if (isMap(node)) return [node];
   return isSeq(node)
     ? node.items.filter(
         (item) => !(isScalar(item) && typeof item.value === 'string')
@@ -116,6 +119,7 @@ function keepOthers(node: unknown): unknown[] {
 
 /** Drops the plain strings of a start list. False when nothing is left. */
 function clearExpressions(node: unknown): boolean {
+  if (isMap(node)) return true;
   if (!isSeq(node)) return false;
   node.items = keepOthers(node);
   return node.items.length > 0;

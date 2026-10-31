@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { describe, expect, it } from 'vitest';
-import { mentionsStep, rewriteStepReferences } from '../ops/references';
+import {
+  mentionsStep,
+  outputReferenceIds,
+  rewriteStepReferences,
+} from '../ops/references';
 
 // [input, expected output of renaming `fetch` to `load`]
 const rewritten: Array<[string, string]> = [
@@ -148,5 +152,21 @@ describe('mentionsStep', () => {
 
   it('is false for another step', () => {
     expect(mentionsStep('${steps.fetch.outputs.a}', 'load')).toBe(false);
+  });
+});
+
+describe('outputReferenceIds', () => {
+  it('names the step of each step-output reference', () => {
+    expect(
+      outputReferenceIds('${steps.fetch.outputs.a} ${ steps.load.outputs.b }')
+    ).toEqual(['fetch', 'load']);
+  });
+
+  it('skips escaped tokens and other forms', () => {
+    expect(
+      outputReferenceIds(
+        '\\${steps.fetch.outputs.a} ${fetch.stdout} ${params.x} $steps.a'
+      )
+    ).toEqual([]);
   });
 });

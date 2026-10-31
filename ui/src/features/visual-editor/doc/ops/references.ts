@@ -103,6 +103,21 @@ export function rewriteStepReferences(
   });
 }
 
+/** The step ids that the `${steps.<id>.outputs.<name>}` tokens of `value` name. */
+export function outputReferenceIds(value: string): string[] {
+  if (!value.includes('$')) {
+    return [];
+  }
+  const ids: string[] = [];
+  for (const match of value.matchAll(TOKEN)) {
+    const id = match[2];
+    if (id !== undefined && !isEscaped(value, match.index)) {
+      ids.push(id);
+    }
+  }
+  return ids;
+}
+
 /**
  * Returns true when `value` has a token that `rewriteStepReferences` would
  * change for step `name`.

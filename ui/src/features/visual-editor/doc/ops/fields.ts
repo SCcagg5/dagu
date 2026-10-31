@@ -303,25 +303,40 @@ interface RefChange {
   idAfter?: string;
 }
 
+// The text of a scalar that names a step. The server reads a number or a
+// boolean in a list of names as its text (`StringOrArray` in
+// internal/spec/types/stringarray.go).
+function refText(node: unknown): string | undefined {
+  if (!isScalar(node)) return undefined;
+  const { value } = node;
+  return typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'boolean'
+    ? String(value)
+    : undefined;
+}
+
 /**
- * Calls `fn` for each scalar that names a step: `depends`, `approval.rewind_to`
- * and `with.push_back.rewind_to` (name or id, see `resolveStepDependencies` in
- * internal/spec/validator.go), and the targets of `routes` and `with.routes`
- * (name only, see `transformRouterSteps` in internal/spec/dag.go).
+ * Calls `fn` for each scalar that names a step, with its text: `depends`,
+ * `approval.rewind_to` and `with.push_back.rewind_to` (name or id, see
+ * `resolveStepDependencies` in internal/spec/validator.go), and the targets
+ * of `routes` and `with.routes` (name only, see `transformRouterSteps` in
+ * internal/spec/dag.go).
  */
 function visitStepRefs(
   entry: YAMLMap,
-  fn: (scalar: Scalar<string>, nameOnly: boolean) => void
+  fn: (scalar: Scalar, text: string, nameOnly: boolean) => void
 ): void {
+  const one = (node: unknown, nameOnly: boolean) => {
+    const text = refText(node);
+    if (text !== undefined) fn(node as Scalar, text, nameOnly);
+  };
   const list = (node: unknown, nameOnly: boolean) => {
-    const single = stringScalar(node);
-    if (single) {
-      fn(single, nameOnly);
-    } else if (isSeq(node)) {
-      for (const item of node.items) {
-        const scalar = stringScalar(item);
-        if (scalar) fn(scalar, nameOnly);
-      }
+    if (isSeq(node)) {
+      for (const item of node.items) one(item, nameOnly);
+    } else {
+      one(node, nameOnly);
     }
   };
   list(entry.get('depends', true), false);
@@ -363,8 +378,8 @@ function retarget(
 function rewriteStepRefs(doc: Document, change: RefChange): void {
   for (const step of indexSteps(doc).steps) {
     if (!isMap(step.node)) continue;
-    visitStepRefs(step.node, (scalar, nameOnly) => {
-      const next = retarget(scalar.value, nameOnly, change);
+    visitStepRefs(step.node, (scalar, text, nameOnly) => {
+      const next = retarget(text, nameOnly, change);
       if (next !== null) setScalarString(scalar, next);
     });
   }

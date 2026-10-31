@@ -50,6 +50,12 @@ describe('readSchedule', () => {
     });
   });
 
+  it('counts a start that is one object', () => {
+    expect(
+      readSchedule('schedule:\n  start:\n    at: 2030-01-01T00:00:00Z\n')
+    ).toEqual({ present: true, expressions: [], others: 1 });
+  });
+
   it('does not throw on a broken text', () => {
     expect(readSchedule('a: [\n').present).toBe(false);
   });
@@ -118,6 +124,21 @@ steps:
       []
     );
     expect(map).toBe('schedule:\n  stop: "0 18 * * *"\n');
+  });
+
+  // The start of the map form can be one object, such as a one-off run.
+  it('keeps a start that is one object', () => {
+    const text = 'schedule:\n  start:\n    at: 2030-01-01T00:00:00Z\n';
+    const next = set(text, ['0 9 * * *']);
+    expect(next).toContain('at: 2030-01-01T00:00:00Z');
+    expect(readSchedule(next)).toEqual({
+      present: true,
+      expressions: ['0 9 * * *'],
+      others: 1,
+    });
+
+    const result = applyEdit(text, { kind: 'setSchedule', expressions: [] });
+    expect(result.ok).toBe(false);
   });
 
   it('refuses a change that changes nothing', () => {

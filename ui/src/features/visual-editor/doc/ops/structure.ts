@@ -44,6 +44,7 @@ import {
   referenceNameFor,
   writeDepends,
 } from './depends';
+import { outputReferenceIds } from './references';
 
 type Failure = { ok: false; code: EditErrorCode; message: string };
 
@@ -128,11 +129,25 @@ function referencesOf(
   return refs;
 }
 
+/** The ids that the step-output references below a node name. */
+function outputProducers(node: unknown, ids: Set<string>): void {
+  if (isMap(node)) {
+    for (const pair of node.items) outputProducers(pair.value, ids);
+  } else if (isSeq(node)) {
+    for (const item of node.items) outputProducers(item, ids);
+  } else if (isScalar(node) && typeof node.value === 'string') {
+    for (const id of outputReferenceIds(node.value)) ids.add(id);
+  }
+}
+
 /**
  * Edges of the step graph: each key maps to the keys of its direct downstream
  * steps. An entry of `depends` points from the step it names to the step that
- * lists it. A router points to each target of its routes. References that no
- * step has are ignored.
+ * lists it. A router points to each target of its routes. A step that reads
+ * `${steps.<id>.outputs.<name>}` comes after the step with that id, as the
+ * server infers (`inferStepOutputDependencies` in
+ * internal/spec/inferred_depends.go); its description runs nowhere.
+ * References that no step has are ignored.
  */
 function downstreamGraph(
   doc: Document,
@@ -140,16 +155,33 @@ function downstreamGraph(
 ): Map<StepKey, Set<StepKey>> {
   const { steps } = indexSteps(doc);
   const byReference = new Map<string, StepKey>();
+  const byId = new Map<string, StepKey>();
   const graph = new Map<StepKey, Set<StepKey>>();
   for (const step of steps) {
     graph.set(step.key, new Set());
     for (const ref of referencesOf(step, options))
       byReference.set(ref, step.key);
+    const id = idOf(step);
+    if (id !== undefined) byId.set(id, step.key);
   }
   const link = (from: StepKey | undefined, to: StepKey) => {
     if (from !== undefined) graph.get(from)?.add(to);
   };
   for (const step of steps) {
+    const producers = new Set<string>();
+    if (isMap(step.node)) {
+      for (const pair of step.node.items) {
+        if (!(isScalar(pair.key) && pair.key.value === 'description')) {
+          outputProducers(pair.value, producers);
+        }
+      }
+    } else {
+      outputProducers(step.node, producers);
+    }
+    for (const id of producers) {
+      const producer = byId.get(id);
+      if (producer !== step.key) link(producer, step.key);
+    }
     if (!isMap(step.node)) continue;
     for (const d of readDepends(step.node.get('depends', true))) {
       link(byReference.get(d), step.key);

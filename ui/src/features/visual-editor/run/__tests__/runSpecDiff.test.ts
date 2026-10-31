@@ -111,6 +111,60 @@ steps:
     expect(diffRunSpec('name: [\n', BASE).headChanged).toBe(true);
   });
 
+  // A chain step depends on the steps of the position before it.
+  describe('a chain DAG', () => {
+    const chain = (...items: string[]) =>
+      `type: chain\nsteps:\n${items.map((item) => `  - ${item}\n`).join('')}`;
+
+    it('marks the steps whose place in the chain moved', () => {
+      const diff = diffRunSpec(
+        chain(
+          '{name: a, run: echo a}',
+          '{name: b, run: echo b}',
+          '{name: c, run: echo c}'
+        ),
+        chain(
+          '{name: b, run: echo b}',
+          '{name: a, run: echo a}',
+          '{name: c, run: echo c}'
+        )
+      );
+      expect([...diff.changed].sort()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('marks the steps around a parallel group that changed', () => {
+      const before = chain(
+        '{name: a, run: echo a}',
+        '[{name: b, run: echo b}, {name: c, run: echo c}]',
+        '{name: d, run: echo d}'
+      );
+      const swapped = chain(
+        '{name: a, run: echo a}',
+        '[{name: c, run: echo c}, {name: b, run: echo b}]',
+        '{name: d, run: echo d}'
+      );
+      expect([...diffRunSpec(before, swapped).changed]).toEqual([]);
+
+      const flat = chain(
+        '{name: a, run: echo a}',
+        '{name: b, run: echo b}',
+        '{name: c, run: echo c}',
+        '{name: d, run: echo d}'
+      );
+      expect([...diffRunSpec(before, flat).changed].sort()).toEqual(['c', 'd']);
+    });
+
+    it('does not count the order of a graph DAG', () => {
+      const graph = (first: string, second: string) =>
+        `steps:\n  - ${first}\n  - ${second}\n`;
+      const diff = diffRunSpec(
+        graph('{name: a, run: echo a}', '{name: b, run: echo b}'),
+        graph('{name: b, run: echo b}', '{name: a, run: echo a}')
+      );
+      expect([...diff.changed]).toEqual([]);
+    });
+  });
+
   it('names an unnamed step with the names of the server', () => {
     const before = 'steps:\n  - run: echo one\n  - run: echo two\n';
     const after = 'steps:\n  - run: echo one\n  - run: echo 2\n';

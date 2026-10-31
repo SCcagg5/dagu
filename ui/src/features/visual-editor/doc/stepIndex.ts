@@ -235,14 +235,18 @@ function fieldOf(step: IndexedStep, field: string): string | undefined {
 
 /**
  * Returns the `name:` value of the step, or undefined. In map form the key is
- * the name: the server forces it over a `name:` value.
+ * the name: the server forces it over a `name:` value. The value is trimmed,
+ * as the server trims it (`buildStepName` in internal/spec/step.go).
  */
 export function explicitNameOf(step: IndexedStep): string | undefined {
-  if (step.loc.form === 'mapEntry') return pairKeyText(step.loc.pair);
-  return fieldOf(step, 'name');
+  const name =
+    step.loc.form === 'mapEntry'
+      ? pairKeyText(step.loc.pair)
+      : fieldOf(step, 'name');
+  return name?.trim();
 }
 
-/** Returns the `id:` value of the step, or undefined. */
+/** Returns the trimmed `id:` value of the step, or undefined. */
 export function idOf(step: IndexedStep): string | undefined {
-  return fieldOf(step, 'id');
+  return fieldOf(step, 'id')?.trim();
 }

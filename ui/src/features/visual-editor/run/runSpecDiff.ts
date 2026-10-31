@@ -88,18 +88,38 @@ export function headOf(model: DagDocModel): string | null {
   }
 }
 
-/** Parsed definition of each step by name. */
+/**
+ * Parsed definition of each step by name. A step of a chain DAG depends on
+ * the steps of the position before it (`injectChainDependencies` in
+ * internal/spec/builder.go), so those steps are part of its definition. A
+ * parallel group is one position.
+ */
 function stepsByName(
   model: DagDocModel,
   details: ApiDAGDetails | undefined
 ): Map<string, string> {
   const names = resolveStepNames(model, details).byKey;
+  const chain = model.dagType === 'chain';
   const out = new Map<string, string>();
+  let previous: string[] = [];
+  let current: string[] = [];
+  let group: number | undefined;
   for (const step of model.steps) {
     // An unnamed step that the server did not name: the id, then the place.
     const name = names[step.key] ?? step.explicitName ?? step.id;
     const label = name ?? `#${step.index ?? out.size}`;
-    out.set(label, canonical(step.value));
+    if (step.parallelGroup === undefined || step.parallelGroup !== group) {
+      previous = current;
+      current = [];
+      group = step.parallelGroup;
+    }
+    current.push(label);
+    out.set(
+      label,
+      canonical(
+        chain ? { step: step.value, after: [...previous].sort() } : step.value
+      )
+    );
   }
   return out;
 }
