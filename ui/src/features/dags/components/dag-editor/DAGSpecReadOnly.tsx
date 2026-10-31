@@ -398,6 +398,7 @@ function DAGSpecReadOnly({
         buildDAGRunPageURL({
           rootDAGRunName: dagName,
           rootDAGRunId: retryData.dagRunId,
+          fileName: sourceFileName,
           remoteNode,
         })
       );
@@ -424,6 +425,7 @@ function DAGSpecReadOnly({
     selectedSkipSteps,
     showError,
     showToast,
+    sourceFileName,
     ts,
   ]);
 
