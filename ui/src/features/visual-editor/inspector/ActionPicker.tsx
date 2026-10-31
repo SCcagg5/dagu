@@ -99,6 +99,7 @@ export function ActionPicker({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
               if (event.key === 'ArrowDown') {
                 event.preventDefault();
                 setActive((index) => Math.min(index + 1, results.length - 1));

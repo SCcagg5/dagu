@@ -153,7 +153,12 @@ function WebhookTab({
   const onSecretVisibleChangeRef = useRef(onSecretVisibleChange);
   onSecretVisibleChangeRef.current = onSecretVisibleChange;
   useEffect(() => {
-    onSecretVisibleChangeRef.current?.(secretVisible);
+    const notify = onSecretVisibleChangeRef.current;
+    notify?.(secretVisible);
+    // A secret that shows goes away with the tab.
+    return () => {
+      if (secretVisible) notify?.(false);
+    };
   }, [secretVisible]);
 
   // Copy states

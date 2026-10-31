@@ -83,6 +83,7 @@ export function TextField({
           className="min-h-0 px-2 py-1 text-xs"
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
             if (event.key === 'Escape') {
               setDraft(value);
             }
@@ -94,6 +95,7 @@ export function TextField({
           className="h-7 px-2 text-xs"
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
             if (event.key === 'Enter') {
               commit();
             } else if (event.key === 'Escape') {

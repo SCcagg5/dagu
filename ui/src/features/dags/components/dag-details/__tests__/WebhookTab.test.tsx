@@ -385,4 +385,23 @@ describe('WebhookTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false);
   });
+
+  // The host guards a shown secret: an unmount must not leave it guarded.
+  it('reports the secret gone when the tab unmounts while it shows', async () => {
+    const onSecretVisibleChange = vi.fn();
+    const { unmount } = render(
+      <WebhookTab
+        fileName="deploy"
+        onSecretVisibleChange={onSecretVisibleChange}
+      />
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'make sender secret' })
+    );
+    await waitFor(() =>
+      expect(onSecretVisibleChange).toHaveBeenLastCalledWith(true)
+    );
+    unmount();
+    expect(onSecretVisibleChange).toHaveBeenLastCalledWith(false);
+  });
 });
