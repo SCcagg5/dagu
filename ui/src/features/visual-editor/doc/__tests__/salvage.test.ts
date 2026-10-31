@@ -6,6 +6,7 @@ import {
   ValidationIssueSeverity,
   ValidationIssueSource,
 } from '@/api/v1/schema';
+import { stepRefName } from '../../canvas/gestures';
 import { buildCanvasGraph } from '../../canvas/graph';
 import type { DagDocModel, ValidationIssue } from '../../contracts';
 import { buildActionCatalog } from '../../inspector/catalog';
@@ -126,6 +127,9 @@ describe('one broken step among five', () => {
     expect(lost.steps[2]!.broken).toBeDefined();
     expect(lost.steps[2]!.explicitName).toBeUndefined();
     expect(graphOf(lost).nodes[2]!.label).toBe('Invalid step 3');
+    // The label is no name to write in a route.
+    expect(stepRefName(graphOf(lost).nodes[2]!)).toBeNull();
+    expect(stepRefName(graphOf(model).nodes[2]!)).toBe('c');
     // The depends of the placeholder read; no step can link to its lost name.
     expect(edgePairs(lost)).toEqual([
       'steps[0]>steps[1]',
