@@ -1,10 +1,10 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { NodeStatus } from '@/api/v1/schema';
 import { useQuery } from '@/hooks/api';
-import type { StepOutputs } from '../contracts';
+import type { ApiDAGDetails, StepOutputs } from '../contracts';
 import {
   isCacheable,
   outputCache,
@@ -34,9 +34,10 @@ export function cacheableValues(
   return isCacheable(values) ? values : null;
 }
 
-// The (run, step) pairs that a capture already stored, by workflow. A pair is
-// stored once, so that two views of different runs do not replace each
-// other's entry again and again.
+// The runs and values that a capture already stored, by workflow and step.
+// A pair is stored once, so that two views of different runs do not replace
+// each other's entry again and again. A retry keeps its run id: its new
+// values are another pair.
 const captured = new Map<string, Set<string>>();
 
 function capturedKey(scope: CacheScope, step: string): string {
@@ -76,17 +77,6 @@ export function useCaptureStepOutputs(p: {
   const scope = useCacheScope(fileName ?? '');
   const entries = useOutputCacheEntries(scope);
   const values = fileName ? cacheableValues(data) : null;
-  const hashes = useRunStepHashes({
-    dagName,
-    runId,
-    enabled: values !== null,
-  });
-  // The saved definition: an entry that is fresh for it is kept when the user
-  // looks at an older run, whose step is not the step of the file any more.
-  const saved = useLiveStepHashes({
-    fileName: fileName ?? '',
-    enabled: values !== null && !!fileName,
-  });
   const { remoteNode } = scope;
   const run = useQuery(
     '/dag-runs/{name}/{dagRunId}',
@@ -105,6 +95,30 @@ export function useCaptureStepOutputs(p: {
       ? { params: { path: { fileName }, query: { remoteNode } } }
       : null
   );
+  // The server names a step that has no name: the run gives the names of its
+  // steps, in order.
+  const runNodes = run.data?.dagRunDetails.nodes;
+  const runNames = useMemo<ApiDAGDetails | undefined>(
+    () =>
+      runNodes
+        ? { name: dagName, steps: runNodes.map((node) => node.step) }
+        : undefined,
+    [dagName, runNodes]
+  );
+  const hashes = useRunStepHashes({
+    dagName,
+    runId,
+    ...(runNames ? { names: runNames } : {}),
+    enabled: values !== null,
+  });
+  // The saved definition: an entry that is fresh for it is kept when the user
+  // looks at an older run, whose step is not the step of the file any more.
+  const savedDag = workflow.data?.dag;
+  const saved = useLiveStepHashes({
+    fileName: fileName ?? '',
+    ...(savedDag ? { dag: savedDag } : {}),
+    enabled: values !== null && !!fileName,
+  });
   // Null until the run and the workflow answer.
   const ranWithDefaults =
     run.data && workflow.data
@@ -137,9 +151,10 @@ export function useCaptureStepOutputs(p: {
       stepHash: hash,
     };
     const seen = captured.get(capturedKey(scope, step)) ?? new Set<string>();
-    if (seen.has(runId) || sameEntry(held, entry)) return;
+    const pair = `${runId}\u0000${JSON.stringify(values)}`;
+    if (seen.has(pair) || sameEntry(held, entry)) return;
     if (outputCache.put(scope, step, entry)) {
-      captured.set(capturedKey(scope, step), seen.add(runId));
+      captured.set(capturedKey(scope, step), seen.add(pair));
     }
     // `values` is rebuilt for each render: its content is the dependency.
   }, [

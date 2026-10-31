@@ -108,4 +108,21 @@ describe('useRunAvailability', () => {
     expect(second.result.current).toEqual({ state: 'gone' });
     expect(value.exists).toHaveBeenCalledTimes(1);
   });
+
+  // Two workflows, or two servers, can each have a run with the same id.
+  it('keeps the answers of one scope from another', async () => {
+    const first = links({ scope: 'a', exists: vi.fn(async () => false) });
+    const gone = renderHook(() => useRunAvailability('r1', true), {
+      wrapper: wrap(first),
+    });
+    await waitFor(() => expect(gone.result.current).toEqual({ state: 'gone' }));
+    const second = links({ scope: 'b', exists: vi.fn(async () => true) });
+    const view = renderHook(() => useRunAvailability('r1', true), {
+      wrapper: wrap(second),
+    });
+    await waitFor(() =>
+      expect(view.result.current).toEqual({ state: 'available', runId: 'r1' })
+    );
+    expect(second.exists).toHaveBeenCalledTimes(1);
+  });
 });

@@ -106,6 +106,51 @@ steps:
     expect(after.get('c')).not.toBe(before.get('c'));
   });
 
+  // The server makes each route target depend on its router.
+  it('follows the router of a route target', () => {
+    const spec = `steps:
+  - name: route
+    action: router.route
+    with:
+      value: \${CODE}
+      routes:
+        ok: [handle]
+  - name: handle
+    run: echo handle
+`;
+    const before = stepHashes(spec);
+    const after = stepHashes(spec.replace('ok: [handle]', 'done: [handle]'));
+    expect(after.get('handle')).not.toBe(before.get('handle'));
+  });
+
+  // The steps of a parallel group follow the entry before the group, not
+  // each other, and the next step follows every step of the group.
+  it('follows the entry before a parallel group in a chain', () => {
+    const spec = `type: chain
+steps:
+  - name: a
+    run: echo a
+  - name: b
+    run: echo b
+  - name: c
+    run: echo c
+`;
+    const grouped = `type: chain
+steps:
+  - - name: a
+      run: echo a
+    - name: b
+      run: echo b
+  - name: c
+    run: echo c
+`;
+    const before = stepHashes(spec);
+    expect(stepHashes(grouped).get('b')).not.toBe(before.get('b'));
+    const edited = stepHashes(grouped.replace('echo a', 'echo A'));
+    expect(edited.get('b')).toBe(stepHashes(grouped).get('b'));
+    expect(edited.get('c')).not.toBe(stepHashes(grouped).get('c'));
+  });
+
   // A step can run a sub-DAG that a later document defines.
   it('changes every step when a later document changes', () => {
     const child = (run: string) =>

@@ -24,9 +24,12 @@ const hook = vi.hoisted(() => ({
   followedDetails: null as unknown,
 }));
 
+// A result keyed `<run>/<step>` answers for that run only; one keyed by the
+// step answers for any run.
 vi.mock('@/features/visual-editor/api/useStepOutputs', () => ({
   useStepOutputs: (_dag: string, run: string | null, step: string | null) =>
-    (run !== null && hook.results[step ?? '']) || {
+    (run !== null &&
+      (hook.results[`${run}/${step}`] ?? hook.results[step ?? ''])) || {
       data: undefined,
       error: undefined,
       isLoading: false,
@@ -175,6 +178,39 @@ describe('UpstreamDataPanel cache', () => {
     expect(screen.getByTestId('upstream-cached-fetch')).toHaveTextContent(
       /^cached from run run-0abc/
     );
+  });
+
+  // The source run holds an older fetch: the next step run reads fetch from
+  // the cached run, and the row shows the values of that run.
+  it('shows the values of the cached run, not of the source run', () => {
+    hook.results['run-0abcdef12/fetch'] = {
+      data: {
+        ...sample,
+        outputs: [
+          {
+            name: 'note',
+            value: 'from the cached run',
+            truncated: false,
+            size: 19,
+          },
+        ],
+      },
+    };
+    renderPanel({
+      inputRun: input({
+        cache: {
+          cached: new Set(['fetch']),
+          capturedAt: CAPTURED,
+          times: { fetch: CAPTURED },
+          runs: { fetch: 'run-0abcdef12' },
+        },
+      }),
+    });
+    expect(screen.getByTestId('upstream-cached-fetch')).toHaveTextContent(
+      /^cached from run run-0abc/
+    );
+    expect(screen.getByText('from the cached run')).toBeInTheDocument();
+    expect(screen.queryByText('hello')).toBeNull();
   });
 
   it('makes the run of a cached value a link', () => {

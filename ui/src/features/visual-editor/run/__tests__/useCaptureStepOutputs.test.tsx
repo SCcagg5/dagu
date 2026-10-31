@@ -22,6 +22,8 @@ const h = vi.hoisted(() => ({
   /** The parameters of the run, and the defaults of the workflow. */
   runParams: '',
   defaultParams: '',
+  /** The server names of the steps, in the run and in the workflow. */
+  stepNames: [] as string[],
   paths: [] as string[],
 }));
 
@@ -32,11 +34,21 @@ vi.mock('@/hooks/api', () => ({
     if (path === '/dags/{fileName}/spec') {
       return h.saved ? { data: { spec: h.spec } } : { data: undefined };
     }
+    const steps = h.stepNames.map((name) => ({ name }));
     if (path === '/dag-runs/{name}/{dagRunId}') {
-      return { data: { dagRunDetails: { params: h.runParams } } };
+      return {
+        data: {
+          dagRunDetails: {
+            params: h.runParams,
+            nodes: steps.map((step) => ({ step })),
+          },
+        },
+      };
     }
     if (path === '/dags/{fileName}') {
-      return { data: { dag: { defaultParams: h.defaultParams } } };
+      return {
+        data: { dag: { name: 'wf', defaultParams: h.defaultParams, steps } },
+      };
     }
     return { data: { spec: h.runSpec ?? h.spec } };
   },
@@ -70,6 +82,7 @@ function capture(p: {
   data?: StepOutputs;
   runId?: string | null;
   fileName?: string;
+  step?: string;
 }) {
   return renderHook(
     (props: typeof p) =>
@@ -77,7 +90,7 @@ function capture(p: {
         fileName: 'fileName' in props ? props.fileName : 'wf.yaml',
         dagName: 'wf',
         runId: props.runId === undefined ? 'r1' : props.runId,
-        step: 'fetch',
+        step: props.step ?? 'fetch',
         data: props.data,
       }),
     { initialProps: p }
@@ -92,6 +105,7 @@ beforeEach(() => {
   h.saved = true;
   h.runParams = '';
   h.defaultParams = '';
+  h.stepNames = [];
   h.paths = [];
 });
 
@@ -240,6 +254,53 @@ describe('useCaptureStepOutputs', () => {
     h.saved = false;
     capture({ data: outputs() });
     expect(outputCache.entries(SCOPE)).toEqual({});
+  });
+
+  // A retry keeps the run id: the values of the new attempt replace the
+  // values of the first one.
+  it('stores the new values of a run that was retried', () => {
+    const view = capture({ data: outputs(), runId: 'r1' });
+    view.rerender({
+      data: outputs({
+        outputs: [
+          { name: 'data', value: 'retried', truncated: false, size: 7 },
+        ],
+      }),
+      runId: 'r1',
+    });
+    expect(outputCache.entries(SCOPE)['fetch']?.values).toEqual({
+      data: 'retried',
+    });
+  });
+
+  // The server names a step that has no name: the hash takes that name.
+  it('stores a step that has a name from the server', () => {
+    h.spec = `type: chain
+steps:
+  - run: echo hello
+    output: MESSAGE
+`;
+    h.stepNames = ['cmd_1'];
+    forgetCaptures(SCOPE, 'cmd_1');
+    capture({
+      data: outputs({
+        stepName: 'cmd_1',
+        outputs: [],
+        outputVariable: {
+          name: 'MESSAGE',
+          value: 'hello',
+          truncated: false,
+          size: 5,
+        },
+      }),
+      step: 'cmd_1',
+    });
+    const hash = stepHashes(h.spec, { name: 'wf', steps: [{ name: 'cmd_1' }] });
+    expect(hash.get('cmd_1')).toBeDefined();
+    expect(outputCache.entries(SCOPE)['cmd_1']).toMatchObject({
+      values: { MESSAGE: 'hello' },
+      stepHash: hash.get('cmd_1'),
+    });
   });
 
   it('keeps the entry of a new run in place of the old one', () => {

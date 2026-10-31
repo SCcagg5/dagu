@@ -19,6 +19,11 @@ export interface RunLinks {
   /** Asks whether the server still has the run. */
   exists(runId: string): Promise<boolean>;
   /**
+   * The server and the workflow that the run ids belong to: the answers of
+   * `exists` are kept for each scope.
+   */
+  scope?: string;
+  /**
    * Called by a mark that shows a source run: the host starts to read the
    * history only then, so that a page with no reused step makes no request.
    */
@@ -43,9 +48,13 @@ export type RunAvailability =
   | { state: 'available'; runId: string }
   | { state: 'gone' };
 
-// The answers of the server, by run id, for the life of the page: a run that
-// is gone stays gone.
+// The answers of the server, by scope and run id, for the life of the page: a
+// run that is gone stays gone.
 const asked = new Map<string, boolean>();
+
+function askedKey(links: RunLinks, runId: string): string {
+  return `${links.scope ?? ''}\u0000${runId}`;
+}
 
 /**
  * Whether the run named by `runId` can be selected. The history answers
@@ -63,11 +72,12 @@ export function useRunAvailability(
   const [, setAnswered] = useState(0);
   useEffect(() => {
     if (!enabled || !runId || !links || resolved !== null) return;
-    if (asked.has(runId)) return;
+    const key = askedKey(links, runId);
+    if (asked.has(key)) return;
     let cancelled = false;
     void links.exists(runId).then(
       (found) => {
-        asked.set(runId, found);
+        asked.set(key, found);
         if (!cancelled) setAnswered((n) => n + 1);
       },
       () => undefined
@@ -76,7 +86,7 @@ export function useRunAvailability(
       cancelled = true;
     };
   }, [enabled, runId, links, resolved]);
-  const answer = runId ? asked.get(runId) : undefined;
+  const answer = runId && links ? asked.get(askedKey(links, runId)) : undefined;
   if (!runId || !links) return { state: 'unknown' };
   if (resolved !== null) return { state: 'available', runId: resolved };
   if (answer === undefined) {

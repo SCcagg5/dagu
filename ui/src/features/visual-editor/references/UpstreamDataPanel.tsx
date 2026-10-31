@@ -60,6 +60,8 @@ type OutputValue = StepOutputs['outputs'][number];
 
 /** One output line: what the scope declares and what the run holds. */
 interface OutputItem {
+  /** Unique among the rows: an output variable can share a named output's name. */
+  key: string;
   name: string;
   type?: string;
   source?: string;
@@ -94,23 +96,32 @@ function buildItems(
     held !== undefined && name in held && !data
       ? cachedValue(name, held[name] as string)
       : undefined;
-  const items: OutputItem[] = step.outputs.map((o) => ({
-    name: o.name,
-    type: o.type,
-    source: o.source,
-    declared: true,
-    // Without an id, only an output variable (${NAME}) can be referenced.
-    reference: step.id || o.source === 'outputVariable' ? o.reference : null,
-    run:
-      usedValue(o.name) ??
-      data?.outputs.find((v) => v.name === o.name) ??
-      (data?.outputVariable?.name === o.name
+  // ${NAME} reads the output variable, ${steps.<id>.outputs.NAME} a named
+  // output: a row reads the value of its own kind.
+  const runValue = (name: string, variable: boolean) =>
+    variable
+      ? data?.outputVariable?.name === name
         ? data.outputVariable
-        : undefined) ??
-      heldValue(o.name),
-  }));
-  const listed = new Set(items.map((i) => i.name));
-  const extra: { v: OutputValue; variable: boolean }[] = data
+        : undefined
+      : data?.outputs.find((v) => v.name === name);
+  const keyOf = (name: string, variable: boolean) =>
+    variable ? `$${name}` : name;
+  const items: OutputItem[] = step.outputs.map((o) => {
+    const variable = o.source === 'outputVariable';
+    return {
+      key: keyOf(o.name, variable),
+      name: o.name,
+      type: o.type,
+      source: o.source,
+      declared: true,
+      // Without an id, only an output variable (${NAME}) can be referenced.
+      reference: step.id || variable ? o.reference : null,
+      run: usedValue(o.name) ?? runValue(o.name, variable) ?? heldValue(o.name),
+    };
+  });
+  const listed = new Set(items.map((i) => i.key));
+  // `variable` is null for a cached value: the cache keeps no kind.
+  const extra: { v: OutputValue; variable: boolean | null }[] = data
     ? [
         ...data.outputs.map((v) => ({ v, variable: false })),
         ...(data.outputVariable
@@ -122,27 +133,34 @@ function buildItems(
   for (const name of Object.keys(used ?? {})) {
     if (!extra.some((e) => e.v.name === name)) {
       const v = usedValue(name);
-      if (v) extra.push({ v, variable: false });
+      if (v) extra.push({ v, variable: null });
     }
   }
   for (const name of Object.keys(held ?? {})) {
     if (!extra.some((e) => e.v.name === name)) {
       const v = heldValue(name);
-      if (v) extra.push({ v, variable: false });
+      if (v) extra.push({ v, variable: null });
     }
   }
   if (!data && !held && !used) return items;
   for (const { v, variable } of extra) {
-    if (listed.has(v.name)) continue;
-    listed.add(v.name);
+    const key = keyOf(v.name, variable === true);
+    if (
+      listed.has(key) ||
+      (variable === null && listed.has(keyOf(v.name, true)))
+    ) {
+      continue;
+    }
+    listed.add(key);
     // A runtime step has no declared outputs: build the token from its id.
     const buildable =
-      !variable &&
+      variable !== true &&
       step.outputsKnown === 'runtime' &&
       !!step.id &&
       NAME_PATTERN.test(step.id) &&
       NAME_PATTERN.test(v.name);
     items.push({
+      key,
       name: v.name,
       declared: false,
       reference: buildable ? `\${steps.${step.id}.outputs.${v.name}}` : null,
@@ -541,13 +559,15 @@ function UpstreamStep({
   const state = follow ? upstreamRowState(follow.node, follow.active) : null;
   // A followed run shows the outputs of a step once the step has finished.
   // A step that the run reused is read too: its node carries the outputs.
+  // Otherwise a cached step shows the run that the next step run reads it
+  // from, as its mark says.
   const outputsRunId = follow
     ? state === 'success' ||
       state === 'failed' ||
       (state === 'skipped' && reused !== undefined)
       ? follow.runId
       : null
-    : runId;
+    : (cached?.runId ?? runId);
   const result = useStepOutputs(dagName, outputsRunId, step.name);
   const active = outputsRunId !== null;
   const data = active ? result.data : undefined;
@@ -694,7 +714,7 @@ function UpstreamStep({
         <ul className="flex flex-col gap-1">
           {items.map((item) => (
             <OutputRow
-              key={item.name}
+              key={item.key}
               item={item}
               hasRun={!!data}
               onInsert={onInsert}
