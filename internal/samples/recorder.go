@@ -228,7 +228,11 @@ func (r *recorder) finish() error {
 			}
 		}
 	}
-	if err := r.writeEvent(Event{Time: r.now().UTC(), Kind: EventStopped}); err != nil {
+	stopped := Event{Time: r.now().UTC(), Kind: EventStopped}
+	if r.trk.inOutage {
+		stopped.FailedCount = r.trk.failed
+	}
+	if err := r.writeEvent(stopped); err != nil {
 		return err
 	}
 	return r.st.syncAll()

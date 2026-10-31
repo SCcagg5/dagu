@@ -38,6 +38,19 @@ func TestPercentileAccuracy(t *testing.T) {
 	var one agg
 	one.add(41234, false)
 	require.Equal(t, int64(41234), one.quantile(0.5))
+
+	// Executions of a month or more keep the same precision.
+	var long agg
+	var longUS []int64
+	for i := range 20 {
+		v := (30*24*time.Hour + time.Duration(i)*36*time.Hour).Microseconds()
+		longUS = append(longUS, v)
+		long.add(v, false)
+	}
+	for _, p := range []float64{0.5, 0.95} {
+		want := float64(longUS[int(math.Ceil(p*float64(len(longUS))))-1])
+		require.InDelta(t, want, float64(long.quantile(p)), want*0.0225, "p%v", p)
+	}
 }
 
 // Two histograms add, so that the roll-up of parts gives the aggregate of the whole.
@@ -236,7 +249,10 @@ func TestEvents(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, w.Events, 3)
 	_, err = rd.Events(ctx, EventQuery{Before: "bad"})
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidCursor)
+	// A store without events still rejects a cursor it did not make.
+	_, err = OpenReader(filepath.Join(t.TempDir(), "none")).Events(ctx, EventQuery{Before: "bad"})
+	require.ErrorIs(t, err, ErrInvalidCursor)
 }
 
 // An outage goes on over a restart: no second failed event, one recovered event with the whole outage.
@@ -262,6 +278,59 @@ func TestOutageAcrossRestart(t *testing.T) {
 	}
 	require.Equal(t, []string{"stopped", "recovered", "started", "stopped", "failed", "started"}, got)
 	require.Equal(t, 2*time.Minute, page.Events[1].Outage)
+	// The count goes on over the restart: five failed samples before it, five after.
+	require.EqualValues(t, 10, page.Events[1].FailedCount)
+}
+
+// A crash can cut the last line of a file. The next record starts on a line
+// of its own, so that it is read.
+func TestAppendAfterCutLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cut.jsonl")
+	require.NoError(t, os.WriteFile(path, []byte(`{"cut`), 0o600))
+	a := &appender{path: path}
+	require.NoError(t, a.write([]byte("{}\n")))
+	require.NoError(t, a.close())
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "{\"cut\n{}\n", string(got))
+}
+
+// Two steps never share a store, whatever their names.
+func TestDirIsUniquePerStep(t *testing.T) {
+	names := []string{"a.b", "a b", "a_b", "抽出", "変換", strings.Repeat("x", 100), strings.Repeat("x", 101)}
+	seen := map[string]string{}
+	for _, name := range names {
+		dir := Dir("attempt", name)
+		require.NotContains(t, seen, dir, "%q and %q", seen[dir], name)
+		seen[dir] = name
+	}
+	// A name that is kept as it is gives a plain directory.
+	require.Equal(t, filepath.Join("attempt", "samples", "beat"), Dir("attempt", "beat"))
+}
+
+// A backfill that stops early still closes its files, and writes what it has.
+func TestBackfillClosesOnError(t *testing.T) {
+	dir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	start := time.Date(2029, 3, 10, 0, 0, 0, 0, time.UTC)
+	err := Backfill(ctx, dir, BackfillOptions{
+		Start: start, End: start.Add(time.Hour), Interval: time.Minute, Now: start.Add(time.Hour),
+		Next: func(int64) (time.Duration, int, string) {
+			cancel()
+			return time.Second, 0, ""
+		},
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	events, err := os.ReadFile(filepath.Join(dir, eventsFileName))
+	require.NoError(t, err)
+	require.Contains(t, string(events), string(EventStarted))
+	require.NoError(t, os.RemoveAll(dir))
+
+	err = Backfill(context.Background(), t.TempDir(), BackfillOptions{
+		Start: start, End: start.Add(time.Hour), Interval: 500 * time.Microsecond, Now: start.Add(time.Hour),
+		Next: func(int64) (time.Duration, int, string) { return time.Second, 0, "" },
+	})
+	require.Error(t, err)
 }
 
 func TestEmptyStore(t *testing.T) {

@@ -14,8 +14,9 @@ import (
 
 const (
 	binsPerOctave = 16
-	// maxBin is the last bin: 2^40 us, about 12 days.
-	maxBin = 1 + binsPerOctave*40
+	// maxBin is the last bin: 2^54 us, above the longest time.Duration, so
+	// that every duration has a bin of finite width.
+	maxBin = 1 + binsPerOctave*54
 )
 
 // binOf returns the histogram bin of a duration in microseconds.

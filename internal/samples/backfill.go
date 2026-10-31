@@ -17,8 +17,8 @@ type BackfillOptions struct {
 	// Start and End bound the stretch, [Start, End). Both are multiples of one
 	// minute.
 	Start, End time.Time
-	// Interval is the time between two samples: a divisor of one minute, or a
-	// whole count of minutes.
+	// Interval is the time between two samples, in whole milliseconds: a
+	// divisor of one minute, or a whole count of minutes.
 	Interval time.Duration
 	// Now is the time that the retention of the tiers counts from. A file that
 	// the retention of its tier would remove at Now is not written.
@@ -34,9 +34,12 @@ type BackfillOptions struct {
 // the Next function and of one histogram update for each sample. The directory
 // must hold no store yet. A Recorder opened after it continues the store from
 // End.
-func Backfill(ctx context.Context, dir string, o BackfillOptions) error {
+func Backfill(ctx context.Context, dir string, o BackfillOptions) (err error) {
 	if o.Interval <= 0 || o.Next == nil {
 		return errf("backfill needs an interval and a Next function")
+	}
+	if o.Interval%time.Millisecond != 0 {
+		return errf("backfill needs an interval of whole milliseconds")
 	}
 	startS, endS := o.Start.Unix(), o.End.Unix()
 	if startS%60 != 0 || endS%60 != 0 || endS <= startS {
@@ -54,6 +57,9 @@ func Backfill(ctx context.Context, dir string, o BackfillOptions) error {
 	b.writers[TierHour] = newBulkWriter(b.st, TierHour)
 	b.writers[TierDay] = newBulkWriter(b.st, TierDay)
 	b.ev = newBulkEvents(b.st.eventsPath())
+	defer func() {
+		err = errors.Join(err, b.ev.close(), b.writers[TierMinute].close(), b.writers[TierHour].close(), b.writers[TierDay].close())
+	}()
 	if err := b.ev.write(Event{Time: o.Start.UTC(), Kind: EventStarted}); err != nil {
 		return err
 	}
@@ -87,10 +93,7 @@ func Backfill(ctx context.Context, dir string, o BackfillOptions) error {
 			return err
 		}
 	}
-	if err := b.ev.write(Event{Time: o.End.UTC(), Kind: EventStopped}); err != nil {
-		return err
-	}
-	return errors.Join(b.ev.close(), b.writers[TierMinute].close(), b.writers[TierHour].close(), b.writers[TierDay].close())
+	return b.ev.write(Event{Time: o.End.UTC(), Kind: EventStopped})
 }
 
 type backfiller struct {
@@ -216,5 +219,7 @@ func (e *bulkEvents) close() error {
 	if e.f == nil {
 		return nil
 	}
-	return errors.Join(e.w.Flush(), e.f.Sync(), e.f.Close())
+	err := errors.Join(e.w.Flush(), e.f.Sync(), e.f.Close())
+	e.f, e.w = nil, nil
+	return err
 }
