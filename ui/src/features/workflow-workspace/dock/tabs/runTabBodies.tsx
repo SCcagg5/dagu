@@ -49,7 +49,7 @@ import { useDockStep } from '../useDockStep';
 import { ContinuousPanel } from '../../continuous/ContinuousPanel';
 import { pickContinuousNode } from '../../continuous/continuousNode';
 import { useWorkspaceUrl } from '../../state/workspaceUrl';
-import { isForeachStep } from '../../step/StepForeach';
+import { StepForeach, isForeachStep } from '../../step/StepForeach';
 import { StepManualActions } from '../../step/StepManualActions';
 import { StepDeclared } from '../../step/StepDeclared';
 import { StepOutputRows } from '../../step/StepOutputRows';
@@ -485,7 +485,7 @@ function ContinuousBody({ details, step }: RunTabProps) {
 function LogBody({ run, details, step }: RunTabProps) {
   const { ts } = useI18n();
   const [url, setUrl] = useWorkspaceUrl();
-  const { autoStep } = useDock();
+  const { autoStep, openStep } = useDock();
   // A host that shows one step names it, and the URL does not choose.
   const linked = step ? { step } : logTargetFromUrl(url, details);
   const auto =
@@ -517,26 +517,37 @@ function LogBody({ run, details, step }: RunTabProps) {
         {!target.subRun && (
           <StepFailureBanner step={target.step} className="shrink-0" />
         )}
-        {foreachItems && (
-          // The log of a foreach step is its raw output: the items, with
-          // their failures, are in the node view.
-          <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1 text-xs text-muted-foreground">
-            <span>{ts('This step runs once for each item.')}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={() =>
-                setUrl(
-                  { step: target.step, ndv: 'expanded' },
-                  { replace: true }
-                )
-              }
-            >
-              {ts('View items')}
-            </Button>
-          </div>
-        )}
+        {foreachItems &&
+          (step ? (
+            // The node view lists the items, with their failures, over the
+            // raw output of the step; a body step log opens in the panel.
+            <div className="max-h-[50%] shrink-0 overflow-auto border-b px-3 py-2">
+              <StepForeach
+                node={node}
+                holder={details}
+                onOpenLogs={(t) => openStep(t)}
+              />
+            </div>
+          ) : (
+            // The log of a foreach step is its raw output: the items, with
+            // their failures, are in the node view.
+            <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1 text-xs text-muted-foreground">
+              <span>{ts('This step runs once for each item.')}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() =>
+                  setUrl(
+                    { step: target.step, ndv: 'expanded' },
+                    { replace: true }
+                  )
+                }
+              >
+                {ts('View items')}
+              </Button>
+            </div>
+          ))}
         <div className="min-h-0 flex-1">
           <StepRunView
             // The stream is not in the key: the viewer switches it in place,

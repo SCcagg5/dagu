@@ -34,7 +34,7 @@ import {
 import { useClient } from '@/hooks/api';
 import { useI18n } from '@/i18n/I18nProvider';
 import { useWorkspaceEditor } from '../canvas/WorkspaceEditorContext';
-import type { ApiDAGRunDetails, ApiNode } from '../contracts';
+import type { ApiDAGDetails, ApiDAGRunDetails, ApiNode } from '../contracts';
 import { useWorkspaceData } from '../data/context';
 import { useWorkspacePermissions } from '../data/useWorkspacePermissions';
 import { useDockCommands } from '../dock/DockContext';
@@ -262,35 +262,44 @@ export function useStepRunActions(
     [can]
   );
 
-  const dagSteps = dagData.dag?.steps;
+  // The definition that a run executes: the draft while the editor holds
+  // unsaved text (a test run of it), else the saved file. Its steps give the
+  // previous steps of a step.
+  const runDefinition = useCallback(
+    (): ApiDAGDetails | undefined =>
+      (handle?.isDirty() ? handle.getDag() : undefined) ?? dagData.dag,
+    [dagData.dag, handle]
+  );
 
   // The YAML of the step: the editor text when there is one (an unsaved edit
   // counts), else the saved definition.
   const stepTextOf = useCallback(
-    (step: string): string => {
-      const saved = dagSteps?.find((s) => s.name === step);
+    (step: string, dag: ApiDAGDetails | undefined): string => {
+      const saved = dag?.steps?.find((s) => s.name === step);
       const buffer = handle?.getBuffer();
-      if (buffer && dagData.dag) {
+      if (buffer && dag) {
         const model = parseDagDoc(buffer);
-        const key = resolveStepNames(model, dagData.dag).byName[step];
+        const key = resolveStepNames(model, dag).byName[step];
         const entry = model.steps.find((s) => s.key === key);
         if (entry) return buffer.slice(entry.range.from, entry.range.to);
       }
       return saved ? JSON.stringify(saved) : '';
     },
-    [dagData.dag, dagSteps, handle]
+    [handle]
   );
 
   // One dialog for 'Run step', on the node and in the step view.
   const openRun = useCallback(
     (step: string) => {
       if (!can(step).runStep) return;
-      const reads = referencedStepNames(dagSteps, step, stepTextOf(step));
+      const dag = runDefinition();
+      const steps = dag?.steps;
+      const reads = referencedStepNames(steps, step, stepTextOf(step, dag));
       // The steps that the step needs and reads from, with the steps that
       // they need, in dependency order.
       const previous = stepsWithUpstream(
-        dagSteps,
-        [...upstreamStepNames(dagSteps, step), ...reads],
+        steps,
+        [...upstreamStepNames(steps, step), ...reads],
         step
       );
       setConfirm({
@@ -304,14 +313,18 @@ export function useStepRunActions(
         liveText: handle?.getBuffer() || undefined,
       });
     },
-    [can, dagSteps, followed, handle, stepTextOf]
+    [can, followed, handle, runDefinition, stepTextOf]
   );
   const runStep = openRun;
 
   const runUpstream = useCallback(
     (step: string) => {
       if (!can(step).runStep) return;
-      const upstream = upstreamStepNames(dagSteps, step, 'dependency');
+      const upstream = upstreamStepNames(
+        runDefinition()?.steps,
+        step,
+        'dependency'
+      );
       if (upstream.length === 0) return;
       setConfirm({
         kind: 'upstream',
@@ -322,7 +335,7 @@ export function useStepRunActions(
         liveText: undefined,
       });
     },
-    [can, dagSteps]
+    [can, runDefinition]
   );
 
   const openSubRun = useCallback(

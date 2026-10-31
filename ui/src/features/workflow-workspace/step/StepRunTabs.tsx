@@ -32,6 +32,7 @@ import {
 } from '../dock/tabs/stepScope';
 import type { DockTab } from '../state/workspaceUrl';
 import { StepFactsLine } from './StepFactsLine';
+import { isForeachStep } from './StepForeach';
 import { isAgentAwaitingAnswer } from './StepManualActions';
 
 /** Prefix of the ids of the pane in the step view; the dock keeps its own. */
@@ -92,8 +93,8 @@ export interface StepRunTabsProps {
 
 /**
  * The tab that opens first: a step that waits opens its Actions (or its
- * Agent tab when an agent waits), a failed step or run opens its log, the
- * rest opens the outputs.
+ * Agent tab when an agent waits), a failed step or run and a foreach step
+ * (its log lists the items) open the log, the rest opens the outputs.
  */
 export function defaultStepTab(
   details: ApiDAGRunDetails | null,
@@ -104,7 +105,11 @@ export function defaultStepTab(
     if (tabs.includes('actions')) return 'actions';
     if (isAgentAwaitingAnswer(node) && tabs.includes('agent')) return 'agent';
   }
-  if (node?.status === NodeStatus.Failed || details?.status === Status.Failed) {
+  if (
+    node?.status === NodeStatus.Failed ||
+    details?.status === Status.Failed ||
+    (node && isForeachStep(node))
+  ) {
     return 'log';
   }
   return 'outputs';

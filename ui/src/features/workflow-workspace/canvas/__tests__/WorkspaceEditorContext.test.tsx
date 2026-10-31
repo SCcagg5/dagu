@@ -54,6 +54,7 @@ function makeHandle(): WorkspaceEditorHandle {
     replaceBuffer: vi.fn(),
     isDirty: vi.fn(() => false),
     getBuffer: vi.fn(() => ''),
+    getDag: vi.fn(() => undefined),
     copyYaml: vi.fn(async () => {}),
   };
 }

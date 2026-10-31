@@ -1331,6 +1331,7 @@ function DAGSpec({
     editable,
     dirty: localHasUnsavedChanges,
     buffer: currentValue ?? serverSpec ?? '',
+    dag: visualValidation.dag,
     sectionOpen,
     setSectionOpen,
     closeSection,
@@ -1343,6 +1344,7 @@ function DAGSpec({
     editable,
     dirty: localHasUnsavedChanges,
     buffer: currentValue ?? serverSpec ?? '',
+    dag: visualValidation.dag,
     sectionOpen,
     setSectionOpen,
     closeSection,
@@ -1364,6 +1366,7 @@ function DAGSpec({
       },
       isDirty: () => source().dirty,
       getBuffer: () => source().buffer,
+      getDag: () => source().dag,
       copyYaml: () => source().copySpec(source().buffer),
       toggleYaml: (open) => {
         // The visual editor also closes its own panels, as its YAML button does.

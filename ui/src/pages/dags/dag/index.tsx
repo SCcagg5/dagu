@@ -8,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
 } from 'react';
 import { cn } from '@/lib/utils';
 import { WorkspaceLoading } from '../../../features/workflow-workspace/WorkspaceLoading';
@@ -51,6 +52,8 @@ import { isNotFoundQueryError } from '@/lib/queryErrors';
 import { WorkflowWorkspace } from '@/features/workflow-workspace';
 import { LogPopoutPage } from '@/features/workflow-workspace/popout/LogPopoutPage';
 import { useLegacyRedirect } from '@/features/workflow-workspace/state/useLegacyRedirect';
+import { useBoundedDAGRunDetails } from '@/features/dag-runs/hooks/useBoundedDAGRunDetails';
+import LoadingIndicator from '@/components/ui/loading-indicator';
 
 // The run view of a workflow file that is gone reaches Mermaid, which the
 // page keeps out of its static imports.
@@ -67,6 +70,51 @@ type Params = {
 };
 
 type DAGRunDetails = components['schemas']['DAGRunDetails'];
+
+/**
+ * A run on its own, for a link that no workspace shows: the run of the link,
+ * or its sub-run in ?subRun. It follows the run while the run is active.
+ */
+function StandaloneRun({
+  run,
+  subRunId,
+  remoteNode,
+}: {
+  run: DAGRunDetails;
+  subRunId: string | null;
+  remoteNode: string;
+}) {
+  const sub = subRunId && subRunId !== run.dagRunId ? subRunId : null;
+  const live = useBoundedDAGRunDetails({
+    target: sub
+      ? {
+          remoteNode,
+          name: run.name,
+          dagRunId: sub,
+          parentName: run.name,
+          parentDAGRunId: run.dagRunId,
+          subDAGRunId: sub,
+        }
+      : { remoteNode, name: run.name, dagRunId: run.dagRunId },
+    pollIntervalMs: 2000,
+  });
+  const fresh =
+    live.data?.dagRunId === (sub ?? run.dagRunId) ? live.data : null;
+  // A sub-run that cannot load leaves the run of the link.
+  const shown = fresh ?? (sub && !live.error ? null : run);
+  if (!shown) return <LoadingIndicator />;
+  return (
+    <Suspense fallback={null}>
+      <DAGRunDetailsContent
+        name={shown.name}
+        dagRun={shown}
+        dagRunId={shown.dagRunId}
+        refreshFn={() => void live.refresh()}
+        fillHeight
+      />
+    </Suspense>
+  );
+}
 
 function DAGDetails() {
   const params = useParams<Params>();
@@ -160,11 +208,7 @@ function DAGDetails() {
     (isNotFoundQueryError(dagError) ||
       (!!dagData?.dag &&
         dagData.dag.name !== fileName.replace(/\.ya?ml$/, '')));
-  const {
-    data: linkedRun,
-    error: linkedRunError,
-    mutate: mutateLinkedRun,
-  } = useQuery(
+  const { data: linkedRun, error: linkedRunError } = useQuery(
     '/dag-runs/{name}/{dagRunId}',
     whenEnabled(lookUpRunFile, {
       params: {
@@ -180,11 +224,18 @@ function DAGDetails() {
       : null;
   const resolvingRunFile =
     lookUpRunFile && !linkedRunError && (!linkedRun || !!runFileRedirect);
-  // The source file of the run is gone (deleted, or renamed with the DAG name
-  // kept): the run shows on its own.
-  const fileLessRun =
-    isNotFoundQueryError(dagError) && !linkedRunFile
-      ? (linkedRun?.dagRunDetails ?? null)
+  // The run shows on its own where no workspace shows it: its source file is
+  // gone (deleted, or renamed with the DAG name kept), or the file now holds
+  // the DAG under another name.
+  const lookedUpRun = linkedRun?.dagRunDetails ?? null;
+  const ownRun =
+    lookedUpRun &&
+    !runFileRedirect &&
+    ((isNotFoundQueryError(dagError) && !linkedRunFile) ||
+      (!!dagData?.dag &&
+        !!linkedRunFile &&
+        lookedUpRun.name !== dagData.dag.name))
+      ? lookedUpRun
       : null;
 
   // Links from older versions and bookmarks redirect before a body mounts.
@@ -322,9 +373,18 @@ function DAGDetails() {
     [refreshData, fileName, dagRunName]
   );
 
-  // The workflow waits for its redirects: a legacy link or the run file.
-  const redirecting = legacy === 'pending' || resolvingRunFile;
-  const showBody = !!dagData?.dag && dagMatchesWorkspace && !redirecting;
+  // The workflow waits for its redirects: a legacy link or the run file. A
+  // lookup keeps the workspace that already shows the file: a run that it
+  // selects is a run of its workflow, and a remount would reset the editor.
+  const shownFile = useRef<string | null>(null);
+  const redirecting =
+    legacy === 'pending' ||
+    (resolvingRunFile && shownFile.current !== fileName);
+  const showBody =
+    !!dagData?.dag && dagMatchesWorkspace && !redirecting && !ownRun;
+  if (showBody) shownFile.current = fileName;
+  const workspaceMismatch =
+    !!dagData?.dag && !dagMatchesWorkspace && !redirecting && !ownRun;
   useFullBleed(showBody);
   // The workspace bar is the first row of the page.
   useHideBreadcrumb(showBody);
@@ -347,18 +407,15 @@ function DAGDetails() {
             )}
           >
             {runFileRedirect && <Navigate replace to={runFileRedirect} />}
-            {!dagData?.dag &&
-              (fileLessRun ? (
-                <Suspense fallback={null}>
-                  <DAGRunDetailsContent
-                    name={fileLessRun.name}
-                    dagRun={fileLessRun}
-                    dagRunId={fileLessRun.dagRunId}
-                    refreshFn={() => void mutateLinkedRun()}
-                    fillHeight
-                  />
-                </Suspense>
-              ) : dagError && !resolvingRunFile ? (
+            {ownRun ? (
+              <StandaloneRun
+                run={ownRun}
+                subRunId={searchParams.get('subRun')}
+                remoteNode={remoteNode}
+              />
+            ) : (
+              !dagData?.dag &&
+              (dagError && !resolvingRunFile ? (
                 isNotFoundQueryError(dagError) ? (
                   <NotFoundState
                     title={ts('Workflow not found')}
@@ -382,8 +439,9 @@ function DAGDetails() {
                 )
               ) : (
                 <WorkspaceLoading fileName={fileName} />
-              ))}
-            {dagData?.dag && redirecting && (
+              ))
+            )}
+            {dagData?.dag && redirecting && !ownRun && (
               <WorkspaceLoading fileName={fileName} />
             )}
             {showBody && popout && dagData && (
@@ -406,7 +464,7 @@ function DAGDetails() {
                 legacyHistoryIdx={legacyHistoryIdx}
               />
             )}
-            {dagData?.dag && !dagMatchesWorkspace && !redirecting && (
+            {workspaceMismatch && (
               <div className="space-y-3 p-6 text-sm text-muted-foreground">
                 <p>
                   <I18nText
@@ -424,6 +482,13 @@ function DAGDetails() {
                     <Link
                       className="underline hover:text-foreground"
                       to={allWorkspacesTo}
+                      // Without ?workspace the selection of the app bar
+                      // applies, and it can hide the workflow too.
+                      onClick={() =>
+                        appBarContext.selectWorkspace?.({
+                          kind: WorkspaceKind.all,
+                        })
+                      }
                     >
                       {ts('Show in all workspaces')}
                     </Link>

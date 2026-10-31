@@ -56,6 +56,11 @@ export interface WorkspaceEditorHandle extends VisualEditorHandle {
   replaceBuffer(text: string): void;
   isDirty(): boolean;
   getBuffer(): string;
+  /**
+   * The definition that the server built from the buffer, as the canvas
+   * shows it: the saved one while a draft is not checked or does not build.
+   */
+  getDag(): DAGDetails | undefined;
   /** Same as the Copy button over the YAML editor. */
   copyYaml(): Promise<void>;
 }
