@@ -390,7 +390,9 @@ function DAGRunActions({
                     data.errors
                   );
                 } else {
-                  showToast(ts('Stop signal sent to all running instances'));
+                  showToast(ts('Stop signal sent to all running instances'), {
+                    variant: 'info',
+                  });
                 }
                 reloadData();
                 return;

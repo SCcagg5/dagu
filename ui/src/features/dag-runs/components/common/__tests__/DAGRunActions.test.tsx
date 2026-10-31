@@ -368,7 +368,8 @@ describe('DAGRunActions', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
       await waitFor(() =>
         expect(h.showToast).toHaveBeenCalledWith(
-          'Stop signal sent to all running instances'
+          'Stop signal sent to all running instances',
+          { variant: 'info' }
         )
       );
       expect(h.client.POST).toHaveBeenCalledTimes(1);
