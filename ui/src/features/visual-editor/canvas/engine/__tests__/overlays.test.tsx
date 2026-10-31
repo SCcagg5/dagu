@@ -638,6 +638,32 @@ describe('MiniMap', () => {
       expect(viewport).toEqual(dragged);
     });
 
+    // A touch can end in a cancel, without a release.
+    it.each(['pointerCancel', 'lostPointerCapture'] as const)(
+      'stops a drag at a %s',
+      (type) => {
+        renderOverlays();
+        moveView({ x: -200, y: 0, zoom: 1 });
+        pointer(minimap(), 'pointerdown', 100, 75);
+        fireEvent[type](minimap());
+        const stopped = viewport;
+        pointer(minimap(), 'pointermove', 180, 75);
+        expect(viewport).toEqual(stopped);
+      }
+    );
+
+    it('zooms with a wheel that counts lines, as the canvas does', () => {
+      renderOverlays();
+      moveView({ x: -200, y: 0, zoom: 1 });
+      const moves = store.userMoves();
+      // Seven lines are 112 px: one step. The event keeps the page still.
+      expect(fireEvent.wheel(minimap(), { deltaY: -7, deltaMode: 1 })).toBe(
+        false
+      );
+      expect(viewport.zoom).toBe(1.25);
+      expect(store.userMoves()).toBe(moves + 1);
+    });
+
     // A view that the user moved with the overview is not fitted again.
     it('reports a click, a drag and the wheel as user moves', () => {
       const onUserMove = vi.fn();
