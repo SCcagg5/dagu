@@ -176,6 +176,8 @@ describe('RunDetailsPopover', () => {
     expect(bar).toHaveAttribute('aria-valuenow', '1');
     expect(bar).toHaveAttribute('aria-valuemax', '2');
     expect(bar).toHaveTextContent('1/2');
+    // The failed step has ended, but only the succeeded one counts.
+    expect(bar).toHaveAttribute('aria-valuetext', '1 of 2 succeeded');
     expect(within(bar).getByTitle('Succeeded: 1')).toBeInTheDocument();
 
     await userEvent.click(
