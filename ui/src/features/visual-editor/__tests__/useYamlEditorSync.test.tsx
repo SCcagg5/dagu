@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseDagDoc } from '../doc/parse';
 import { yamlArraySteps } from '../testing/fixtures';
 import {
@@ -732,6 +732,13 @@ describe('step view while the user types', () => {
 });
 
 describe('step view change bars', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const lines = yamlArraySteps.split('\n');
   const block = (step: typeof second) =>
     lines.slice(step!.range.startLine - 1, step!.range.endLine).join('\n');
@@ -747,7 +754,6 @@ describe('step view change bars', () => {
     ]);
 
   it('draws no bar for a step that is the saved step', async () => {
-    vi.useFakeTimers();
     const { state } = setup(
       { selected: second!.key, baseline: block(second) },
       30,
@@ -756,11 +762,9 @@ describe('step view change bars', () => {
     await vi.advanceTimersByTimeAsync(150);
 
     expect(classes(state)).toEqual([]);
-    vi.useRealTimers();
   });
 
   it('marks a modified line with the number of the whole file', async () => {
-    vi.useFakeTimers();
     const edited = yamlArraySteps.replace('sort data.csv', 'sort -u data.csv');
     const { state } = setup(
       { selected: second!.key, baseline: block(second) },
@@ -773,11 +777,9 @@ describe('step view change bars', () => {
     const target =
       lines.findIndex((line) => line.includes('sort data.csv')) + 1;
     expect(classes(state)).toEqual([[target, 'dag-change-modified']]);
-    vi.useRealTimers();
   });
 
   it('marks every line of a step that the saved text does not have', async () => {
-    vi.useFakeTimers();
     const { state } = setup(
       { selected: second!.key, baseline: null },
       30,
@@ -791,11 +793,9 @@ describe('step view change bars', () => {
     );
     expect(marks.every(([, name]) => name === 'dag-change-added')).toBe(true);
     expect(marks[0]![0]).toBe(second!.range.startLine);
-    vi.useRealTimers();
   });
 
   it('draws no bar for blank lines and trailing spaces', async () => {
-    vi.useFakeTimers();
     const edited = yamlArraySteps.replace(
       '    depends: [fetch]\n',
       '    depends: [fetch]   \n\n'
@@ -812,15 +812,12 @@ describe('step view change bars', () => {
     await vi.advanceTimersByTimeAsync(150);
 
     expect(classes(state)).toEqual([]);
-    vi.useRealTimers();
   });
 
   it('draws nothing without a baseline', async () => {
-    vi.useFakeTimers();
     const { state } = setup({ selected: second!.key }, 30, true);
     await vi.advanceTimersByTimeAsync(150);
 
     expect(state.collections).toBe(1);
-    vi.useRealTimers();
   });
 });

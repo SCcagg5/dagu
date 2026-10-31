@@ -340,6 +340,7 @@ beforeEach(() => {
   h.runSpec = yamlArraySteps;
   h.runLoading = false;
   h.runError = null;
+  h.savedSpec = 'name: saved\n';
   sessionStorage.clear();
   h.run = makeRun(arrayRun());
   h.post.mockReset();

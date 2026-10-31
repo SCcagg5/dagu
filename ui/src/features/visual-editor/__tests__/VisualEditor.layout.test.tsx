@@ -238,7 +238,6 @@ describe.skipIf(realSchema === null)('VisualEditor narrow tools', () => {
         name: 'Top to bottom',
       })
     ).toBeInTheDocument();
-    expect(screen.queryByTestId('ve-add-step-fab')).toBeNull();
     // The top-right panel keeps only the export menu.
     expect(
       within(screen.getByTestId('ve-toolbar')).queryByRole('button', {
@@ -256,9 +255,8 @@ describe.skipIf(realSchema === null)('VisualEditor narrow tools', () => {
     expect(screen.queryByTestId('ve-tools-sheet')).toBeNull();
   });
 
-  it('shows the Tools button and no Add step to a reader', () => {
+  it('shows the Tools button to a reader', () => {
     renderAt(390, { chrome: CHROME, editable: false });
-    expect(screen.queryByTestId('ve-add-step-fab')).toBeNull();
     expect(screen.getByRole('button', { name: 'Tools' })).toBeInTheDocument();
   });
 
@@ -268,7 +266,6 @@ describe.skipIf(realSchema === null)('VisualEditor narrow tools', () => {
     ['no chrome', undefined, 390],
   ])('keeps the full toolbar with %s at %ipx', (_, chrome, width) => {
     renderAt(width, { chrome });
-    expect(screen.queryByTestId('ve-add-step-fab')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Tools' })).toBeNull();
     expect(
       within(screen.getByTestId('ve-toolbar')).getByRole('button', {

@@ -248,9 +248,13 @@ describe('VisualEditor launchers', () => {
   it('lists no launcher in the Add step list', () => {
     const { handle } = renderEditor();
     openAddStep(handle);
-    expect(screen.queryByTestId('ve-add-launcher-cron')).toBeNull();
-    expect(screen.queryByTestId('ve-add-launcher-webhook')).toBeNull();
-    expect(screen.queryByTestId('ve-add-launcher-manual')).toBeNull();
+    const list = within(screen.getByTestId('ve-add-step'));
+    expect(list.getAllByRole('option').length).toBeGreaterThan(0);
+    for (const name of ['Manual', 'Cron', 'Webhook']) {
+      expect(
+        list.queryByRole('option', { name: new RegExp(`^${name}\\b`, 'i') })
+      ).toBeNull();
+    }
     expect(state.text).toBe(yamlArraySteps);
   });
 
