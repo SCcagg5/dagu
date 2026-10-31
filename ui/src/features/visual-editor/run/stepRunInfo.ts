@@ -38,8 +38,9 @@ export function formatOutputSize(bytes: number): string {
  * True for a Skipped node that carries the state of an earlier run.
  * A run started with `steps` and `outputsFromRunId` marks every other step Skipped
  * and copies the source node state into it. The API hides the internal flag, so
- * this guesses from the copied state: a plain skip never ran, has no finish time
- * and has a zero doneCount.
+ * this guesses from the copied state: a done count or a finish time. A step
+ * whose precondition failed has a finish time too, so the guess holds only in
+ * a run that carries outputs.
  */
 export function isReusedNode(node: Node): boolean {
   return (
@@ -50,10 +51,18 @@ export function isReusedNode(node: Node): boolean {
 
 export type StepParticipation = 'absent' | 'notRun' | 'reused' | 'ran';
 
-/** Tells whether the step ran in this run, was reused, or did not take part. */
-export function stepParticipation(node: Node | undefined): StepParticipation {
+/**
+ * Tells whether the step ran in this run, was reused, or did not take part.
+ * `reused` tells whether the run carries the outputs of the step from an
+ * earlier run (`runInputProvenance`): the node alone does not tell a reused
+ * step from a plain skip.
+ */
+export function stepParticipation(
+  node: Node | undefined,
+  reused: boolean
+): StepParticipation {
   if (!node) return 'absent';
-  if (isReusedNode(node)) return 'reused';
+  if (reused && node.status === NodeStatus.Skipped) return 'reused';
   if (
     node.status === NodeStatus.NotStarted ||
     node.status === NodeStatus.Skipped

@@ -15,6 +15,7 @@ import { StepDetailsDrawer } from '@/features/dags/components/step-details';
 import { useStepOutputs } from '../api/useStepOutputs';
 import { JsonValue } from '../references/JsonValue';
 import { formatAbsoluteTime, formatElapsed } from '@/lib/dagRunTiming';
+import { runInputProvenance } from './inputProvenance';
 import {
   findRunNode,
   formatOutputSize,
@@ -136,12 +137,18 @@ export function StepRunPanel({
 
   const details = data?.dagRunDetails;
   const node = findRunNode(details, stepName);
-  const state = stepParticipation(node);
+  const state = stepParticipation(
+    node,
+    runInputProvenance(details).has(stepName)
+  );
   const shown = state === 'ran' || state === 'reused';
   const stepRunning =
     node?.status === NodeStatus.Running || node?.status === NodeStatus.Retrying;
-  // An absent, unstarted or running step has no outputs to ask for yet.
-  const hasOutputs = shown && !stepRunning;
+  // An absent, unstarted, running or waiting step has no outputs to ask for
+  // yet. The request key does not change when such a step finishes, so an
+  // early read would stay empty.
+  const hasOutputs =
+    shown && !stepRunning && node?.status !== NodeStatus.Waiting;
   const outputs = useStepOutputs(dagName, runId, hasOutputs ? stepName : null);
   // The run goes on and the step has not started: it waits its turn.
   const waiting =

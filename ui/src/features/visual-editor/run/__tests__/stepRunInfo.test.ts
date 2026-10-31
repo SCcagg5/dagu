@@ -49,14 +49,14 @@ describe('stepParticipation', () => {
     ({ step: { name: 'a' }, ...base, ...extra }) as Node;
 
   it('is absent without a node', () => {
-    expect(stepParticipation(undefined)).toBe('absent');
+    expect(stepParticipation(undefined, false)).toBe('absent');
   });
 
   it('is notRun for NotStarted and plain Skipped nodes', () => {
-    expect(stepParticipation(make({ status: NodeStatus.NotStarted }))).toBe(
-      'notRun'
-    );
-    expect(stepParticipation(make({ status: NodeStatus.Skipped }))).toBe(
+    expect(
+      stepParticipation(make({ status: NodeStatus.NotStarted }), false)
+    ).toBe('notRun');
+    expect(stepParticipation(make({ status: NodeStatus.Skipped }), false)).toBe(
       'notRun'
     );
     expect(
@@ -64,15 +64,30 @@ describe('stepParticipation', () => {
         make({
           status: NodeStatus.Skipped,
           finishedAt: '0001-01-01T00:00:00Z',
-        })
+        }),
+        false
       )
     ).toBe('notRun');
   });
 
-  it('is reused for a Skipped node with a count or a finish time', () => {
+  // The runner gives every skipped step a finish time, so a step whose
+  // precondition failed has one in a run that carries no outputs.
+  it('is notRun for a skipped step that the run does not carry', () => {
     expect(
-      stepParticipation(make({ status: NodeStatus.Skipped, doneCount: 1 }))
-    ).toBe('reused');
+      stepParticipation(
+        make({
+          status: NodeStatus.Skipped,
+          finishedAt: '2026-01-15T02:00:03Z',
+        }),
+        false
+      )
+    ).toBe('notRun');
+  });
+
+  it('is reused for a Skipped node that the run carries', () => {
+    expect(stepParticipation(make({ status: NodeStatus.Skipped }), true)).toBe(
+      'reused'
+    );
     expect(
       isReusedNode(
         make({ status: NodeStatus.Skipped, finishedAt: '2026-01-15T02:00:03Z' })
@@ -83,10 +98,16 @@ describe('stepParticipation', () => {
   it('is ran for other statuses, even with a finish time', () => {
     expect(
       stepParticipation(
-        make({ status: NodeStatus.Success, finishedAt: '2026-01-15T02:00:03Z' })
+        make({
+          status: NodeStatus.Success,
+          finishedAt: '2026-01-15T02:00:03Z',
+        }),
+        true
       )
     ).toBe('ran');
-    expect(stepParticipation(make({ status: NodeStatus.Running }))).toBe('ran');
+    expect(stepParticipation(make({ status: NodeStatus.Running }), false)).toBe(
+      'ran'
+    );
   });
 });
 

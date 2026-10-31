@@ -79,6 +79,14 @@ describe('tryPrettyJson', () => {
     const result = tryPrettyJson(big);
     expect(result).toEqual({ pretty: big, isJson: false, tooLarge: true });
   });
+
+  // The indent grows with the depth: a short, deep value would expand to
+  // millions of characters.
+  it('keeps a value raw when its prettified text would be too long', () => {
+    const deep = '['.repeat(2000) + '0' + ']'.repeat(2000);
+    const result = tryPrettyJson(deep);
+    expect(result).toEqual({ pretty: deep, isJson: false, tooLarge: true });
+  });
 });
 
 describe('jsonPieces', () => {

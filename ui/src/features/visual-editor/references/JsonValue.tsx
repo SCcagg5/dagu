@@ -10,6 +10,13 @@ import { cn } from '@/lib/utils';
 /** A value longer than this many characters is not parsed. */
 export const JSON_PARSE_LIMIT = 200 * 1024;
 
+/**
+ * A prettified text longer than this many characters is not shown. The
+ * indent grows with the depth, so a short, deep value can expand far past
+ * the size of its text.
+ */
+const PRETTY_LIMIT = 1024 * 1024;
+
 /** Values longer than this fold, with a Show more button. */
 const FOLD_CHARS = 200;
 const FOLD_LINES = 5;
@@ -26,13 +33,15 @@ export interface PrettyJson {
 /**
  * Re-indents the text of a JSON container with two spaces, as
  * JSON.stringify(value, null, 2) does. The text of each string and each
- * number stays as it is, so a long integer keeps all its digits.
+ * number stays as it is, so a long integer keeps all its digits. Null when
+ * the result would be longer than PRETTY_LIMIT.
  */
-function indentJson(text: string): string {
+function indentJson(text: string): string | null {
   let out = '';
   let depth = 0;
   const pad = () => '\n' + '  '.repeat(depth);
   for (let i = 0; i < text.length; i++) {
+    if (out.length > PRETTY_LIMIT) return null;
     const c = text[i] as string;
     if (c === '"') {
       let j = i + 1;
@@ -61,15 +70,16 @@ function indentJson(text: string): string {
       out += c;
     }
   }
-  return out;
+  return out.length > PRETTY_LIMIT ? null : out;
 }
 
 /**
  * The prettified text of a value that is a JSON object or array. A scalar
- * (a number, a bare JSON string, true, null), an invalid text and a text of
- * more than 200 KB stay as they are. With `decoded`, the output is declared
- * as JSON, so a text that does not start with a bracket is parsed too; a
- * scalar is still not expanded.
+ * (a number, a bare JSON string, true, null), an invalid text, a text of
+ * more than 200 KB and a text that would prettify to more than 1 MB stay as
+ * they are. With `decoded`, the output is declared as JSON, so a text that
+ * does not start with a bracket is parsed too; a scalar is still not
+ * expanded.
  */
 export function tryPrettyJson(
   value: string,
@@ -86,7 +96,9 @@ export function tryPrettyJson(
   } catch {
     return raw;
   }
-  return { pretty: indentJson(trimmed), isJson: true, tooLarge: false };
+  const pretty = indentJson(trimmed);
+  if (pretty === null) return { ...raw, tooLarge: true };
+  return { pretty, isJson: true, tooLarge: false };
 }
 
 interface JsonPiece {
