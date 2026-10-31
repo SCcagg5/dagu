@@ -53,6 +53,19 @@ describe('ValueOrReferenceField', () => {
     expect(onChange.mock.lastCall?.[0]?.limit).toBe(5);
   });
 
+  // A number input takes the exponent form: 1e3 is a thousand, not 1.
+  it('reads the exponent form of a number', () => {
+    const { onChange } = renderInspectorForm(
+      schema,
+      { limit: 2 },
+      { uiSchema }
+    );
+    fireEvent.change(screen.getByLabelText('limit'), {
+      target: { value: '1e3' },
+    });
+    expect(onChange.mock.lastCall?.[0]?.limit).toBe(1000);
+  });
+
   it('starts in reference mode for a string and keeps it a string', () => {
     const { onChange } = renderInspectorForm(
       schema,
