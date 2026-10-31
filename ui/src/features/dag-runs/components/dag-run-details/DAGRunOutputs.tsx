@@ -56,8 +56,8 @@ type Props = {
    */
   prettyValues?: boolean;
   /**
-   * Read again every 1.5 s while the answer has no output: a run that just
-   * ended may save its outputs after its status.
+   * Read again every 2 s while the answer has no output: a run that just
+   * ended may save its outputs after its status. The host turns it off.
    */
   pollWhileEmpty?: boolean;
   /**

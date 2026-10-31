@@ -317,7 +317,7 @@ describe('DAGRunTable', () => {
     );
 
     fireEvent.click(
-      screen.getByRole('button', {
+      screen.getByRole('link', {
         name: 'View artifacts for artifact-dag run-1',
       })
     );
@@ -402,6 +402,34 @@ describe('DAGRunTable', () => {
     });
     input.focus();
     fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/dag-runs');
+    expect(screen.getByTestId('location')).not.toHaveTextContent('/dags/');
+  });
+
+  // The items of a popup (the Status select, the view menu) are portaled
+  // out of the filters and take Enter themselves.
+  it.each([
+    ['an option of a select', { role: 'option' }],
+    [
+      'a key that a popup handled',
+      { onKeyDown: (event: React.KeyboardEvent) => event.preventDefault() },
+    ],
+  ])('ignores Enter on %s', (_, props) => {
+    render(
+      <MemoryRouter initialEntries={['/dag-runs']}>
+        <ConfigContext.Provider value={config}>
+          <DAGRunTable dagRuns={[queuedRun]} />
+          <div data-testid="popup-item" tabIndex={-1} {...props}>
+            Running
+          </div>
+          <LocationProbe />
+        </ConfigContext.Provider>
+      </MemoryRouter>
+    );
+
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    fireEvent.keyDown(screen.getByTestId('popup-item'), { key: 'Enter' });
 
     expect(screen.getByTestId('location')).toHaveTextContent('/dag-runs');
     expect(screen.getByTestId('location')).not.toHaveTextContent('/dags/');

@@ -178,7 +178,7 @@ describe('DAGRunGroupedView', () => {
 
     fireEvent.click(screen.getByText('artifact-dag'));
     fireEvent.click(
-      screen.getByRole('button', {
+      screen.getByRole('link', {
         name: 'View artifacts for artifact-dag run-1',
       })
     );

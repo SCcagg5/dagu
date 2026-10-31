@@ -392,9 +392,7 @@ function DAGRunGroupedView({
                           <div className="mt-0.5 flex flex-shrink-0 items-start gap-2">
                             <DAGRunArtifactsButton
                               dagRun={dagRun}
-                              onClick={(e) =>
-                                openPage(runURL(dagRun, 'artifacts'), e)
-                              }
+                              to={runURL(dagRun, 'artifacts')}
                             />
                             <StepDetailsTooltip dagRun={dagRun}>
                               <div className="flex flex-col items-end gap-1">

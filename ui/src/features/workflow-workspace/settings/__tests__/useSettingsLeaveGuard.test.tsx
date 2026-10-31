@@ -270,6 +270,24 @@ describe('useSettingsLeaveGuard', () => {
       expect(leave).not.toHaveBeenCalled();
     });
 
+    // The question of guard is about the sections: it closes when they are
+    // clean again, though the editor draft stays.
+    it('closes the question of guard when only the draft is left', async () => {
+      const guard = renderLocal();
+      const next = vi.fn();
+      act(() => {
+        guard().setEditorDirty(true);
+        guard().setDirty('notifications', true);
+      });
+      act(() => guard().guard(next));
+      expect(await screen.findByRole('dialog')).toBeVisible();
+
+      act(() => guard().setDirty('notifications', false));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(next).not.toHaveBeenCalled();
+    });
+
     it('stops an unload while the draft is dirty', () => {
       const guard = renderLocal();
       const unload = () => {
