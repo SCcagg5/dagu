@@ -129,7 +129,9 @@ describe('KeyValueField', () => {
       { headers: { X: 'a' } },
       { uiSchema }
     );
+    onChange.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(onChange).toHaveBeenCalled();
     expect(onChange.mock.lastCall?.[0]?.headers).toBeUndefined();
   });
 });

@@ -38,7 +38,9 @@ describe('ReferenceTextWidget', () => {
       { url: 'x' },
       { uiSchema }
     );
+    onChange.mockClear();
     fireEvent.change(screen.getByLabelText('url'), { target: { value: '' } });
+    expect(onChange).toHaveBeenCalled();
     expect(onChange.mock.lastCall?.[0]?.url).toBeUndefined();
   });
 
