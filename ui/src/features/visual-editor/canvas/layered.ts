@@ -139,8 +139,9 @@ export function layeredRoutes(input: LayeredInput): LayeredResult {
   for (let v = 0; v < layers.real; v++) {
     minCross = Math.min(minCross, center[v]! - crossSize(v) / 2);
   }
-  const positions: LayeredPositions = {};
-  const bands: Record<string, LayeredBand> = {};
+  // No prototype: a step named `__proto__` keeps a key of its own.
+  const positions: LayeredPositions = Object.create(null);
+  const bands: Record<string, LayeredBand> = Object.create(null);
   nodes.forEach((node, v) => {
     const r = layers.rank[v]!;
     bands[node.key] = {

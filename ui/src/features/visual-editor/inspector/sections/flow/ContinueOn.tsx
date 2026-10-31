@@ -20,10 +20,13 @@ const FAILURE_ALIAS = 'failed';
 
 /** Object form of `continue_on`; the shorthand `failed`/`skipped` becomes its object. */
 export function continueOnObject(value: unknown): Record<string, unknown> {
-  if (value === 'failed') {
+  // The server reads the shorthand in any case and without outer spaces.
+  const shorthand =
+    typeof value === 'string' ? value.trim().toLowerCase() : undefined;
+  if (shorthand === 'failed') {
     return { failure: true };
   }
-  if (value === 'skipped') {
+  if (shorthand === 'skipped') {
     return { skipped: true };
   }
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -34,7 +37,8 @@ export function continueOnObject(value: unknown): Record<string, unknown> {
 /**
  * Switches of `continue_on`. On the object form each switch sets or
  * removes its key. On the string shorthand a change replaces the value
- * with the equivalent object.
+ * with the equivalent object. The last key that goes off stays as `false`:
+ * a step without `continue_on` takes `defaults.continue_on`.
  */
 export function ContinueOn({
   step,
@@ -48,29 +52,33 @@ export function ContinueOn({
   const isOn = (key: string) =>
     object[key] === true ||
     (key === 'failure' && object[FAILURE_ALIAS] === true);
-  const setKey = (key: string, checked: boolean) =>
+  const setKey = (key: string, next: boolean | undefined) =>
     onEdit({
       kind: 'setStepField',
       step: step.key,
       path: ['continue_on', key],
-      value: checked ? true : undefined,
+      value: next,
     });
   const toggle = (key: string, checked: boolean) => {
+    // Only the switch of the shorthand can go off.
     if (typeof value === 'string') {
-      const next = { ...object, [key]: checked || undefined };
-      Object.keys(next).forEach((k) => next[k] === undefined && delete next[k]);
       onEdit({
         kind: 'setStepField',
         step: step.key,
         path: ['continue_on'],
-        value: Object.keys(next).length > 0 ? next : undefined,
+        value: checked ? { ...object, [key]: true } : { [key]: false },
       });
       return;
     }
-    if (checked || key in object) setKey(key, checked);
+    const others = Object.keys(object).filter(
+      (k) => k !== key && !(key === 'failure' && k === FAILURE_ALIAS)
+    );
+    if (checked) setKey(key, true);
+    else if (others.length === 0) setKey(key, false);
+    else if (key in object) setKey(key, undefined);
     // Drop the alias so that one key decides the failure switch.
     if (key === 'failure' && FAILURE_ALIAS in object) {
-      setKey(FAILURE_ALIAS, false);
+      setKey(FAILURE_ALIAS, undefined);
     }
   };
   return (

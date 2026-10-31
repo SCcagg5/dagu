@@ -268,6 +268,11 @@ export function connectedComponents(graph: CanvasGraph): StepKey[][] {
     .map(([, keys]) => keys);
 }
 
+/** No prototype: a step named `__proto__` keeps a key of its own. */
+function emptyPositions(): NodePositions {
+  return Object.create(null);
+}
+
 interface ComponentLayout {
   positions: NodePositions;
   bundles: Bundle[];
@@ -369,7 +374,7 @@ function layoutComponent(
   }
   const { positions: placed, routes, bands } = result;
 
-  const positions: NodePositions = {};
+  const positions = emptyPositions();
   let width = 0;
   let height = 0;
   for (const node of nodes) {
@@ -412,7 +417,7 @@ function layoutAgent(
   compact: boolean,
   direction: CanvasDirection
 ): NodePositions {
-  const positions: NodePositions = {};
+  const positions = emptyPositions();
   const tools = graph.nodes.filter(
     (node) => node.lane === 'main' && node.key !== AGENT_NODE_KEY
   );
@@ -634,7 +639,7 @@ export function layoutRoutes(
     };
   }
   const horizontal = direction === 'LR';
-  const positions: NodePositions = {};
+  const positions = emptyPositions();
   const waypoints: EdgeWaypoints = {};
   const bundles: EdgeBundles = {};
   let offset = 0;

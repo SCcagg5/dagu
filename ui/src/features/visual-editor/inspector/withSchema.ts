@@ -44,7 +44,10 @@ export function getActionWithSchema(
   );
   if (matching.length === 0) {
     const custom = customActions.find((hint) => hint.name.trim() === name);
-    return custom ? flattenObjectSchema(schema, custom.inputSchema) : null;
+    // The refs of an input schema point into that schema.
+    return custom
+      ? flattenObjectSchema(custom.inputSchema, custom.inputSchema)
+      : null;
   }
   // A conditional rule applies to some steps only: its `required` keys
   // are not required for every step of the action.
