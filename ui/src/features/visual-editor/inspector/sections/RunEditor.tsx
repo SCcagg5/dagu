@@ -16,9 +16,27 @@ const SELECT_CLASS =
 
 const SHELLS = ['bash', 'sh', 'zsh', 'pwsh', 'python3'];
 
-function ShellSelect({ step, readOnly, onEdit, fieldIssues }: SectionProps) {
+// The classic keys of a command, in the order that picks the edited one.
+const CLASSIC_KEYS = ['command', 'script'] as const;
+
+function ShellSelect({
+  step,
+  readOnly,
+  onEdit,
+  fieldIssues,
+  classic,
+}: SectionProps & { classic: boolean }) {
   const { ts } = useI18n();
-  const shell = step.value.shell;
+  // A `run:` step takes its shell in `with` (normalizeRunStep in
+  // internal/spec/step_v2.go); a classic step keeps the top-level key. The
+  // server reports both as `shell`.
+  const path = classic ? ['shell'] : ['with', 'shell'];
+  const withValue = step.value.with;
+  const shell = classic
+    ? step.value.shell
+    : typeof withValue === 'object' && withValue !== null
+      ? (withValue as Record<string, unknown>).shell
+      : undefined;
   if (shell !== undefined && typeof shell !== 'string') {
     return (
       <p className="text-xs text-muted-foreground" data-field-path="shell">
@@ -41,7 +59,7 @@ function ShellSelect({ step, readOnly, onEdit, fieldIssues }: SectionProps) {
             onEdit({
               kind: 'setStepField',
               step: step.key,
-              path: ['shell'],
+              path,
               value: event.target.value || undefined,
             })
           }
@@ -61,16 +79,21 @@ function ShellSelect({ step, readOnly, onEdit, fieldIssues }: SectionProps) {
 
 /**
  * Editor of the `run:` command of a step. A step written with the classic
- * `command:` key shows and writes that key. A one-line command uses a text
- * input; a script with line breaks, or the "Multi-line" toggle, uses a
- * small Monaco editor. Both send one `setStepField ['run']` on blur. A list
- * of commands is shown read-only. The shell select sets or removes `shell`.
+ * `command:` or `script:` key, and no `run:`, shows and writes that key. A
+ * one-line command uses a text input; a script with line breaks, or the
+ * "Multi-line" toggle, uses a small Monaco editor. Both send one
+ * `setStepField` of the key on blur. A list of commands is shown read-only.
+ * The shell select sets or removes `with.shell`, or `shell` for a classic
+ * step.
  */
 export function RunEditor(props: SectionProps): ReactElement {
   const { step, readOnly, onEdit, fieldIssues } = props;
   const { ts } = useI18n();
-  const key =
-    'run' in step.value || !('command' in step.value) ? 'run' : 'command';
+  const classic =
+    'run' in step.value
+      ? undefined
+      : CLASSIC_KEYS.find((name) => name in step.value);
+  const key = classic ?? 'run';
   const run = step.value[key];
   const text = typeof run === 'string' ? run : '';
   const [multiline, setMultiline] = useState(text.includes('\n'));
@@ -149,7 +172,7 @@ export function RunEditor(props: SectionProps): ReactElement {
           />
         </div>
       )}
-      <ShellSelect {...props} />
+      <ShellSelect {...props} classic={classic !== undefined} />
     </div>
   );
 }

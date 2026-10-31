@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import { CST, Lexer } from 'yaml';
 import {
   ValidationIssueSeverity,
   ValidationIssueSource,
@@ -68,7 +69,9 @@ const WRAPPER_KEYWORDS = new Set([
   'else',
 ]);
 
-const SERVER_NAME = /^cmd_\d+$/;
+// The server names a step without name and id `<type>_<n>`
+// (generateTypedStepName in internal/spec/builder.go).
+const SERVER_NAME = /_\d+$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -241,9 +244,11 @@ function actionDrafts(step: StepView, known: Set<string> | null): Draft[] {
   return [];
 }
 
+// The server checks the names and ids of the steps only: a handler takes
+// the name of its event.
 function identityDrafts(model: DagDocModel): Draft[] {
   const drafts: Draft[] = [];
-  const steps = everyStep(model).filter((step) => step.broken === undefined);
+  const steps = model.steps.filter((step) => step.broken === undefined);
   const names = new Map<string, StepView>();
   const ids = new Map<string, StepView>();
   for (const step of steps) {
@@ -340,11 +345,14 @@ function dependencyDrafts(model: DagDocModel): Draft[] {
     if (step.explicitName !== undefined) known.add(step.explicitName);
     if (step.id !== undefined) known.add(step.id);
   }
+  const unnamed = model.steps.some(
+    (step) => step.explicitName === undefined && step.id === undefined
+  );
   const drafts: Draft[] = [];
   for (const step of model.steps) {
     if (step.broken !== undefined) continue;
     for (const target of step.depends) {
-      if (known.has(target) || SERVER_NAME.test(target)) continue;
+      if (known.has(target) || (unnamed && SERVER_NAME.test(target))) continue;
       drafts.push({
         step,
         severity: 'error',
@@ -359,6 +367,46 @@ function dependencyDrafts(model: DagDocModel): Draft[] {
 function hasExecution(step: StepView): boolean {
   const { value } = step;
   return EXECUTION_KEYS.some((key) => key in value && !isBlank(value[key]));
+}
+
+/** The names and ids of the steps of the foreach bodies of a step value. */
+function foreachStepRefs(value: Record<string, unknown>): Set<string> {
+  const refs = new Set<string>();
+  const visit = (item: unknown) => {
+    if (!isRecord(item)) return;
+    for (const key of ['id', 'name']) {
+      if (typeof item[key] === 'string') refs.add(item[key]);
+    }
+    if (isRecord(item.foreach) && Array.isArray(item.foreach.steps)) {
+      item.foreach.steps.forEach(visit);
+    }
+  };
+  if (isRecord(value.foreach) && Array.isArray(value.foreach.steps)) {
+    value.foreach.steps.forEach(visit);
+  }
+  return refs;
+}
+
+/** The ranges of the YAML comments of a text, as [from, to) offsets. */
+function commentRanges(text: string): [number, number][] {
+  const ranges: [number, number][] = [];
+  let offset = 0;
+  for (const token of new Lexer().lex(text)) {
+    // The lexer marks the start of a document, a scalar and a flow error
+    // with a control character that is not in the text.
+    if (
+      token === CST.DOCUMENT ||
+      token === CST.SCALAR ||
+      token === CST.FLOW_END
+    ) {
+      continue;
+    }
+    if (CST.tokenType(token) === 'comment') {
+      ranges.push([offset, offset + token.length]);
+    }
+    offset += token.length;
+  }
+  return ranges;
 }
 
 /** The names of the outputs of a step that the text declares. */
@@ -378,17 +426,23 @@ function referenceDrafts(
       byRef.set(step.explicitName, step);
     }
   }
+  const comments = commentRanges(model.text);
+  const inComment = (offset: number) =>
+    comments.some(([from, to]) => offset >= from && offset < to);
   const drafts: Draft[] = [];
   for (const step of everyStep(model)) {
     if (step.broken !== undefined) continue;
     const text = model.text.slice(step.range.from, step.range.to);
+    // A body step of a foreach can reference the steps of its body.
+    const body = foreachStepRefs(step.value);
     const seen = new Set<string>();
     for (const token of findReferenceTokens(text)) {
       if (token.namespace !== 'steps') continue;
-      const [, id = '', , output = ''] = token.path.split('.');
-      if (seen.has(token.path)) continue;
-      seen.add(token.path);
       const offset = step.range.from + token.from;
+      if (inComment(offset)) continue;
+      const [, id = '', , output = ''] = token.path.split('.');
+      if (seen.has(token.path) || body.has(id)) continue;
+      seen.add(token.path);
       const target = byRef.get(id);
       const known = scope?.steps.find(
         (item) => item.id === id || item.name === id

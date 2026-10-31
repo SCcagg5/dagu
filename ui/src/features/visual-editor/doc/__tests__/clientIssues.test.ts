@@ -246,7 +246,7 @@ describe.skipIf(realSchema === null)('collectClientIssues rules', () => {
   it('reports a dependency on a step that does not exist', () => {
     const issues = issuesOf(
       step(
-        '  - name: a\n    run: echo\n    depends: [ghost]\n  - name: b\n    run: echo\n    depends: [a, cmd_3]\n'
+        '  - name: a\n    run: echo\n    depends: [ghost]\n  - name: b\n    run: echo\n    depends: [a]\n'
       )
     );
     expect(issues).toEqual([
@@ -258,6 +258,24 @@ describe.skipIf(realSchema === null)('collectClientIssues rules', () => {
     ]);
   });
 
+  // A step without name and id gets `<type>_<n>` from the server.
+  it('accepts the name that the server gives an unnamed step', () => {
+    const issues = issuesOf(
+      step(
+        '  - action: http.request\n    with: {method: GET, url: "http://x"}\n  - run: echo\n  - name: b\n    run: echo\n    depends: [http_1, cmd_2]\n'
+      )
+    );
+    expect(issues).toEqual([]);
+  });
+
+  // A handler takes the name of its event, so its name: is not checked.
+  it('accepts the same name in two handlers', () => {
+    const issues = issuesOf(
+      'handler_on:\n  success:\n    name: cleanup\n    run: echo\n  failure:\n    name: cleanup\n    run: echo\nsteps:\n  - name: cleanup\n    run: echo\n'
+    );
+    expect(issues).toEqual([]);
+  });
+
   it('reports a reference to a step that does not exist', () => {
     const issues = issuesOf(
       step('  - name: a\n    run: echo ${steps.ghost.outputs.x}\n')
@@ -267,6 +285,44 @@ describe.skipIf(realSchema === null)('collectClientIssues rules', () => {
       stepPath: 'steps[0]',
       line: 3,
     });
+  });
+
+  it('ignores a reference in a YAML comment', () => {
+    const issues = issuesOf(
+      step(
+        '  - name: a\n    # ${steps.ghost.outputs.x}\n    run: echo # ${steps.ghost.outputs.y}\n'
+      )
+    );
+    expect(issues).toEqual([]);
+  });
+
+  it('accepts a reference to a step of the same foreach body', () => {
+    const text = step(
+      [
+        '  - id: list',
+        '    run: ./list.sh',
+        '  - id: summarize_all',
+        '    depends: list',
+        '    foreach:',
+        '      items: ${steps.list.outputs.items}',
+        '      steps:',
+        '        - id: fetch',
+        '          run: ./fetch.sh',
+        '          outputs:',
+        '            - name: path',
+        '        - id: summarize',
+        '          depends: fetch',
+        '          run: ./summarize.sh ${steps.fetch.outputs.path}',
+        '          outputs:',
+        '            - name: markdown',
+        '      collect:',
+        '        markdown: ${steps.summarize.outputs.markdown}',
+        '',
+      ].join('\n')
+    );
+    expect(
+      issuesOf(text).filter((i) => i.message.includes('unknown step'))
+    ).toEqual([]);
   });
 
   // The server says what the steps give; the text only says what a step with

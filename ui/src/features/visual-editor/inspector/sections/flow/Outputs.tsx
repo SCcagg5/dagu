@@ -31,7 +31,8 @@ function idFromName(name: string | undefined): string | null {
 /**
  * Names of the declared outputs of a step. The first output of a step with
  * no id also gives the step an id. A rename sets
- * `outputs[i].name`, a removed row removes the item and a new name appends
+ * `outputs[i].name`, a removed row removes the item (the last one removes
+ * `outputs`: the server refuses an empty list) and a new name appends
  * `{ name }`.
  */
 export function Outputs({
@@ -95,7 +96,12 @@ export function Outputs({
             size="icon-sm"
             aria-label={ts('Remove output {name}', { name: outputName(item) })}
             disabled={readOnly}
-            onClick={() => set(['outputs', index], undefined)}
+            onClick={() =>
+              set(
+                items.length === 1 ? ['outputs'] : ['outputs', index],
+                undefined
+              )
+            }
           >
             <X />
           </Button>

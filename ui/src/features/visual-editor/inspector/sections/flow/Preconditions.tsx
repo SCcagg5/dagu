@@ -14,7 +14,10 @@ import type { SectionProps } from '../../types';
 
 type Condition = Record<string, unknown>;
 
-/** The conditions when the value is a list of condition maps, else null. */
+/**
+ * The conditions when the value is a list of condition maps, else null. A
+ * map with `eval` is not a row: the server refuses `condition` next to it.
+ */
 export function conditionRows(value: unknown): Condition[] | null {
   if (value === undefined) {
     return [];
@@ -23,7 +26,11 @@ export function conditionRows(value: unknown): Condition[] | null {
     return null;
   }
   return value.every(
-    (item) => typeof item === 'object' && item !== null && !Array.isArray(item)
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      !Array.isArray(item) &&
+      !('eval' in item)
   )
     ? (value as Condition[])
     : null;

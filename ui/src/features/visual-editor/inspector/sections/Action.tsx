@@ -36,8 +36,9 @@ const COMMAND_FIELDS = ['run', 'command', 'script'];
  *   `['with'] = undefined`, then `['with'] = template.with` when the
  *   template has one. "Keep" changes the action only.
  * - Command to action B: `run`, `command` and `script` removed when set,
- *   `['shell'] = undefined` when set, `['action'] = B`,
- *   `['with'] = template.with` when set.
+ *   `['shell'] = undefined` when set, `['action'] = B`, `['with'] =
+ *   undefined` when set (the shell settings of `run`), `['with'] =
+ *   template.with` when set. With `with` set, "Keep" cancels.
  * - Action to command: `['action'] = undefined`, `['with'] = undefined`
  *   when set, `['run'] = ''`. "Keep" cancels.
  */
@@ -78,10 +79,13 @@ export function planActionChange(
       ops.push(set(['shell'], undefined));
     }
     ops.push(set(['action'], entry.name));
-    if (templateWith && !hasWith) {
+    if (hasWith) {
+      ops.push(set(['with'], undefined));
+    }
+    if (templateWith) {
       ops.push(set(['with'], templateWith));
     }
-    return { ops, confirm: false };
+    return { ops, confirm: hasWith };
   }
   const change = set(['action'], entry.name);
   if (!hasWith) {
