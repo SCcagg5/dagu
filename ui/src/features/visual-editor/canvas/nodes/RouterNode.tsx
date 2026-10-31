@@ -123,9 +123,10 @@ function RouterNodeComponent({
         selected={selected}
         runnable
       />
+      {/* Click-through over the handles; the parts with a tooltip take hover. */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="flex w-28 min-w-0 flex-col items-center">
-          <div className="flex max-w-full items-center gap-1">
+          <div className="pointer-events-auto flex max-w-full items-center gap-1">
             <Split
               className={cn(
                 'shrink-0 text-muted-foreground',
@@ -151,7 +152,7 @@ function RouterNodeComponent({
             <span
               // Two lines: an expression such as ${steps.produce.outputs.code}
               // is read in full, not cut after 12 characters.
-              className="line-clamp-2 max-w-full break-all text-center font-mono text-xs leading-tight text-muted-foreground"
+              className="pointer-events-auto line-clamp-2 max-w-full break-all text-center font-mono text-xs leading-tight text-muted-foreground"
               title={node.routeValue ?? node.subtitle}
             >
               {node.routeValue ?? node.subtitle}
@@ -188,7 +189,7 @@ function RouterNodeComponent({
                 title={pattern}
                 style={labelPlace}
                 className={cn(
-                  'pointer-events-none absolute max-w-24 truncate rounded bg-card/80 px-0.5 font-mono text-[11px] leading-4 text-foreground/70',
+                  'absolute max-w-24 truncate rounded bg-card/80 px-0.5 font-mono text-[11px] leading-4 text-foreground/70',
                   !lr && !stalk && '-translate-x-1/2'
                 )}
               >
