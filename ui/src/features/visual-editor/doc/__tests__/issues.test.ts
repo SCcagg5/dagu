@@ -152,6 +152,13 @@ describe('rangeFromOffsets', () => {
     ]);
   });
 
+  it('counts lines and columns in CRLF text', () => {
+    const r = rangeFromOffsets('ab\r\ncd\r\nef', 4, 6);
+    expect([r.startLine, r.startColumn, r.endLine, r.endColumn]).toEqual([
+      2, 1, 2, 3,
+    ]);
+  });
+
   it('counts UTF-16 units', () => {
     // The emoji takes two UTF-16 units.
     const r = rangeFromOffsets('a\u{1F600}b', 3, 4);
@@ -240,6 +247,13 @@ describe('locateIssue: line', () => {
     const r = locateIssue(modelArraySteps, issue({ line: 3 }), namesArraySteps);
     expect(slice(modelArraySteps.text, r)).toBe('steps:');
     expect(r?.startColumn).toBe(1);
+  });
+
+  it('keeps the carriage return out of a line of CRLF text', () => {
+    const text = modelArraySteps.text.replace(/\n/g, '\r\n');
+    const r = locateIssue(modelOf(text, []), issue({ line: 3 }), noNames);
+    expect(slice(text, r)).toBe('steps:');
+    expect(r).toMatchObject({ startLine: 3, startColumn: 1, endLine: 3 });
   });
 
   it('clamps the column to the line', () => {
