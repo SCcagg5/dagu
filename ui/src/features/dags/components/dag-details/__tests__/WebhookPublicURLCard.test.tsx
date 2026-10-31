@@ -160,7 +160,7 @@ describe('WebhookPublicURLCard', () => {
     expect(screen.getAllByText('push')).not.toHaveLength(0);
     expect(screen.getByRole('link', { name: '3f0c2d4e' })).toHaveAttribute(
       'href',
-      '/dags/deploy?remoteNode=local&run=3f0c2d4e-run'
+      '/dags/deploy.yaml?remoteNode=local&run=3f0c2d4e-run'
     );
     expect(
       screen.getByText('the signature does not match the signing secret')

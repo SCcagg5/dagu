@@ -98,7 +98,6 @@ function parseEvents(text: string): string[] {
 
 function WebhookPublicURLCard({
   fileName,
-  dagName,
   isAdmin,
   remoteNode,
   webhook,
@@ -487,7 +486,7 @@ function WebhookPublicURLCard({
 
             {!loadFailed && (
               <Deliveries
-                dagName={dagName}
+                fileName={fileName}
                 deliveries={details?.deliveries ?? []}
               />
             )}
@@ -577,10 +576,10 @@ function PublicURLState({
 }
 
 function Deliveries({
-  dagName,
+  fileName,
   deliveries,
 }: {
-  dagName: string;
+  fileName: string;
   deliveries: WebhookPublicDelivery[];
 }) {
   const remoteNode = useRemoteNode();
@@ -631,13 +630,13 @@ function Deliveries({
                 <TableCell className="text-xs sm:min-w-48">
                   <div>
                     <I18nText text={outcomeLabels[delivery.outcome]} />
-                    {delivery.dagRunId && dagName && (
+                    {delivery.dagRunId && fileName && (
                       <>
                         {' · '}
                         <Link
                           className="font-mono text-primary hover:underline"
                           to={buildDAGPageURL({
-                            fileName: dagName,
+                            fileName,
                             remoteNode,
                             run: delivery.dagRunId,
                           })}
