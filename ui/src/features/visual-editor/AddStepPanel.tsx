@@ -180,20 +180,18 @@ export function AddStepPanel({
   };
   const [favourites, setFavourites] = useState(readFavouriteActions);
 
+  const titles = useMemo(
+    () => ({
+      recent: ts('Recently used'),
+      popular: ts('Popular'),
+      favourites: ts('Favourites'),
+    }),
+    [ts]
+  );
   const sections = useMemo(
     () =>
-      buildSections(
-        catalog,
-        query,
-        recent,
-        {
-          recent: ts('Recently used'),
-          popular: ts('Popular'),
-          favourites: ts('Favourites'),
-        },
-        { favourites, aliases }
-      ),
-    [catalog, query, recent, favourites, aliases, ts]
+      buildSections(catalog, query, recent, titles, { favourites, aliases }),
+    [catalog, query, recent, titles, favourites, aliases]
   );
   // The list is by position: a row is its place, not its action.
   const rows = useMemo(
@@ -247,6 +245,15 @@ export function AddStepPanel({
     const next = toggleFavouriteAction(favourites, name);
     setFavourites(next);
     writeFavouriteActions(next);
+    // The active row stays on the action, which moves in or out of the
+    // favourites: a second toggle undoes the first.
+    const place = buildSections(catalog, query, recent, titles, {
+      favourites: next,
+      aliases,
+    })
+      .flatMap((section) => section.entries)
+      .findIndex((entry) => entry.name === name);
+    if (place >= 0) setActiveIndexState(place);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {

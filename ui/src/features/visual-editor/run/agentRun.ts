@@ -37,7 +37,12 @@ export function buildAgentRunInfo(
   ) {
     return null;
   }
-  const info: AgentRunInfo = { iterations: 0, calls: {}, tasks: {} };
+  // No prototype: a tool or a task can be named `constructor`.
+  const info: AgentRunInfo = {
+    iterations: 0,
+    calls: Object.create(null),
+    tasks: Object.create(null),
+  };
   for (const event of details.agentEvents ?? []) {
     info.iterations = Math.max(info.iterations, event.turn);
     if (event.kind === 'action' && event.name) {

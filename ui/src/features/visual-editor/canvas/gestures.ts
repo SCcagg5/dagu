@@ -27,7 +27,7 @@ export interface CanvasConnection {
 
 /** The name to write in YAML for a step, or null when the step has no name. */
 export function stepRefName(node: CanvasNode): string | null {
-  if (node.label !== node.key) {
+  if (node.label !== node.key && !node.placeholderLabel) {
     return node.label;
   }
   return node.serverName ?? null;

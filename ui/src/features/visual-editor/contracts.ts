@@ -242,6 +242,8 @@ export interface CanvasNode {
   key: StepKey;
   serverName?: string;
   label: string;
+  /** True when `label` is a placeholder: the step cannot be read and has no name. */
+  placeholderLabel?: boolean;
   subtitle?: string;
   kind: StepKind;
   lane: 'main' | 'handler';
