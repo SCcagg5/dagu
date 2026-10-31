@@ -165,43 +165,51 @@ export const FORMAT_LINE_WIDTH = 100;
 /** The least number of columns that a folded line keeps for its text. */
 const FORMAT_MIN_CONTENT_WIDTH = 20;
 
-type Walk = (value: unknown) => void;
+type Walk = (value: unknown, path: string) => void;
 
-function eachNodeComment(node: unknown, visit: (comment: string) => void) {
-  const before = (node as { commentBefore?: string | null }).commentBefore;
-  if (before) visit(before);
+/**
+ * The path of the place on top of a node: the first entry of a collection,
+ * so that a comment there counts the same on the collection and on the entry.
+ */
+function headPath(node: unknown, path: string): string {
+  if ((isMap(node) || isSeq(node)) && node.items.length > 0) {
+    const first = node.items[0];
+    return isPair(first) ? `${path}/0` : headPath(first, `${path}/0`);
+  }
+  return path;
 }
 
-function afterComment(node: unknown): string | null | undefined {
-  return (node as { comment?: string | null }).comment;
-}
-
-/** Every comment of a document, in text order, as non-empty trimmed lines. */
+/**
+ * Every comment of a document, in text order, as non-empty trimmed lines,
+ * each with the path of the node that holds it. The head of the document
+ * counts as the head of its first entry and the tail as the tail of its
+ * root, since blank lines decide where the library puts them.
+ */
 function commentLines(doc: Document): string[] {
   const lines: string[] = [];
-  const push = (comment: string | null | undefined) => {
+  const push = (comment: string | null | undefined, place: string) => {
     if (!comment) return;
     for (const line of comment.split('\n')) {
       const trimmed = line.trim();
-      if (trimmed !== '') lines.push(trimmed);
+      if (trimmed !== '') lines.push(`${place} ${trimmed}`);
     }
   };
-  const walk: Walk = (value) => {
+  const walk: Walk = (value, path) => {
     if (isPair(value)) {
-      walk(value.key);
-      walk(value.value);
+      walk(value.key, path);
+      walk(value.value, path);
       return;
     }
     if (!isNode(value)) return;
-    eachNodeComment(value, push);
+    push(value.commentBefore, `before ${headPath(value, path)}`);
     if (isMap(value) || isSeq(value)) {
-      for (const item of value.items) walk(item);
+      value.items.forEach((item, index) => walk(item, `${path}/${index}`));
     }
-    push(afterComment(value));
+    push(value.comment, `after ${path}`);
   };
-  push(doc.commentBefore);
-  walk(doc.contents);
-  push(doc.comment);
+  push(doc.commentBefore, `before ${headPath(doc.contents, '')}`);
+  walk(doc.contents, '');
+  push(doc.comment, 'after ');
   return lines;
 }
 
@@ -247,6 +255,9 @@ function toLf(text: string): string {
   return text.replace(/\r\n?/g, '\n');
 }
 
+/** Integers stay exact beyond 2^53, as the server reads them. */
+const EXACT_INTS = { intAsBigInt: true };
+
 /** The text when it parses without error, as documents; else null. */
 function readDocuments(
   text: string,
@@ -272,15 +283,16 @@ function looseText(text: string): string {
 
 /**
  * True when the two texts are the same document: the parsed values are equal,
- * with the same key order, and the comments are equal. Blank lines, trailing
- * spaces, the final line end, line ends (LF or CRLF), the indentation width
- * and the quote style of a string are no change. A text that does not parse
- * is compared as text, with blank lines and trailing spaces dropped.
+ * with the same key order, and the comments are equal, on the same nodes.
+ * Blank lines, trailing spaces, the final line end, line ends (LF or CRLF),
+ * the indentation width and the quote style of a string are no change. A
+ * text that does not parse is compared as text, with blank lines and
+ * trailing spaces dropped.
  */
 export function isSameYaml(a: string, b: string): boolean {
   if (a === b) return true;
-  const left = readDocuments(a);
-  const right = readDocuments(b);
+  const left = readDocuments(a, EXACT_INTS);
+  const right = readDocuments(b, EXACT_INTS);
   if (!left || !right) {
     return !left && !right && looseText(a) === looseText(b);
   }
@@ -603,14 +615,23 @@ function formatDocument(doc: Document): string {
  * is idempotent and has no other input than the text.
  */
 export function formatYaml(text: string): string {
-  const docs = readDocuments(text, { customTags: FOLDING_TAGS as never });
+  const docs = readDocuments(text, {
+    ...EXACT_INTS,
+    customTags: FOLDING_TAGS as never,
+  });
   if (!docs || docs.length === 0) return text;
   // A text without content keeps its text.
   if (docs.every((doc) => doc.contents === null && !doc.commentBefore)) {
     return text;
   }
-  const parts = docs.map((doc) => formatDocument(doc).replace(/\n+$/, ''));
-  return `${parts.join('\n---\n')}\n`;
+  try {
+    // One line end only: the others can be content of a kept block scalar.
+    const parts = docs.map((doc) => formatDocument(doc).replace(/\n$/, ''));
+    return `${parts.join('\n---\n')}\n`;
+  } catch {
+    // The key order can put an alias before its anchor: no canonical form.
+    return text;
+  }
 }
 
 /** The smallest single edit that turns `before` into `after`, or null when equal. */
@@ -671,12 +692,21 @@ export function formatStepRange(text: string, step: StepSpan): TextEdit | null {
   const own = ' '.repeat(column);
   const inner = ' '.repeat(canon);
   const head = keyed ? inner : `${' '.repeat(2 * levels)}- `;
+  // The blank lines after the range are content of a block scalar that
+  // keeps its line ends (`|+`) at the end of the step.
+  const rest = toLf(text.slice(to)).split('\n').slice(1);
+  const filled = rest.findIndex((line) => line.trim() !== '');
+  const blank = filled < 0 ? rest : rest.slice(0, filled);
   const source: string[] = [];
-  for (const [index, line] of toLf(original).split('\n').entries()) {
+  for (const [index, line] of [
+    ...toLf(original).split('\n'),
+    ...blank,
+  ].entries()) {
     if (index === 0) {
       source.push(head + line);
     } else if (line.trim() === '') {
-      source.push('');
+      // The spaces of a blank line can be content of a block scalar.
+      source.push(line.startsWith(own) ? inner + line.slice(column) : '');
     } else if (line.startsWith(own)) {
       source.push(inner + line.slice(column));
     } else {
@@ -684,6 +714,7 @@ export function formatStepRange(text: string, step: StepSpan): TextEdit | null {
     }
   }
   const docs = readDocuments([...wrapper, ...source].join('\n'), {
+    ...EXACT_INTS,
     customTags: FOLDING_TAGS as never,
   });
   const doc = docs?.length === 1 ? docs[0]! : null;
@@ -702,11 +733,17 @@ export function formatStepRange(text: string, step: StepSpan): TextEdit | null {
     orderStep(node.items[0]);
     normalise(node.items[0], null);
   }
-  const printed = doc
-    .toString(PRINT_OPTIONS)
-    .replace(/\n+$/, '')
-    .split('\n')
-    .slice(levels);
+  let printed: string[];
+  try {
+    printed = doc
+      .toString(PRINT_OPTIONS)
+      .replace(/\n+$/, '')
+      .split('\n')
+      .slice(levels);
+  } catch {
+    // The key order can put an alias before its anchor.
+    return null;
+  }
   const lines: string[] = [];
   for (const [index, line] of printed.entries()) {
     const bare = line.replace(/[ \t]+$/, '');

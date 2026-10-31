@@ -8,10 +8,11 @@ type ApiDAGDetails = components['schemas']['DAGDetails'];
 /**
  * The step names in execution order, handlers last. The order is a
  * topological sort of the dependency graph from the start steps: a step
- * comes after every step that it depends on, steps of the same depth keep
- * the order of the file, and the depth of a step is one more than the depth
- * of its deepest dependency. A dependency that is no step is ignored, and a
- * dependency cycle does not stop the sort.
+ * comes after every step that it depends on, explicitly or through an
+ * output reference, steps of the same depth keep the order of the file,
+ * and the depth of a step is one more than the depth of its deepest
+ * dependency. A dependency that is no step is ignored, and a dependency
+ * cycle does not stop the sort.
  */
 export function executionOrder(dag: ApiDAGDetails | undefined): string[] {
   const steps = dag?.steps ?? [];
@@ -27,7 +28,11 @@ export function executionOrder(dag: ApiDAGDetails | undefined): string[] {
     if (visiting.has(name)) return 0;
     visiting.add(name);
     let level = 0;
-    for (const dependency of byName.get(name)?.depends ?? []) {
+    const step = byName.get(name);
+    for (const dependency of [
+      ...(step?.depends ?? []),
+      ...(step?.inferredDepends ?? []),
+    ]) {
       if (known.has(dependency) && dependency !== name) {
         level = Math.max(level, depthOf(dependency) + 1);
       }
