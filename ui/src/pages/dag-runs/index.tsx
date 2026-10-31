@@ -1378,15 +1378,6 @@ function DAGRuns() {
               <Search className="mr-1.5 h-4 w-4" />
               <I18nText text={'Search'} />
             </Button>
-            <DAGRunBatchActions
-              inline
-              selectedRuns={selectedRuns}
-              loadedCount={dagRuns.length}
-              onSelectAllLoaded={selectAllLoaded}
-              onClearSelection={clearSelection}
-              onReplaceSelection={replaceSelection}
-              onActionComplete={refreshDagRuns}
-            />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <I18nProps>
@@ -1529,6 +1520,15 @@ function DAGRuns() {
                 className="w-full md:w-auto"
               />
             )}
+            <DAGRunBatchActions
+              inline
+              selectedRuns={selectedRuns}
+              loadedCount={dagRuns.length}
+              onSelectAllLoaded={selectAllLoaded}
+              onClearSelection={clearSelection}
+              onReplaceSelection={replaceSelection}
+              onActionComplete={refreshDagRuns}
+            />
           </div>
         </div>
         {dagRunsError && dagRuns.length === 0 && !isInitialLoading ? (
