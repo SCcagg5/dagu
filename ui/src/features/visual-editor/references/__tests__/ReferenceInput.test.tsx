@@ -179,6 +179,21 @@ describe('ReferenceInput', () => {
       expect(field()).toHaveFocus();
     });
 
+    // The search box holds the focus: a click back in the field gives the
+    // keys to the field again.
+    it('closes when the focus goes back to the field', () => {
+      render(<Controlled initial="" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Insert reference' }));
+      expect(
+        screen.getByRole('textbox', { name: 'Search references' })
+      ).toHaveFocus();
+      act(() => field().focus());
+      expect(screen.queryByRole('listbox')).toBeNull();
+      fireEvent.change(field(), { target: { value: '${' } });
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Search references')).toBeNull();
+    });
+
     it('does not open the picker when disabled', () => {
       render(<Controlled initial="x" disabled />);
       const button = screen.getByRole('button', { name: 'Insert reference' });
@@ -319,6 +334,22 @@ describe('ReferenceInput', () => {
       expect(field()).toHaveValue(text);
       fireEvent.blur(field());
       expect(chips()).toHaveLength(3);
+    });
+
+    // The text of a long textarea scrolls: the chips scroll with it.
+    it('keeps the chips at the scroll offset of a textarea', () => {
+      const text = Array(8).fill('a ${params.PAGE}').join('\n');
+      const { container } = render(<Controlled initial={text} multiline />);
+      const overlay = () =>
+        container.querySelector('[data-reference-chip]')
+          ?.parentElement as HTMLElement;
+      field().scrollTop = 40;
+      fireEvent.scroll(field());
+      expect(overlay().scrollTop).toBe(40);
+      act(() => field().focus());
+      field().scrollTop = 60;
+      fireEvent.blur(field());
+      expect(overlay().scrollTop).toBe(60);
     });
 
     it('shows no overlay without tokens', () => {
