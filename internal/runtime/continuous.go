@@ -145,7 +145,7 @@ func (c *continuousStep) afterExecution(ctx context.Context, node *Node, execErr
 	if sample.Failed() {
 		sample.Message = c.logs.lastStderrLine(node.outputs.localStderrPath())
 		if sample.Message == "" && execErr != nil {
-			sample.Message = truncateUTF8(firstLine(execErr.Error()), sampleMessageMax)
+			sample.Message = truncateUTF8(firstLine(node.outputs.maskSecrets(execErr.Error())), sampleMessageMax)
 		}
 	}
 	c.record(ctx, sample)
@@ -204,9 +204,7 @@ func (c *continuousStep) track(ctx context.Context, s samples.Sample, now time.T
 	switch {
 	case failed && !c.failed:
 		c.failedSince, c.failedCount = s.Time, 0
-		if c.seen {
-			c.writeDue = true
-		}
+		c.writeDue = true
 		logger.Info(ctx, "Continuous step failed",
 			tag.ExitCode(s.ExitCode), slog.String("message", s.Message))
 	case !failed && c.failed:
@@ -417,6 +415,17 @@ func (oc *OutputCoordinator) localStderrPath() string {
 		return oc.stdoutFileName // merged log
 	}
 	return ""
+}
+
+// maskSecrets replaces the secret values in s, as in the step log.
+func (oc *OutputCoordinator) maskSecrets(s string) string {
+	oc.mu.Lock()
+	defer oc.mu.Unlock()
+
+	if oc.masker == nil {
+		return s
+	}
+	return oc.masker.MaskString(s)
 }
 
 func firstLine(s string) string {
