@@ -4,8 +4,13 @@
 import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NodeStatus, NodeStatusLabel, Status } from '@/api/v1/schema';
-import type { ApiNode } from '../../contracts';
+import {
+  NodeStatus,
+  NodeStatusLabel,
+  ReusedInputVia,
+  Status,
+} from '@/api/v1/schema';
+import type { ApiDAGRunDetails, ApiNode } from '../../contracts';
 import { node, run } from '../../data/__tests__/fixtures';
 import { StepFacts } from '../StepFacts';
 
@@ -15,8 +20,12 @@ vi.mock('@/hooks/api', () => ({
 vi.mock('@/contexts/RemoteNodeContext', () => ({
   useRemoteNode: () => 'local',
 }));
+const { useStepOutputsMock } = vi.hoisted(() => ({
+  useStepOutputsMock: vi.fn(() => ({ data: undefined, error: undefined })),
+}));
+
 vi.mock('@/features/visual-editor/api/useStepOutputs', () => ({
-  useStepOutputs: () => ({ data: undefined, error: undefined }),
+  useStepOutputs: useStepOutputsMock,
 }));
 vi.mock('../../data/context', () => ({
   useWorkspaceData: () => ({ fileName: 'demo.yaml' }),
@@ -40,12 +49,16 @@ vi.mock('../useStepRunActions', async (importOriginal) => ({
   }),
 }));
 
-function renderFacts(step: ApiNode, status = Status.Success) {
+function renderFacts(
+  step: ApiNode,
+  status = Status.Success,
+  extra: Partial<ApiDAGRunDetails> = {}
+) {
   return render(
     <MemoryRouter>
       <StepFacts
         target={{ step: step.step.name }}
-        holder={run('run-1', [step], status)}
+        holder={run('run-1', [step], status, extra)}
         node={step}
       />
     </MemoryRouter>
@@ -131,5 +144,48 @@ describe('StepFacts colours and durations', () => {
       vi.advanceTimersByTime(1000);
     });
     expect(screen.getByText('1m 6s')).toBeInTheDocument();
+  });
+});
+
+describe('StepFacts outputs', () => {
+  const skipped = (extra: Record<string, unknown> = {}) =>
+    node('a', NodeStatus.Skipped, {
+      statusLabel: NodeStatusLabel.skipped,
+      ...extra,
+    });
+
+  // The runner gives a step whose precondition failed a finish time: only
+  // the record of the run tells a reused step.
+  it('reads no outputs of a skipped step that the run does not carry', () => {
+    renderFacts(skipped({ doneCount: 0 }));
+    expect(useStepOutputsMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      null,
+      null
+    );
+  });
+
+  it('reads the outputs of a skipped step that the run carries', () => {
+    renderFacts(skipped(), Status.Success, {
+      reusedInputs: [{ step: 'a', runId: 'run-0', via: ReusedInputVia.run }],
+    });
+    expect(useStepOutputsMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      'run-1',
+      'a'
+    );
+  });
+
+  // The outputs of a human task come when it completes, under the same key.
+  it('reads no outputs of a waiting step', () => {
+    renderFacts(
+      node('a', NodeStatus.Waiting, { statusLabel: NodeStatusLabel.waiting }),
+      Status.Waiting
+    );
+    expect(useStepOutputsMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      null,
+      null
+    );
   });
 });
