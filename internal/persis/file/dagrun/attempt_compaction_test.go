@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -165,6 +166,38 @@ func TestAttempt_WriteReopensClosedWriter(t *testing.T) {
 	require.NoError(t, att.writer.close())
 
 	require.NoError(t, att.Write(ctx, createTestStatus(ir.Succeeded)))
+	status, err := ParseStatusFile(file)
+	require.NoError(t, err)
+	assert.Equal(t, ir.Succeeded, status.Status)
+}
+
+// Two attempts can hold the same status file open, as a compare-and-swap does
+// beside the runner. A write after the other attempt compacted the file goes
+// to the current file, so readers see it.
+func TestAttempt_WriteFollowsCompactionByOtherAttempt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows cannot replace a file that another handle holds open, so no compaction happens")
+	}
+	dir := createTempDir(t)
+	file := filepath.Join(dir, "status.dat")
+	ctx := context.Background()
+
+	runner, err := NewAttempt(file, nil)
+	require.NoError(t, err)
+	require.NoError(t, runner.Open(ctx))
+	defer func() { _ = runner.Close(ctx) }()
+	big := createTestStatus(ir.Running)
+	big.Nodes[0].Error = strings.Repeat("y", statusFileMaxSize+1)
+	require.NoError(t, runner.Write(ctx, big))
+
+	other, err := NewAttempt(file, nil)
+	require.NoError(t, err)
+	require.NoError(t, other.Open(ctx))
+	defer func() { _ = other.Close(ctx) }()
+
+	require.NoError(t, runner.Write(ctx, big))
+	require.Equal(t, 0, runner.appended, "the runner compacts")
+	require.NoError(t, other.Write(ctx, createTestStatus(ir.Succeeded)))
 	status, err := ParseStatusFile(file)
 	require.NoError(t, err)
 	assert.Equal(t, ir.Succeeded, status.Status)

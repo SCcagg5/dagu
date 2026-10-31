@@ -2289,15 +2289,21 @@ func (h *Handler) ReportStatus(ctx context.Context, req *coordinatorv1.ReportSta
 }
 
 // sameTimestamp reports whether two recorded times are the same instant. A
-// status written before timestamps carried milliseconds has the same instant
-// in another form.
+// writer from before timestamps carried milliseconds drops the fraction, so a
+// value without one matches any time in the same second.
 func sameTimestamp(a, b string) bool {
 	if a == b {
 		return true
 	}
 	ta, errA := stringutil.ParseTime(a)
 	tb, errB := stringutil.ParseTime(b)
-	return errA == nil && errB == nil && !ta.IsZero() && ta.Equal(tb)
+	if errA != nil || errB != nil || ta.IsZero() || tb.IsZero() {
+		return false
+	}
+	if !strings.Contains(a, ".") || !strings.Contains(b, ".") {
+		return ta.Truncate(time.Second).Equal(tb.Truncate(time.Second))
+	}
+	return ta.Equal(tb)
 }
 
 func preservesCompletedManualActions(current, incoming *ir.DAGRunStatus) bool {

@@ -121,6 +121,9 @@ type ArtifactPruneRequest struct {
 	OlderThan TimeInUTC
 	// DryRun reports what would be removed without removing it.
 	DryRun bool
+	// SharedStores are other stores whose runs write to the same artifact
+	// root. Their runs keep their entries, as the runs of the store do.
+	SharedStores []DAGRunStore
 }
 
 // ArtifactPruneResult reports the paths a sweep removed, or would remove in a
