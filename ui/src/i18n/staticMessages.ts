@@ -531,6 +531,11 @@ const baseEnglish = {
   'DAG:': 'DAG:',
   'Run error': 'Run error',
   'Run precondition not met': 'Run precondition not met',
+  'Execution in progress': 'Execution in progress',
+  'DAGRun is queued for execution': 'DAGRun is queued for execution',
+  'Execution was aborted': 'Execution was aborted',
+  'Waiting for manual action': 'Waiting for manual action',
+  'Execution was rejected': 'Execution was rejected',
   Workflow: 'Workflow',
   DAGs: 'DAGs',
   'Dagu runs workflows defined in YAML. Create one from scratch or start from the documentation examples.':
@@ -3527,6 +3532,11 @@ const baseChinese = {
   'DAG:': 'DAG：',
   'Run error': '运行错误',
   'Run precondition not met': '运行前置条件未满足',
+  'Execution in progress': '正在执行',
+  'DAGRun is queued for execution': 'DAG 运行已加入执行队列',
+  'Execution was aborted': '执行已中止',
+  'Waiting for manual action': '等待手动操作',
+  'Execution was rejected': '执行已被拒绝',
   Workflow: '工作流',
   DAGs: 'DAG 列表',
   'Dagu runs workflows defined in YAML. Create one from scratch or start from the documentation examples.':
@@ -6454,6 +6464,12 @@ const baseJapanese = {
   'DAG:': 'DAG：',
   'Run error': '実行エラー',
   'Run precondition not met': '実行の前提条件が満たされていません',
+  'Execution in progress': '実行中です',
+  'DAGRun is queued for execution':
+    'DAG 実行は実行待ちのキューに登録されています',
+  'Execution was aborted': '実行は中止されました',
+  'Waiting for manual action': '手動操作を待っています',
+  'Execution was rejected': '実行は拒否されました',
   Workflow: 'ワークフロー',
   DAGs: 'DAG',
   'Dagu runs workflows defined in YAML. Create one from scratch or start from the documentation examples.':
