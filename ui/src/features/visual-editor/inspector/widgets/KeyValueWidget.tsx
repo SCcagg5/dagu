@@ -42,6 +42,19 @@ function toObject(rows: Row[]): Record<string, string> {
   return Object.fromEntries(result);
 }
 
+// The keys that more than one row has: a map holds one value for each key.
+function duplicateKeys(rows: Row[]): Set<string> {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const row of rows) {
+    const key = row.key.trim();
+    if (!key) continue;
+    if (seen.has(key)) duplicates.add(key);
+    seen.add(key);
+  }
+  return duplicates;
+}
+
 function sameObject(
   a: Record<string, string>,
   b: Record<string, string>
@@ -58,7 +71,9 @@ function sameObject(
 /**
  * Rows of key and value inputs. A change is sent when an input loses the
  * focus, or at once when a row is removed. Rows with an empty key are kept
- * on screen but not sent. The rows reset when `value` changes from outside.
+ * on screen but not sent. While two rows have the same key, nothing is sent
+ * and their keys show as invalid. The rows reset when `value` changes from
+ * outside.
  */
 export function KeyValueEditor({
   value,
@@ -77,7 +92,12 @@ export function KeyValueEditor({
     }
   }, [value]);
 
+  const duplicates = duplicateKeys(rows);
+
   const commit = (next: Row[]) => {
+    if (duplicateKeys(next).size > 0) {
+      return;
+    }
     const object = toObject(next);
     if (!sameObject(object, lastSent.current)) {
       lastSent.current = object;
@@ -99,6 +119,7 @@ export function KeyValueEditor({
             value={row.key}
             placeholder={ts('Key')}
             aria-label={ts('Key')}
+            aria-invalid={duplicates.has(row.key.trim()) || undefined}
             disabled={readOnly}
             onChange={(event) => update(index, { key: event.target.value })}
             onBlur={() => commit(rows)}

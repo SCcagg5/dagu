@@ -113,6 +113,21 @@ describe('classifyReferencePath', () => {
     );
   });
 
+  // A field of an item is a data key, such as a workbook header in any script.
+  it('accepts a foreach item field in any script', () => {
+    for (const path of [
+      'foreach.row._row',
+      'foreach.row.請求番号',
+      'foreach.row.Straße',
+      'foreach.row.列2',
+    ]) {
+      expect(classifyReferencePath(path), path).toEqual(canonical('foreach'));
+    }
+    expect(classifyReferencePath('foreach.row.2列')).toEqual({
+      kind: 'unsupported',
+    });
+  });
+
   it('classifies a single env-style name as a variable', () => {
     expect(classifyReferencePath('NAME')).toEqual({ kind: 'variable' });
     expect(classifyReferencePath('_x1')).toEqual({ kind: 'variable' });
@@ -222,6 +237,13 @@ describe('findOpenReference', () => {
     expect(at('${\n')).toBeNull();
     expect(at('x\n$')).toEqual({ from: 2, query: '' });
     expect(at('${a\n${b')).toEqual({ from: 4, query: 'b' });
+  });
+
+  it('keeps the query of a foreach item field in any script', () => {
+    expect(at('${foreach.row.請求')).toEqual({
+      from: 0,
+      query: 'foreach.row.請求',
+    });
   });
 
   it('rejects characters that cannot be in a reference name', () => {

@@ -37,9 +37,17 @@ function TargetsInput({
   const joined = targets.join(', ');
   const [draft, setDraft] = useState(joined);
   useEffect(() => setDraft(joined), [joined]);
+  // A step name can hold a comma, which the text cannot tell from a
+  // separator: an untouched text keeps the targets as they are.
   const commit = () => {
+    if (draft === joined) {
+      return;
+    }
     const next = parseTargets(draft);
-    if (next.join(',') !== targets.join(',')) {
+    if (
+      next.length !== targets.length ||
+      next.some((name, i) => name !== targets[i])
+    ) {
       onSetTargets(pattern, next);
     }
   };

@@ -26,6 +26,9 @@ export interface ReferenceToken {
 
 const NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+// A field of a foreach item is a data key, such as a workbook header: a
+// letter of any script or '_', then letters, marks, digits or '_'.
+const ITEM_FIELD = /^[\p{L}_][\p{L}\p{M}\p{Nd}_]*$/u;
 const RESERVED = new Set<string>([
   'params',
   'consts',
@@ -74,7 +77,7 @@ function isCanonicalPath(
     case 'foreach':
       return (
         (rest.length === 1 && NAME.test(a)) ||
-        (rest.length === 2 && NAME.test(a) && ENV_NAME.test(b))
+        (rest.length === 2 && NAME.test(a) && ITEM_FIELD.test(b))
       );
   }
 }
@@ -146,7 +149,10 @@ export function findOpenReference(
   const open = caret >= 2 ? text.lastIndexOf('${', caret - 2) : -1;
   if (open >= lineStart) {
     const query = text.slice(open + 2, caret);
-    if (!isEscapedDollar(text, open) && /^[A-Za-z0-9_.]*$/.test(query)) {
+    if (
+      !isEscapedDollar(text, open) &&
+      /^[\p{L}\p{M}\p{Nd}_.]*$/u.test(query)
+    ) {
       return { from: open, query };
     }
   }
