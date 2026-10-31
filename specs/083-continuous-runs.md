@@ -80,9 +80,8 @@ A sample has:
   the standard error of a failed execution. It is empty for an execution that
   succeeded.
 
-When the clock steps back to a minute before the newest sample, a sample is
-stored at the start of that newest minute, so that the samples of a step stay
-in time order.
+When the clock steps back before the newest sample, a sample is stored at the
+time of the newest sample, so that the samples of a step stay in time order.
 
 The runner never holds more than one minute of samples in memory.
 
@@ -129,8 +128,10 @@ An outage that is open when the step stops goes on at the next start: the
 count of failed samples continues, and the next start records no `failed`
 event of its own. Event times never decrease.
 
-An event has: `time`, `kind`, `exitCode`, `message`, and, for `recovered`, the
-count of failed samples and the length of the outage.
+An event has: `time`, `kind`, `exitCode`, and `message`. A `recovered` event
+also has the count of failed samples and the length of the outage. A repeated
+`failed` event, and a `stopped` event during an outage, also have the count of
+failed samples.
 
 A `failed` event is also recorded after one hour of failed samples, with the
 count so far, so that a long outage has more than one record.

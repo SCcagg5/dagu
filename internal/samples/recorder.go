@@ -22,8 +22,9 @@ type recorder struct {
 	now    func() time.Time
 	closed bool
 
-	trk       tracker
-	lastEvent int64 // ms of the last event written
+	trk        tracker
+	lastEvent  int64 // ms of the last event written
+	lastSample int64 // ms of the newest sample
 
 	// The minute that is open.
 	hasMinute bool
@@ -96,6 +97,10 @@ func (r *recorder) Record(ctx context.Context, s Sample) error {
 		// A clock that steps back. The sample joins the open minute.
 		ms = r.minute * 1000
 	}
+	// A sample before the newest one takes its time, so that the samples stay
+	// in time order.
+	ms = max(ms, r.lastSample)
+	r.lastSample = ms
 	us := max(s.Duration.Microseconds(), 0)
 	msg := cutMessage(s.Message)
 	if s.ExitCode == 0 {
