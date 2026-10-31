@@ -147,3 +147,25 @@ func TestAttempt_CompactionSkipsSingleBigRecord(t *testing.T) {
 	require.NoError(t, att.Write(ctx, big))
 	assert.Equal(t, 1, att.appended)
 }
+
+// A writer that could not open again after a compaction opens on the next
+// write, so the later statuses of the run are still kept.
+func TestAttempt_WriteReopensClosedWriter(t *testing.T) {
+	dir := createTempDir(t)
+	file := filepath.Join(dir, "status.dat")
+	ctx := context.Background()
+
+	att, err := NewAttempt(file, nil)
+	require.NoError(t, err)
+	require.NoError(t, att.Open(ctx))
+	defer func() { _ = att.Close(ctx) }()
+	require.NoError(t, att.Write(ctx, createTestStatus(ir.Running)))
+
+	// The state that a failed reopen leaves: the writer is set but closed.
+	require.NoError(t, att.writer.close())
+
+	require.NoError(t, att.Write(ctx, createTestStatus(ir.Succeeded)))
+	status, err := ParseStatusFile(file)
+	require.NoError(t, err)
+	assert.Equal(t, ir.Succeeded, status.Status)
+}
