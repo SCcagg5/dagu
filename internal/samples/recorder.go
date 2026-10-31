@@ -47,7 +47,15 @@ func openRecorder(ctx context.Context, dir string, opts Options) (*recorder, err
 	if err := r.st.repair(now().Unix()); err != nil {
 		return nil, err
 	}
-	trk, last, err := loadTracker(r.st.eventsPath())
+	// The newest stored sample bounds the time of the next one, and its minute
+	// opens again: a crash wrote no aggregate of it.
+	if ms, ok := r.st.newestRaw(); ok {
+		r.lastSample = ms
+		if err := r.beginMinute(floorTo(ms/1000, 60)); err != nil {
+			return nil, err
+		}
+	}
+	trk, last, err := r.st.loadTracker()
 	if err != nil {
 		return nil, err
 	}
@@ -81,25 +89,19 @@ func (r *recorder) Record(ctx context.Context, s Sample) error {
 	if r.closed {
 		return errClosed
 	}
-	ms := s.Time.UnixMilli()
+	// A sample before the newest one, such as after the clock steps back, takes
+	// its time, so that the samples stay in time order.
+	ms := max(s.Time.UnixMilli(), r.lastSample)
 	minute := floorTo(ms/1000, 60)
 	switch {
 	case !r.hasMinute:
-		if err := r.beginMinute(minute); err != nil {
-			return err
-		}
+		r.beginEmptyMinute(minute)
 	case minute > r.minute:
 		if err := r.closeMinute(minute); err != nil {
 			return err
 		}
 		r.beginEmptyMinute(minute)
-	case minute < r.minute:
-		// A clock that steps back. The sample joins the open minute.
-		ms = r.minute * 1000
 	}
-	// A sample before the newest one takes its time, so that the samples stay
-	// in time order.
-	ms = max(ms, r.lastSample)
 	r.lastSample = ms
 	us := max(s.Duration.Microseconds(), 0)
 	msg := cutMessage(s.Message)
@@ -120,8 +122,8 @@ func (r *recorder) Record(ctx context.Context, s Sample) error {
 	return nil
 }
 
-// beginMinute opens the first minute of the recorder. An earlier recorder can
-// have written samples of the same minute: they join the aggregate.
+// beginMinute opens the minute of the newest stored sample. The samples that
+// an earlier recorder wrote in it join the aggregate.
 func (r *recorder) beginMinute(minute int64) error {
 	r.beginEmptyMinute(minute)
 	start, end := fileSpan(TierRaw, minute)
@@ -233,7 +235,9 @@ func (r *recorder) finish() error {
 			}
 		}
 	}
-	stopped := Event{Time: r.now().UTC(), Kind: EventStopped}
+	// The stop is not before the samples it ends, so that the next start counts
+	// no failed sample of them twice.
+	stopped := Event{Time: time.UnixMilli(max(r.now().UnixMilli(), r.lastSample)).UTC(), Kind: EventStopped}
 	if r.trk.inOutage {
 		stopped.FailedCount = r.trk.failed
 	}

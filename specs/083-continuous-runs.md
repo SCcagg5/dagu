@@ -124,9 +124,9 @@ A continuous step records an event, at full resolution and with no expiry, when:
   sample after one that succeeded (`failed`).
 - a sample succeeds while an outage is open (`recovered`).
 
-An outage that is open when the step stops goes on at the next start: the
-count of failed samples continues, and the next start records no `failed`
-event of its own. Event times never decrease.
+An outage that is open when the step stops or crashes goes on at the next
+start: the count of failed samples continues, and the next start records no
+`failed` event of its own. Event times never decrease.
 
 An event has: `time`, `kind`, `exitCode`, and `message`. A `recovered` event
 also has the count of failed samples and the length of the outage. A repeated

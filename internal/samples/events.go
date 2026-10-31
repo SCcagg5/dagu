@@ -88,10 +88,11 @@ func (t *tracker) observe(ms int64, exit int, msg string) (Event, bool) {
 	return Event{}, false
 }
 
-// loadTracker restores the state of an outage from the end of the events file.
-// It returns the time of the last event, in milliseconds, as well.
-func loadTracker(path string) (t tracker, lastEvent int64, err error) {
-	f, err := os.Open(path) //nolint:gosec
+// loadTracker restores the state of an outage from the end of the events file
+// and the raw tier. It returns the time of the last event, in milliseconds, as
+// well.
+func (s *store) loadTracker() (t tracker, lastEvent int64, err error) {
+	f, err := os.Open(s.eventsPath())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return t, 0, nil
@@ -108,6 +109,7 @@ func loadTracker(path string) (t tracker, lastEvent int64, err error) {
 	first := true
 	var earliest, newestFailed *Event
 	var failed uint64
+	var countAt int64 // ms of the event that gives failed
 	err = scanLinesBackward(f, st.Size(), func(_ int64, line []byte) bool {
 		scanned += int64(len(line)) + 1
 		e, ok := parseEvent(line)
@@ -127,11 +129,11 @@ func loadTracker(path string) (t tracker, lastEvent int64, err error) {
 			}
 			earliest = &ev
 			if failed == 0 {
-				failed = e.FailedCount
+				failed, countAt = e.FailedCount, e.Time.UnixMilli()
 			}
 		case EventStopped:
 			if failed == 0 {
-				failed = e.FailedCount
+				failed, countAt = e.FailedCount, e.Time.UnixMilli()
 			}
 		case EventStarted:
 		}
@@ -141,12 +143,36 @@ func loadTracker(path string) (t tracker, lastEvent int64, err error) {
 		return t, 0, err
 	}
 	if earliest != nil {
+		// A crash writes no stopped event: the failed samples stored after the
+		// event of the count are part of the outage too.
+		more, err := s.failedAfter(countAt)
+		if err != nil {
+			return t, 0, err
+		}
 		t = tracker{
 			inOutage: true, outageStart: earliest.Time.UnixMilli(),
-			failed: failed, lastFailed: newestFailed.Time.UnixMilli(),
+			failed: failed + more, lastFailed: newestFailed.Time.UnixMilli(),
 		}
 	}
 	return t, lastEvent, nil
+}
+
+// failedAfter returns the count of failed samples of the raw tier after a time,
+// in milliseconds.
+func (s *store) failedAfter(ms int64) (uint64, error) {
+	var n uint64
+	for _, f := range s.listRange(TierRaw, ms/1000, noLimit) {
+		err := scanRaw(f, func(t, _ int64, exit int) bool {
+			if t > ms && exit != 0 {
+				n++
+			}
+			return true
+		})
+		if err != nil {
+			return 0, err
+		}
+	}
+	return n, nil
 }
 
 const cursorPrefix = "e"

@@ -282,6 +282,56 @@ func TestOutageAcrossRestart(t *testing.T) {
 	require.EqualValues(t, 10, page.Events[1].FailedCount)
 }
 
+// An outage goes on over a crash, which writes no stopped event: the count
+// keeps the failed samples that the store holds after the last counted event.
+func TestOutageAcrossCrash(t *testing.T) {
+	dir := t.TempDir()
+	clk := &clock{t: t0}
+	ctx := context.Background()
+	fail := func(int) (time.Duration, int, string) { return time.Second, 1, "x" }
+	r := newRecorder(t, dir, clk)
+	feed(t, r, clk, t0, 120, time.Second, fail)
+	require.NoError(t, r.Flush(ctx))
+	require.NoError(t, r.(*recorder).st.closeAll())
+
+	clk.t = t0.Add(3 * time.Minute)
+	r = newRecorder(t, dir, clk)
+	feed(t, r, clk, clk.t, 1, time.Second, okFn)
+	require.NoError(t, r.Close(ctx))
+
+	page, err := OpenReader(dir).Events(ctx, EventQuery{Limit: 2})
+	require.NoError(t, err)
+	rec := page.Events[1]
+	require.Equal(t, EventRecovered, rec.Kind)
+	require.EqualValues(t, 120, rec.FailedCount)
+}
+
+// A sample that a flush wrote before a crash stays in the aggregates, though
+// its minute had not ended when the store opened again.
+func TestCrashKeepsFlushedMinute(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	clk := &clock{t: t0.Add(5 * time.Second)}
+	r := newRecorder(t, dir, clk)
+	feed(t, r, clk, clk.t, 1, time.Second, okFn)
+	require.NoError(t, r.Flush(ctx))
+	require.NoError(t, r.(*recorder).st.closeAll())
+
+	clk.t = t0.Add(50 * time.Second)
+	r = newRecorder(t, dir, clk)
+	feed(t, r, clk, t0.Add(65*time.Second), 1, time.Second, okFn)
+	require.NoError(t, r.Close(ctx))
+
+	rd := OpenReaderWith(dir, Options{Now: clk.now})
+	s, err := rd.Samples(ctx, SampleQuery{From: t0, To: t0.Add(2 * time.Minute), MaxPoints: 10})
+	require.NoError(t, err)
+	require.Equal(t, TierMinute, s.Tier)
+	require.Len(t, s.Buckets, 2)
+	av, err := rd.Availability(ctx, clk.t)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, av.TotalCount)
+}
+
 // A crash can cut the last line of a file. The next record starts on a line
 // of its own, so that it is read.
 func TestAppendAfterCutLine(t *testing.T) {
@@ -407,6 +457,21 @@ func TestClockStepsBack(t *testing.T) {
 	require.Equal(t, []time.Time{t0.Add(59 * time.Second), t0.Add(70 * time.Second)}, times)
 	require.Equal(t, []uint64{3, 1}, counts)
 	require.NoError(t, r.Close(ctx))
+
+	// The rule holds over a restart: the newest stored sample bounds the next.
+	clk.t = t0.Add(30 * time.Second)
+	r = newRecorder(t, dir, clk)
+	require.NoError(t, r.Record(ctx, Sample{Time: clk.t, Duration: time.Second}))
+	require.NoError(t, r.Close(ctx))
+	s, err = rd.Samples(ctx, SampleQuery{From: t0.Add(-time.Minute), To: t0.Add(2 * time.Minute)})
+	require.NoError(t, err)
+	times, counts = nil, nil
+	for _, b := range s.Buckets {
+		times = append(times, b.Time)
+		counts = append(counts, b.Count)
+	}
+	require.Equal(t, []time.Time{t0.Add(59 * time.Second), t0.Add(70 * time.Second)}, times)
+	require.Equal(t, []uint64{3, 2}, counts)
 }
 
 func TestEmptyStore(t *testing.T) {
