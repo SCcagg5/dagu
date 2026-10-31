@@ -689,7 +689,11 @@ ExecRepeat: // repeat execution
 			execErr = commitErr
 		}
 		isRetriable := r.handleNodeExecutionError(ctx, plan, node, execErr)
+		// The sample is of the execution alone, without the retry wait.
 		cont.afterExecution(ctx, node, execErr)
+		if isRetriable {
+			isRetriable = r.waitForRetry(ctx, node, execErr)
+		}
 		if isRetriable {
 			if stagingPath != "" {
 				_ = os.Remove(stagingPath)
@@ -1817,13 +1821,19 @@ func (r *Runner) shouldRetryNode(ctx context.Context, node *Node, execErr error)
 		return false
 	}
 
-	// Set the node status to running so that it can be retried inline
 	node.IncRetryCount()
+	return true
+}
+
+// waitForRetry waits for the backoff of an inline retry, then sets the node
+// to running so that it is retried. It reports false, with the node aborted,
+// when the run stops during the wait.
+func (r *Runner) waitForRetry(ctx context.Context, node *Node, execErr error) bool {
 	interval := ir.CalculateBackoffInterval(
 		node.Step().RetryPolicy.Interval,
 		node.Step().RetryPolicy.Backoff,
 		node.Step().RetryPolicy.MaxInterval,
-		node.GetRetryCount()-1, // -1 because we just incremented
+		node.GetRetryCount()-1, // -1 because the count includes this retry
 	)
 	if !waitForExecution(ctx, interval) || r.isCanceled() {
 		node.SetStatus(ir.NodeAborted)

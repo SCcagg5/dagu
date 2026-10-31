@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/dagucloud/dagu/v2/internal/cmn/logger"
+	"github.com/dagucloud/dagu/v2/internal/cmn/masking"
 	"github.com/dagucloud/dagu/v2/internal/ir"
 	"github.com/dagucloud/dagu/v2/internal/samples"
 	"github.com/stretchr/testify/assert"
@@ -147,6 +148,20 @@ func TestContinuousStatusWritesAtOnceOnChange(t *testing.T) {
 	assert.True(t, c.reportDue(), "a retry writes")
 }
 
+// reportsBeforeRepeatWait returns the count of status writes that the runner
+// makes before the wait for the next execution. The wait ends at once, so only
+// a write made before it is counted.
+func reportsBeforeRepeatWait(c *continuousStep) int {
+	node := NewNode(ir.Step{Name: "beat", RepeatPolicy: ir.RepeatPolicy{
+		RepeatMode: ir.RepeatModeWhile, Interval: 10 * time.Minute,
+	}}, NodeState{Status: ir.NodeFailed})
+	progressCh := make(chan ProgressUpdate, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c.runner.prepareNodeForRepeat(ctx, node, progressCh, c)
+	return len(progressCh)
+}
+
 // A failed execution is written before the wait for the next one, not after.
 func TestContinuousStatusWritesChangeBeforeTheWait(t *testing.T) {
 	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
@@ -156,15 +171,38 @@ func TestContinuousStatusWritesChangeBeforeTheWait(t *testing.T) {
 	clock.advance(time.Second)
 	observeSample(c, clock, 7)
 
-	node := NewNode(ir.Step{Name: "beat", RepeatPolicy: ir.RepeatPolicy{
-		RepeatMode: ir.RepeatModeWhile, Interval: 10 * time.Minute,
-	}}, NodeState{Status: ir.NodeFailed})
-	progressCh := make(chan ProgressUpdate, 1)
-	// The wait ends at once: only a write made before it is counted.
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	c.runner.prepareNodeForRepeat(ctx, node, progressCh, c)
-	assert.Len(t, progressCh, 1)
+	assert.Equal(t, 1, reportsBeforeRepeatWait(c))
+}
+
+// A first execution that fails is a change of state too.
+func TestContinuousStatusWritesFirstFailureBeforeTheWait(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	c := newContinuousStepForTest(clock)
+	observeSample(c, clock, 7)
+
+	assert.Equal(t, 1, reportsBeforeRepeatWait(c))
+}
+
+// An error that names a secret, such as a URL with a token, is masked in the
+// sample and in the scheduler log, as in the step log.
+func TestContinuousStepMasksErrorMessage(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	c := newContinuousStepForTest(clock)
+	rec := &fakeRecorder{}
+	c.rec, c.recState = rec, recorderOpen
+	logs := &syncBuffer{}
+	ctx := logger.WithLogger(context.Background(), logger.NewLogger(logger.WithWriter(logs)))
+	node := NewNode(ir.Step{Name: "probe"}, NodeState{})
+	node.outputs.masker = masking.NewMasker(masking.SourcedEnvVars{Secrets: []string{"TOKEN=s3cr3t"}})
+
+	c.beforeExecution(node)
+	c.afterExecution(ctx, node, errors.New(`Get "http://127.0.0.1:1/?token=s3cr3t": connection refused`))
+
+	require.Len(t, rec.samples, 1)
+	assert.Equal(t, 1, rec.samples[0].ExitCode)
+	assert.Contains(t, rec.samples[0].Message, "connection refused")
+	assert.NotContains(t, rec.samples[0].Message, "s3cr3t")
+	assert.NotContains(t, logs.String(), "s3cr3t")
 }
 
 // A store that keeps failing, such as on a full disk, warns once, not for each
@@ -318,6 +356,26 @@ func TestContinuousStepRecordsSamplesAndCoalescesStatus(t *testing.T) {
 	}
 	assert.NotContains(t, out, "Repeating step")
 	assert.NotContains(t, out, "Step will be repeated")
+}
+
+// A failed execution is recorded before the retry wait, so its duration does
+// not include the wait.
+func TestContinuousStepRecordsBeforeRetryWait(t *testing.T) {
+	const retryInterval = 1500 * time.Millisecond
+	step := shellStep("probe", "exit 3", ir.RepeatPolicy{
+		RepeatMode: ir.RepeatModeUntil,
+		ExitCode:   []int{99}, // never reached: repeats without end
+		Interval:   time.Millisecond,
+	})
+	step.RetryPolicy = ir.RetryPolicy{Limit: 1, Interval: retryInterval}
+	rec := &fakeRecorder{stopAfter: 1}
+	opens := 0
+
+	runContinuousNode(t, step, rec, &opens)
+
+	require.Len(t, rec.samples, 1)
+	assert.Equal(t, 3, rec.samples[0].ExitCode)
+	assert.Less(t, rec.samples[0].Duration, retryInterval)
 }
 
 // A step with a limit keeps today's behavior.
