@@ -24,6 +24,8 @@ import { useCanWriteForWorkspace } from '../../contexts/AuthContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useSearchState } from '../../contexts/SearchStateContext';
 import { useUserPreferences } from '../../contexts/UserPreference';
+import { useHideBreadcrumb } from '@/contexts/LayoutChromeContext';
+import { WorkflowsModeToggle } from '../../features/dags/components/dag-list/WorkflowsModeToggle';
 import DAGRunBatchActions from '../../features/dag-runs/components/common/DAGRunBatchActions';
 import DAGRunGroupedView from '../../features/dag-runs/components/dag-run-list/DAGRunGroupedView';
 import DAGRunTable from '../../features/dag-runs/components/dag-run-list/DAGRunTable';
@@ -167,6 +169,7 @@ const NAME_SUGGESTION_DEBOUNCE_MS = 300;
 const NAME_SUGGESTION_LIMIT = 50;
 
 function DAGRuns() {
+  useHideBreadcrumb(true);
   const { ts } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
@@ -700,7 +703,7 @@ function DAGRuns() {
   }, [currentFilters, runViewsLoading, searchState, searchStateScope]);
 
   React.useEffect(() => {
-    appBarContext.setTitle('Executions');
+    appBarContext.setTitle('Workflows');
   }, [appBarContext]);
 
   // Fetch available labels for the filter dropdown
@@ -1267,8 +1270,9 @@ function DAGRuns() {
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           <Title>
-            <I18nText text={'Executions'} />
+            <I18nText text={'Workflows'} />
           </Title>
+          <WorkflowsModeToggle mode="runs" />
           <ViewSelector
             kind="run"
             views={runViews}

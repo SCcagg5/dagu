@@ -30,6 +30,9 @@ export default defineMessages({
     'Pin group {name}': 'Pin group {name}',
     'Pin group': 'Pin group',
     'Unpin group': 'Unpin group',
+    Runs: 'Runs',
+    'Gather the workflows by group': 'Gather the workflows by group',
+    Show: 'Show',
     'Choose the shared default, or remove views saved for this remote and workspace.':
       'Choose the shared default, or remove views saved for this remote and workspace.',
     'Could not update the schedules': 'Could not update the schedules',
@@ -65,6 +68,9 @@ export default defineMessages({
     'Pin group {name}': '固定分组 {name}',
     'Pin group': '固定分组',
     'Unpin group': '取消固定分组',
+    Runs: '运行',
+    'Gather the workflows by group': '按分组汇总工作流',
+    Show: '显示',
     'Choose the shared default, or remove views saved for this remote and workspace.':
       '选择共享的默认视图，或删除为此远程和工作区保存的视图。',
     'Could not update the schedules': '无法更新计划',
@@ -100,6 +106,9 @@ export default defineMessages({
     'Pin group {name}': 'グループ {name} をピン留め',
     'Pin group': 'グループをピン留め',
     'Unpin group': 'グループのピン留めを解除',
+    Runs: '実行',
+    'Gather the workflows by group': 'ワークフローをグループごとにまとめる',
+    Show: '表示',
     'Choose the shared default, or remove views saved for this remote and workspace.':
       '共有のデフォルトビューを選択するか、このリモートとワークスペースに保存されたビューを削除します。',
     'Could not update the schedules': 'スケジュールを更新できませんでした',

@@ -521,6 +521,8 @@ declare module '@tanstack/react-table' {
     canDeleteDAGs?: boolean;
     canPinDAG?: (dag: components['schemas']['DAGFile']) => boolean;
     onToggleGroupPin?: (dags: components['schemas']['DAGFile'][]) => void;
+    /** Workflows are not gathered by group: each name shows its group first. */
+    showGroupPrefix?: boolean;
     isPinPending?: (fileName: string) => boolean;
     onTogglePin?: (dag: components['schemas']['DAGFile']) => void;
     isActivityExpanded?: (fileName: string) => boolean;
@@ -721,7 +723,19 @@ const defaultColumns = [
             style={{ paddingLeft: `${row.depth * 1.5}rem` }}
             className="space-y-0.5 min-w-0"
           >
-            <DAGNameLink fileName={data.dag.fileName}>{getValue()}</DAGNameLink>
+            <div className="flex min-w-0 items-baseline gap-1">
+              {table.options.meta?.showGroupPrefix && data.dag.dag.group && (
+                <span
+                  data-testid="dag-group-prefix"
+                  className="shrink-0 text-xs text-muted-foreground"
+                >
+                  {data.dag.dag.group} /
+                </span>
+              )}
+              <DAGNameLink fileName={data.dag.fileName}>
+                {getValue()}
+              </DAGNameLink>
+            </div>
 
             {description && (
               <div
@@ -1289,6 +1303,24 @@ function DAGTable({
     []
   );
 
+  // Gather the workflows by group, or list them flat with the group before the
+  // name. The choice stays in the browser.
+  const [groupByGroup, setGroupByGroup] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('dagu_workflows_group_by_group') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const handleGroupByGroupChange = useCallback((checked: boolean) => {
+    setGroupByGroup(checked);
+    try {
+      localStorage.setItem('dagu_workflows_group_by_group', String(checked));
+    } catch {
+      // The choice then lasts until the page closes.
+    }
+  }, []);
+
   const [clientSort, setClientSort] = useState<string>('');
   const [clientOrder, setClientOrder] = useState<string>('asc');
 
@@ -1545,6 +1577,14 @@ function DAGTable({
       sortedDags.sort(compareDags);
     }
 
+    // Not gathered by group: pinned workflows lead, then the others, flat.
+    if (!groupByGroup) {
+      return [
+        ...sortedDags.filter((dag) => dag.pinned),
+        ...sortedDags.filter((dag) => !dag.pinned),
+      ].map((dag): Data => ({ kind: ItemKind.DAG, name: dag.dag.name, dag }));
+    }
+
     // A group whose workflows are all pinned stays a group, and leads the
     // list; any other pinned workflow leads as a flat row.
     const membersOf: { [key: string]: typeof sortedDags } = {};
@@ -1616,7 +1656,7 @@ function DAGTable({
         });
       });
     return hierarchicalData;
-  }, [dags, clientSort, compareDags]);
+  }, [dags, clientSort, compareDags, groupByGroup]);
 
   const instance = useReactTable<Data>({
     data,
@@ -1654,6 +1694,7 @@ function DAGTable({
       isPinPending: (fileName) => pendingPins.has(fileName),
       onTogglePin: (dag) => void togglePin(dag),
       onToggleGroupPin: (dags) => void toggleGroupPin(dags),
+      showGroupPrefix: !groupByGroup,
       isActivityExpanded: (fileName) => expandedActivity.has(fileName),
       onToggleActivity: toggleActivity,
       onOpenRun: openRun,
@@ -1786,6 +1827,20 @@ function DAGTable({
                 checked={activeOnly}
                 onCheckedChange={handleActiveOnlyChange}
                 aria-label="Active only"
+                className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              />
+            </I18nProps>
+          </label>
+
+          <label className="flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-border-strong hover:bg-muted">
+            <span>
+              <I18nText text={'Group'} />
+            </span>
+            <I18nProps>
+              <Switch
+                checked={groupByGroup}
+                onCheckedChange={handleGroupByGroupChange}
+                aria-label="Gather the workflows by group"
                 className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               />
             </I18nProps>

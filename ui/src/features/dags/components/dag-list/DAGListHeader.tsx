@@ -4,6 +4,7 @@ import Title from '@/components/ui/title';
 import { useI18n } from '@/i18n/I18nProvider';
 import { CreateDAGButton } from '../common';
 import { I18nText } from '@/i18n/I18nText';
+import { WorkflowsModeToggle } from './WorkflowsModeToggle';
 
 interface DAGListHeaderProps {
   onRefresh?: () => void | Promise<void>;
@@ -32,6 +33,7 @@ const DAGListHeader: React.FC<DAGListHeaderProps> = ({
             })}
           </span>
         )}
+        <WorkflowsModeToggle mode="workflows" />
       </div>
       <div className="flex gap-2">
         <CreateDAGButton />

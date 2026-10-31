@@ -19,6 +19,8 @@ import { useRemoteNode } from '../../../../contexts/RemoteNodeContext';
 import dayjs from '../../../../lib/dayjs';
 import RelativeTime from '@/components/ui/relative-time';
 import { RunStatusChip } from '../common/RunStatusChip';
+import { StatusDot } from '@/components/ui/status-dot';
+import { runDisplayStatus } from '@/lib/runDisplayStatus';
 import AutoRetryBadge from '../common/AutoRetryBadge';
 import { TriggerTypeIndicator } from '../../../dags/components/common/TriggerTypeIndicator';
 import {
@@ -466,31 +468,11 @@ function DAGRunTable({
                 <I18nText text={'Profile'} />
               </TableHead>
             )}
-            {showScheduleColumn && (
-              <TableHead>
-                <div>
-                  <I18nText text={'Scheduled At'} />
-                </div>
-                <div className="text-xs text-muted-foreground font-normal">
-                  {timezoneInfo}
-                </div>
-              </TableHead>
-            )}
             <TableHead>
-              <div>
-                <I18nText text={'Queued At'} />
-              </div>
-              <div className="text-xs text-muted-foreground font-normal">
-                {timezoneInfo}
-              </div>
+              <I18nText text={'Queued At'} />
             </TableHead>
             <TableHead>
-              <div>
-                <I18nText text={'Started At'} />
-              </div>
-              <div className="text-xs text-muted-foreground font-normal">
-                {timezoneInfo}
-              </div>
+              <I18nText text={'Started At'} />
             </TableHead>
             <TableHead>
               <I18nText text={'Duration'} />
@@ -564,21 +546,30 @@ function DAGRunTable({
               </TableCell>
               <TableCell className="py-1 px-2">
                 <StepDetailsTooltip dagRun={dagRun}>
-                  <div className="flex flex-wrap items-center gap-1">
-                    <RunStatusChip
-                      name={dagRun.name}
-                      dagRunId={dagRun.dagRunId}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusDot
+                      kind="run"
                       status={dagRun.status}
-                      size="xs"
-                    >
-                      {dagRun.statusLabel}
-                    </RunStatusChip>
+                      healthy={runDisplayStatus(dagRun).healthy}
+                    />
                     <AutoRetryBadge
                       status={dagRun.status}
                       count={dagRun.autoRetryCount}
                       limit={dagRun.autoRetryLimit}
                       className="text-[10px]"
                     />
+                    {showScheduleColumn && dagRun.scheduleTime && (
+                      <>
+                        <span className="text-muted-foreground">·</span>
+                        <RelativeTime
+                          timestamp={dagRun.scheduleTime}
+                          absolute={dagRun.scheduleTime}
+                          compact
+                          ago
+                          className="text-muted-foreground"
+                        />
+                      </>
+                    )}
                   </div>
                 </StepDetailsTooltip>
               </TableCell>
@@ -603,27 +594,20 @@ function DAGRunTable({
                   )}
                 </TableCell>
               )}
-              {showScheduleColumn && (
-                <TableCell className="py-1 px-2 text-left whitespace-nowrap">
-                  {dagRun.scheduleTime ? (
-                    <span title={dagRun.scheduleTime}>
-                      {formatScheduleTime(dagRun.scheduleTime)}
-                    </span>
-                  ) : (
-                    '-'
-                  )}
-                </TableCell>
-              )}
               <TableCell className="py-1 px-2 text-left whitespace-nowrap">
                 <RelativeTime
                   timestamp={dagRun.queuedAt}
                   absolute={dagRun.queuedAt}
+                  compact
+                  ago
                 />
               </TableCell>
               <TableCell className="py-1 px-2 text-left whitespace-nowrap">
                 <RelativeTime
                   timestamp={dagRun.startedAt}
                   absolute={dagRun.startedAt}
+                  compact
+                  ago
                 />
               </TableCell>
               <TableCell className="py-1 px-2 text-left">
