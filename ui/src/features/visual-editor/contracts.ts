@@ -137,7 +137,7 @@ export type DagEditOp =
       targets: string[];
     }
   | { kind: 'convertStepsToExplicitForm' }
-  /** Sets the start expressions of `schedule`; an empty list removes the key. */
+  /** Sets the start expressions of `schedule`; the other entries stay. */
   | { kind: 'setSchedule'; expressions: string[] };
 
 export interface StepNameMap {

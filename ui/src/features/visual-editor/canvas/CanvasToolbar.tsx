@@ -147,82 +147,80 @@ function CompactToolbar({
     if (target?.closest?.(LAYER_SELECTOR)) event.preventDefault();
   };
 
+  // Not modal: a control in the sheet can open a popover or a dialog. The
+  // Tools button is the trigger, so focus returns to it on close.
   return (
-    <>
+    <DialogPrimitive.Root open={open} onOpenChange={setOpen} modal={false}>
       <div
         ref={findZone}
         className="absolute left-2 top-2 z-10 flex items-center gap-1"
       >
-        <button
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          onClick={() => setOpen(true)}
-          className={cn(
-            BUTTON_CLASS,
-            'h-9 rounded-md border bg-card px-2.5 text-foreground shadow-sm'
-          )}
-        >
-          <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-          {ts('Tools')}
-        </button>
+        <DialogPrimitive.Trigger asChild>
+          <button
+            type="button"
+            className={cn(
+              BUTTON_CLASS,
+              'h-9 rounded-md border bg-card px-2.5 text-foreground shadow-sm'
+            )}
+          >
+            <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+            {ts('Tools')}
+          </button>
+        </DialogPrimitive.Trigger>
         {readOnly ? <ReadOnlyChip /> : null}
       </div>
-      {/* Not modal: a control in the sheet can open a popover or a dialog. */}
-      <DialogPrimitive.Root open={open} onOpenChange={setOpen} modal={false}>
-        <DialogPrimitive.Portal container={zone}>
-          <DialogPrimitive.Content
-            data-testid="ve-tools-sheet"
-            aria-describedby={undefined}
-            onInteractOutside={keepForLayers}
-            className="absolute inset-x-0 bottom-0 z-20 grid max-h-[75%] gap-3 overflow-y-auto rounded-t-xl border border-border bg-card p-4 shadow-lg"
-          >
-            <DialogPrimitive.Title className="text-sm font-semibold">
-              {ts('Canvas tools')}
-            </DialogPrimitive.Title>
-            <div onClick={closeOnToggle} className="flex flex-col gap-3">
-              <div
-                role="group"
-                aria-label={ts('Layout direction')}
-                className="flex items-center gap-1"
-              >
-                {directions.map(({ value, label, Icon }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    title={
-                      direction === value ? ts('Re-align the steps') : undefined
-                    }
-                    aria-pressed={direction === value}
-                    disabled={!onDirectionChange}
-                    onClick={() => onDirectionChange?.(value)}
-                    className={cn(
-                      BUTTON_CLASS,
-                      'h-9 px-2.5',
-                      direction === value && 'bg-muted text-foreground'
-                    )}
-                  >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {toolbarEnd ? (
-                <div
-                  data-testid="ve-tools-sheet-actions"
-                  className="flex flex-wrap items-center gap-1"
+      <DialogPrimitive.Portal container={zone}>
+        <DialogPrimitive.Content
+          data-testid="ve-tools-sheet"
+          aria-describedby={undefined}
+          onInteractOutside={keepForLayers}
+          className="absolute inset-x-0 bottom-0 z-20 grid max-h-[75%] gap-3 overflow-y-auto rounded-t-xl border border-border bg-card p-3 shadow-lg"
+        >
+          <DialogPrimitive.Title className="text-sm font-semibold">
+            {ts('Canvas tools')}
+          </DialogPrimitive.Title>
+          <div onClick={closeOnToggle} className="flex flex-col gap-3">
+            <div
+              role="group"
+              aria-label={ts('Layout direction')}
+              className="flex items-center gap-1"
+            >
+              {directions.map(({ value, label, Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  title={
+                    direction === value ? ts('Re-align the steps') : undefined
+                  }
+                  aria-pressed={direction === value}
+                  disabled={!onDirectionChange}
+                  onClick={() => onDirectionChange?.(value)}
+                  className={cn(
+                    BUTTON_CLASS,
+                    'h-9 px-2.5',
+                    direction === value && 'bg-muted text-foreground'
+                  )}
                 >
-                  {toolbarEnd}
-                </div>
-              ) : null}
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
             </div>
-            <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <X className="h-4 w-4" aria-hidden="true" />
-              <span className="sr-only">{ts('Close')}</span>
-            </DialogPrimitive.Close>
-          </DialogPrimitive.Content>
-        </DialogPrimitive.Portal>
-      </DialogPrimitive.Root>
-    </>
+            {toolbarEnd ? (
+              <div
+                data-testid="ve-tools-sheet-actions"
+                className="flex flex-wrap items-center gap-1"
+              >
+                {toolbarEnd}
+              </div>
+            ) : null}
+          </div>
+          <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <X className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">{ts('Close')}</span>
+          </DialogPrimitive.Close>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
