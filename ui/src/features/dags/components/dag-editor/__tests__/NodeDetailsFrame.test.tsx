@@ -23,6 +23,9 @@ import {
 import { realSchema } from '@/features/visual-editor/inspector/__tests__/realSchema';
 import { DAGContext } from '../../../contexts/DAGContext';
 import DAGSpec, { type DAGSpecHostProps } from '../DAGSpec';
+// DAGSpec loads the client issues on mount without waiting for them. Loading
+// them here keeps that load from outliving the test file.
+import '@/features/visual-editor/doc/clientIssues';
 import type { VisualEditorState } from '../hostTypes';
 import {
   clampDockedWidth,
