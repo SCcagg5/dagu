@@ -44,6 +44,8 @@ let contentListener:
 let keyListener:
   | ((event: {
       keyCode: number;
+      altKey?: boolean;
+      shiftKey?: boolean;
       preventDefault(): void;
       stopPropagation(): void;
     }) => void)
@@ -154,9 +156,13 @@ function fakeEditor(
           },
         ],
       }),
-    press: (keyCode: number) =>
+    press: (
+      keyCode: number,
+      modifiers: { altKey?: boolean; shiftKey?: boolean } = {}
+    ) =>
       keyListener?.({
         keyCode,
+        ...modifiers,
         preventDefault: () => (state.keyPrevented += 1),
         stopPropagation: () => undefined,
       }),
@@ -458,6 +464,23 @@ describe('step scope guards', () => {
     press(1);
 
     expect(state.keyPrevented).toBe(1);
+  });
+
+  // Alt+Up and Alt+Down move the lines of the selection over the next line.
+  it('refuses a line move over the edge of the step', () => {
+    const { press, state } = setup({ selected: second!.key }, 30, true);
+    const { startLine, endLine } = second!.range;
+
+    state.current = [sel(startLine, 3, startLine, 3)];
+    press(16, { altKey: true });
+    expect(state.keyPrevented).toBe(1);
+    press(18, { altKey: true });
+    press(16, { altKey: true, shiftKey: true });
+    expect(state.keyPrevented).toBe(1);
+
+    state.current = [sel(startLine, 1, endLine, 5)];
+    press(18, { altKey: true });
+    expect(state.keyPrevented).toBe(2);
   });
 
   it('stops guarding when the scope changes', () => {

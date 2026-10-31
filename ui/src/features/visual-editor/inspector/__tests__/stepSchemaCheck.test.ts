@@ -26,6 +26,16 @@ describe('checkStepSchema', () => {
     expect(messages.some((m) => m.includes('colour'))).toBe(true);
   });
 
+  // `constructor` is a member of Object.prototype, not a step property.
+  it('names an unknown key that every object has', () => {
+    const messages = checkStepSchema(schemaSample, {
+      name: 'a',
+      run: 'x',
+      constructor: 'x',
+    });
+    expect(messages.some((m) => m.includes('constructor'))).toBe(true);
+  });
+
   it('reports a wrong type with its path', () => {
     const messages = checkStepSchema(schemaSample, {
       name: 'a',
