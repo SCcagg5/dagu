@@ -486,6 +486,29 @@ describe('DAGDetails page', () => {
       });
     });
 
+    // ?workspace names the workspace over the selection of the app bar. The
+    // way out of it selects all workspaces, or the selection of the app bar
+    // hides the workflow again.
+    it('selects all workspaces from Show in all workspaces', () => {
+      const selectWorkspace = vi.fn();
+      renderPage('/dags/release-notes?workspace=other', {
+        ...(appBarValue as object),
+        workspaceSelection: {
+          kind: WorkspaceKind.workspace,
+          workspace: 'other',
+        },
+        selectWorkspace,
+      } as never);
+
+      fireEvent.click(
+        screen.getByRole('link', { name: 'Show in all workspaces' })
+      );
+
+      expect(selectWorkspace).toHaveBeenCalledWith({
+        kind: WorkspaceKind.all,
+      });
+    });
+
     it('scopes the workspace to the remote node of the URL', () => {
       renderPage('/dags/release-notes?remoteNode=edge');
 
