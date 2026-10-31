@@ -219,6 +219,15 @@ describe('planQuickFixes', () => {
     expect(fix?.params).toEqual({ id: 'build' });
   });
 
+  it('does not take its own name as its id when another step has it as id', () => {
+    const text =
+      'steps:\n  - name: build\n    run: echo\n  - name: compile\n    id: build\n    run: echo\n';
+    const [fix] = [
+      ...planQuickFixes(parseDagDoc(text), [issueOf('steps[0]')]).values(),
+    ];
+    expect(fix?.params).toEqual({ id: 'build_1' });
+  });
+
   it('gives two steps with one name different ids in one batch', () => {
     // Two steps with one name: the second one is a duplicate, but the fixes
     // must not give them the same id.

@@ -372,6 +372,19 @@ describe('node view moves', () => {
     expect(executionOrder(diamond)).toEqual(['start', 'right', 'left', 'join']);
   });
 
+  // The runtime runs a step after the steps whose outputs it reads.
+  it('goes to a step that an output reference makes run before', () => {
+    const inferred = {
+      name: 'inferred',
+      steps: [
+        { name: 'report', inferredDepends: ['fetch'] },
+        { name: 'fetch' },
+      ],
+    } as unknown as Dag;
+    expect(executionOrder(inferred)).toEqual(['fetch', 'report']);
+    expect(stepNeighbours(inferred, 'report').previous).toBe('fetch');
+  });
+
   it('does not stop on a dependency cycle', () => {
     const cycle = {
       name: 'cycle',

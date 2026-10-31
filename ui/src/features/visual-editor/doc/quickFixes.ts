@@ -166,10 +166,14 @@ export function planQuickFixes(
     if (!own) continue;
     const line = nameLineOf(model.text, step);
     if (!line || step.explicitName === undefined) continue;
-    // A step may take its own name as its id, unless another step has it.
+    // A step may take its own name as its id, unless another step has it as
+    // its name or its id.
     const others = new Set(taken);
     const shared = [...model.steps, ...model.handlers].some(
-      (other) => other !== step && other.explicitName === step.explicitName
+      (other) =>
+        other !== step &&
+        (other.explicitName === step.explicitName ||
+          other.id === step.explicitName)
     );
     if (!shared) others.delete(step.explicitName);
     const slug = slugStepId(step.explicitName);
