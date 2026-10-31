@@ -218,7 +218,8 @@ steps:
 	}
 }
 
-// A handler step with an id still lists nothing: no field can resolve it.
+// A handler step with an id still lists nothing: no field can resolve it, so
+// the empty list is final even when only a run would give its names.
 func TestScopeHandlerWithID(t *testing.T) {
 	dag := loadScopeDAG(t, `
 type: graph
@@ -228,16 +229,26 @@ handler_on:
     run: echo done
     outputs:
       - name: result
+  failure:
+    id: report
+    run: echo done
+    stdout:
+      outputs:
+        decode: json
 steps:
   - run: echo main
     name: main
 `)
 	steps := scopeSteps(dag)
-	require.Len(t, steps, 2)
-	assert.Equal(t, "handler_on.exit", steps[1].StepPath)
-	require.NotNil(t, steps[1].Id)
-	assert.Equal(t, "cleanup", *steps[1].Id)
-	assert.Empty(t, steps[1].Outputs)
+	require.Len(t, steps, 3)
+	assert.Equal(t, "handler_on.failure", steps[1].StepPath)
+	assert.Equal(t, "handler_on.exit", steps[2].StepPath)
+	require.NotNil(t, steps[2].Id)
+	assert.Equal(t, "cleanup", *steps[2].Id)
+	for _, h := range steps[1:] {
+		assert.Empty(t, h.Outputs, h.StepPath)
+		assert.Equal(t, api.ReferenceScopeStepOutputsKnownStatic, h.OutputsKnown, h.StepPath)
+	}
 }
 
 func outputRefs(outputs []api.ReferenceScopeOutput) []string {

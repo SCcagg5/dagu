@@ -20,7 +20,8 @@ import (
 //
 // Handler steps are outside the step graph (specs 007 and 009): they have no
 // step-output lookup scope, so they list no upstream steps. Nothing can
-// reference the outputs of a handler step either, so they list no outputs.
+// reference the outputs of a handler step either, so they list no outputs, and
+// that list is static.
 func scopeSteps(dag *ir.DAG) []api.ReferenceScopeStep {
 	steps := make([]api.ReferenceScopeStep, 0, len(dag.Steps))
 	upstream := newUpstreamIndex(dag)
@@ -45,6 +46,7 @@ func scopeSteps(dag *ir.DAG) []api.ReferenceScopeStep {
 		}
 		item := scopeStep(h.step, "handler_on."+h.event, []string{})
 		item.Outputs = []api.ReferenceScopeOutput{}
+		item.OutputsKnown = api.ReferenceScopeStepOutputsKnownStatic
 		steps = append(steps, item)
 	}
 	return steps
