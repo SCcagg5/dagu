@@ -228,6 +228,7 @@ type VisualProps = {
   onRevertToSave?(): void;
   yamlVisible?: boolean;
   onYamlVisibleChange?(visible: boolean): void;
+  onFormVisibleChange?(visible: boolean): void;
   toolbarLead?: React.ReactNode;
   toolbarTrail?: React.ReactNode;
   workflowPanel?: React.ReactNode;
@@ -255,6 +256,9 @@ vi.mock('@/features/visual-editor', () => ({
           onClick={() => props.onYamlVisibleChange?.(!props.yamlVisible)}
         >
           Toggle YAML
+        </button>
+        <button type="button" onClick={() => props.onFormVisibleChange?.(true)}>
+          Open form
         </button>
       </div>
     );
@@ -640,6 +644,32 @@ describe('DAGSpec live validation', () => {
     });
     fireEvent.change(editor, { target: { value: savedSpec + '# mine!' } });
     expect(screen.getByRole('dialog')).toHaveTextContent('External Changes');
+  });
+
+  // A live event brings a text without its hash. Until the fresh read
+  // returns, a save still names a hash, so the server can refuse it.
+  it('keeps the last hash until the text of a live event is read again', async () => {
+    const sha = 'a'.repeat(64);
+    const mutate = vi.fn();
+    mocks.useQuery.mockReturnValue({ ...specData({ sha256: sha }), mutate });
+    const view = await renderSpec();
+    const next = savedSpec + '# from disk\n';
+    mocks.useQuery.mockReturnValue({
+      ...specData({ spec: next, sha256: undefined }),
+      mutate,
+    });
+    view.rerender(specTree({ keyboardActive: true }));
+    expect(mutate).toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('DAG spec'), {
+      target: { value: next + '# mine\n' },
+    });
+    await clickSave();
+
+    expect(mocks.put.mock.lastCall?.[1].body).toEqual({
+      spec: next + '# mine\n',
+      expectedSha256: sha,
+    });
   });
 
   it('allows retrying a save after a network exception', async () => {
@@ -1058,6 +1088,36 @@ describe('DAGSpec visual view', () => {
     expect(visual.props?.validation).toMatchObject({ issues: [issue] });
   });
 
+  // A base configuration that the file inherits changes the result, and
+  // the definition of the file, without a change of its text.
+  it('validates the saved spec again when its definition changes', async () => {
+    const result = (env: string) => ({
+      data: {
+        valid: true,
+        errors: [],
+        issues: [],
+        referenceScope: { params: [], consts: [], env: [env], secrets: [] },
+      },
+    });
+    mocks.post.mockResolvedValueOnce(result('OLD'));
+    const view = await renderSpec();
+    await settle();
+
+    mocks.post.mockResolvedValueOnce(result('NEW'));
+    mocks.useQuery.mockReturnValue(
+      specData({
+        dag: { name: 'example', steps: [{ name: 'extract' }], env: ['NEW=1'] },
+      })
+    );
+    view.rerender(specTree({ keyboardActive: true }));
+    await settle();
+
+    expect(mocks.post).toHaveBeenCalledTimes(2);
+    expect(visual.props?.validation).toMatchObject({
+      referenceScope: { env: ['NEW'] },
+    });
+  });
+
   it('gives the reference scope to the YAML completion', async () => {
     const referenceScope = {
       params: [{ name: 'region', reference: '${params.region}' }],
@@ -1302,6 +1362,24 @@ describe('DAGSpec visual view', () => {
 
       expect(screen.getByTestId('visual-editor-mock')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    });
+
+    // The form of a step leaves with the visual editor of the parent.
+    it('shows the YAML of the whole file after a switch from a step form', async () => {
+      await renderSpec({ localDags });
+      fireEvent.click(screen.getByText('Toggle YAML'));
+      fireEvent.click(screen.getByText('Open form'));
+      expect(screen.getByLabelText('DAG spec')).not.toBeVisible();
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
+        target: { value: 'child' },
+      });
+      await settle();
+
+      expect(screen.getByLabelText('DAG spec')).toBeVisible();
+      expect(
+        screen.getByRole('button', { name: 'Format YAML' })
+      ).toBeInTheDocument();
     });
 
     it('shows no selector for a file with one document', async () => {
