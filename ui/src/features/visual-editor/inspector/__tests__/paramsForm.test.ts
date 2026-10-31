@@ -96,4 +96,10 @@ describe('issuesToErrorSchema', () => {
       __errors: [issue.message],
     });
   });
+
+  it('keeps a __proto__ field as a key of its own', () => {
+    const schema = issuesToErrorSchema({ 'with.__proto__': [issue] });
+    expect(({} as Record<string, unknown>).__errors).toBeUndefined();
+    expect(Object.keys(schema)).toEqual(['__proto__']);
+  });
 });
