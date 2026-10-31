@@ -30,6 +30,14 @@ export default defineMessages({
     'Pin group {name}': 'Pin group {name}',
     'Pin group': 'Pin group',
     'Unpin group': 'Unpin group',
+    'Could not update the schedules': 'Could not update the schedules',
+    'Schedules of group {name}': 'Schedules of group {name}',
+    'Webhooks of group {name}': 'Webhooks of group {name}',
+    '{live} of {total} live': '{live} of {total} live',
+    'Are you sure you want to {action} the schedules of the {count} workflows of "{name}"?':
+      'Are you sure you want to {action} the schedules of the {count} workflows of "{name}"?',
+    'Are you sure you want to {action} the webhooks of the {count} workflows of "{name}"?':
+      'Are you sure you want to {action} the webhooks of the {count} workflows of "{name}"?',
   },
   'zh-CN': {
     'Runs in the last 24 hours': '过去 24 小时内的运行',
@@ -55,6 +63,14 @@ export default defineMessages({
     'Pin group {name}': '固定分组 {name}',
     'Pin group': '固定分组',
     'Unpin group': '取消固定分组',
+    'Could not update the schedules': '无法更新计划',
+    'Schedules of group {name}': '分组 {name} 的计划',
+    'Webhooks of group {name}': '分组 {name} 的 Webhook',
+    '{live} of {total} live': '{live}/{total} 运行中',
+    'Are you sure you want to {action} the schedules of the {count} workflows of "{name}"?':
+      '确定要{action}“{name}”中 {count} 个工作流的计划吗？',
+    'Are you sure you want to {action} the webhooks of the {count} workflows of "{name}"?':
+      '确定要{action}“{name}”中 {count} 个工作流的 Webhook 吗？',
   },
   ja: {
     'Runs in the last 24 hours': '過去 24 時間の実行',
@@ -80,5 +96,13 @@ export default defineMessages({
     'Pin group {name}': 'グループ {name} をピン留め',
     'Pin group': 'グループをピン留め',
     'Unpin group': 'グループのピン留めを解除',
+    'Could not update the schedules': 'スケジュールを更新できませんでした',
+    'Schedules of group {name}': 'グループ {name} のスケジュール',
+    'Webhooks of group {name}': 'グループ {name} の Webhook',
+    '{live} of {total} live': '{total} 件中 {live} 件が有効',
+    'Are you sure you want to {action} the schedules of the {count} workflows of "{name}"?':
+      '「{name}」の {count} 件のワークフローのスケジュールを{action}しますか？',
+    'Are you sure you want to {action} the webhooks of the {count} workflows of "{name}"?':
+      '「{name}」の {count} 件のワークフローの Webhook を{action}しますか？',
   },
 });

@@ -786,6 +786,31 @@ function DAGsContent() {
     [client, reloadDAGList, remoteNode, showError]
   );
 
+  // A group pins in one go: the requests run together, the list reloads once.
+  const handleSetDAGsPinned = React.useCallback(
+    async (fileNames: string[], pinned: boolean): Promise<void> => {
+      const results = await Promise.allSettled(
+        fileNames.map((fileName) =>
+          setDAGPinned(client, { fileName, pinned, remoteNode })
+        )
+      );
+      const failed = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected'
+      );
+      if (failed) {
+        showError(
+          failed.reason instanceof Error
+            ? failed.reason.message
+            : String(failed.reason),
+          'Please try again or check the server connection.'
+        );
+      }
+      await reloadDAGList();
+    },
+    [client, reloadDAGList, remoteNode, showError]
+  );
+
   React.useEffect(() => {
     appBarContext.setTitle('Workflows');
   }, [appBarContext]);
@@ -1190,6 +1215,7 @@ function DAGsContent() {
             onRenameDAG={handleRenameDAG}
             canPinDAG={canPinDAG}
             onSetDAGPinned={handleSetDAGPinned}
+            onSetDAGsPinned={handleSetDAGsPinned}
           />
           <div className="mt-3 flex flex-col items-center gap-2">
             {loadMoreError && (

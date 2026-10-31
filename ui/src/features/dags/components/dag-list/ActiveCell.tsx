@@ -146,3 +146,209 @@ function WebhookSwitch({ dag }: { dag: DAGFile }) {
     </span>
   );
 }
+
+/**
+ * The schedules of a group with one switch: on when every scheduled workflow
+ * of the group is live. A change asks for the confirmation, then applies to all
+ * of them at once. A dash when no workflow of the group has a schedule.
+ */
+export function GroupScheduleCell({
+  name,
+  members,
+  refresh,
+}: {
+  name: string;
+  members: DAGFile[];
+  refresh?: () => void;
+}) {
+  const { ts } = useI18n();
+  const client = useClient();
+  const config = useConfig();
+  const remoteNode = useRemoteNode();
+  const { showError } = useErrorModal();
+  const scheduled = members.filter(
+    (dag) => (dag.dag.schedule ?? []).length > 0
+  );
+  const [pending, setPending] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const live = scheduled.filter((dag) => !dag.suspended).length;
+
+  const confirm = useCallback(async () => {
+    const next = pending;
+    setPending(null);
+    if (next === null) return;
+    setBusy(true);
+    try {
+      const results = await Promise.all(
+        scheduled
+          .filter((dag) => !!dag.suspended === next)
+          .map((dag) =>
+            client.POST('/dags/{fileName}/suspend', {
+              params: {
+                path: { fileName: dag.fileName },
+                query: { remoteNode },
+              },
+              body: { suspend: !next },
+            })
+          )
+      );
+      const failure = results.find((result) => result.error);
+      if (failure?.error) {
+        showError(
+          failure.error.message || ts('Could not update the schedules'),
+          ts('Please try again or check the server connection.')
+        );
+      }
+    } finally {
+      setBusy(false);
+      refresh?.();
+    }
+  }, [client, pending, refresh, remoteNode, scheduled, showError, ts]);
+
+  if (scheduled.length === 0) {
+    return <span className="text-xs text-muted-foreground">-</span>;
+  }
+  const canToggle = config.permissions.runDags;
+  return (
+    <span
+      data-testid="group-schedule-cell"
+      onClick={(event) => event.stopPropagation()}
+      className="flex min-w-0 items-center gap-1.5 text-xs"
+    >
+      <Switch
+        checked={live === scheduled.length}
+        disabled={!canToggle || busy}
+        onCheckedChange={canToggle ? (value) => setPending(value) : undefined}
+        aria-label={ts('Schedules of group {name}', { name })}
+      />
+      <span className="text-muted-foreground">
+        {ts('{live} of {total} live', { live, total: scheduled.length })}
+      </span>
+      <I18nProps>
+        <ConfirmModal
+          title={pending ? 'Enable schedule' : 'Disable schedule'}
+          buttonText={pending ? 'Enable' : 'Disable'}
+          visible={pending !== null}
+          dismissModal={() => setPending(null)}
+          onSubmit={() => void confirm()}
+        >
+          <p>
+            {ts(
+              'Are you sure you want to {action} the schedules of the {count} workflows of "{name}"?',
+              {
+                action: ts(pending ? 'enable' : 'disable'),
+                count: scheduled.length,
+                name,
+              }
+            )}
+          </p>
+        </ConfirmModal>
+      </I18nProps>
+    </span>
+  );
+}
+
+/**
+ * The webhooks of a group with one switch: on when every webhook of the group
+ * is enabled. It shows only with the right to manage webhooks on the local
+ * server, and when a workflow of the group has a webhook.
+ */
+export function GroupWebhookCell({
+  name,
+  members,
+}: {
+  name: string;
+  members: DAGFile[];
+}) {
+  const { ts } = useI18n();
+  const config = useConfig();
+  const client = useClient();
+  const { showError } = useErrorModal();
+  const canManage = useCanManageWebhooks();
+  const remoteNode = useRemoteNode();
+  const enabled = canManage && remoteNode === 'local';
+  const init = useMemo(
+    () => whenEnabled(enabled, { params: { query: { remoteNode } } }),
+    [enabled, remoteNode]
+  );
+  const { data, mutate } = useQuery('/webhooks', init);
+  const [pending, setPending] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const names = new Set(members.map((dag) => dag.fileName));
+  const webhooks = Array.isArray(data?.webhooks)
+    ? data.webhooks.filter((item) => names.has(item.dagName))
+    : [];
+
+  const confirm = useCallback(async () => {
+    const next = pending;
+    setPending(null);
+    if (next === null) return;
+    setBusy(true);
+    try {
+      const results = await Promise.all(
+        webhooks
+          .filter((webhook) => webhook.enabled !== next)
+          .map((webhook) =>
+            client.POST('/dags/{fileName}/webhook/toggle', {
+              params: {
+                path: { fileName: webhook.dagName },
+                query: { remoteNode },
+              },
+              body: { enabled: next },
+            })
+          )
+      );
+      const failure = results.find((result) => result.error);
+      if (failure?.error) {
+        showError(
+          failure.error.message || ts('Could not update the webhook'),
+          ts('Please try again or check the server connection.')
+        );
+      }
+    } finally {
+      setBusy(false);
+      await mutate();
+    }
+  }, [client, mutate, pending, remoteNode, showError, ts, webhooks]);
+
+  if (!enabled || webhooks.length === 0) {
+    return <span className="text-xs text-muted-foreground">-</span>;
+  }
+  const canToggle = config.permissions.runDags;
+  const on = webhooks.filter((webhook) => webhook.enabled).length;
+  return (
+    <span
+      data-testid="group-webhook-cell"
+      onClick={(event) => event.stopPropagation()}
+      className="flex min-w-0 items-center gap-1.5 text-xs"
+    >
+      <Switch
+        checked={on === webhooks.length}
+        disabled={!canToggle || busy}
+        onCheckedChange={canToggle ? (value) => setPending(value) : undefined}
+        aria-label={ts('Webhooks of group {name}', { name })}
+      />
+      <Webhook aria-hidden="true" className="size-3.5 text-muted-foreground" />
+      <I18nProps>
+        <ConfirmModal
+          title={pending ? 'Enable webhook' : 'Disable webhook'}
+          buttonText={pending ? 'Enable' : 'Disable'}
+          visible={pending !== null}
+          dismissModal={() => setPending(null)}
+          onSubmit={() => void confirm()}
+        >
+          <p>
+            {ts(
+              'Are you sure you want to {action} the webhooks of the {count} workflows of "{name}"?',
+              {
+                action: ts(pending ? 'enable' : 'disable'),
+                count: webhooks.length,
+                name,
+              }
+            )}
+          </p>
+        </ConfirmModal>
+      </I18nProps>
+    </span>
+  );
+}

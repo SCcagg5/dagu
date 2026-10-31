@@ -58,7 +58,7 @@ export function DAGRecentRuns({ fileName }: { fileName: string }) {
       role="region"
       aria-label={ts('Recent runs of {name}', { name: fileName })}
       data-testid="dag-recent-runs"
-      className="border-l-2 border-border/60 py-1 pl-3 text-xs"
+      className="animate-in fade-in-0 slide-in-from-top-1 border-l-2 border-border/60 py-1 pl-3 text-xs duration-200"
     >
       {error ? (
         <p role="alert" className="py-1 text-destructive">

@@ -269,7 +269,7 @@ export function ViewSelector({
       <div
         className={
           // With the toolbar, the selector is a child of the row of the page,
-          // and the toolbar goes to the end of that row.
+          // and the toolbar follows the filters of that row.
           onRenameView ? 'contents' : 'flex min-w-0 items-center gap-2'
         }
       >
@@ -380,7 +380,7 @@ export function ViewSelector({
           </DropdownMenuContent>
         </DropdownMenu>
         {onRenameView && canManageViews && (
-          <div className="order-last ml-auto flex items-center gap-1">
+          <div className="order-1 flex items-center gap-1">
             {activeView && (
               <>
                 <Button

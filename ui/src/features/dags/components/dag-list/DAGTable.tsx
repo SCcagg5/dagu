@@ -46,7 +46,12 @@ import ActivityBars from './ActivityBars';
 import { DAGRecentRuns } from './DAGRecentRuns';
 import { LastRunCell, useIsHeartbeat } from './LastRunCell';
 import { ScheduleLine } from './ScheduleSummary';
-import { ScheduleCell, WebhookCell } from './ActiveCell';
+import {
+  GroupScheduleCell,
+  GroupWebhookCell,
+  ScheduleCell,
+  WebhookCell,
+} from './ActiveCell';
 import PinToggle from '../common/PinToggle';
 
 // Import shadcn/ui components
@@ -472,6 +477,7 @@ type Props = {
   canPinDAG: (dag: components['schemas']['DAGFile']) => boolean;
   /** Pins or unpins a workflow for all users */
   onSetDAGPinned: (fileName: string, pinned: boolean) => Promise<void>;
+  onSetDAGsPinned: (fileNames: string[], pinned: boolean) => Promise<void>;
 };
 
 export type DAGDeleteResult = {
@@ -508,6 +514,7 @@ declare module '@tanstack/react-table' {
     getDeleteSelectionState?: () => boolean | 'indeterminate';
     isDeleteSelected?: (fileName: string) => boolean;
     onToggleDeleteSelection?: (fileName: string) => void;
+    onToggleGroupDeleteSelection?: (fileNames: string[]) => void;
     onToggleAllDeleteSelection?: (checked: boolean) => void;
     canRenameDAGs?: boolean;
     onOpenRenameDAG?: (dag: components['schemas']['DAGFile']) => void;
@@ -528,6 +535,13 @@ declare module '@tanstack/react-table' {
 
 const columnHelper = createColumnHelper<Data>();
 // --- End Helper Functions ---
+
+/** The workflows of a group row. */
+function groupMembers(group: Data): components['schemas']['DAGFile'][] {
+  return (group.subRows ?? [])
+    .filter((item): item is DAGRow => item.kind === ItemKind.DAG)
+    .map((item) => item.dag);
+}
 
 const deleteSelectionColumn = columnHelper.display({
   id: 'Select',
@@ -550,8 +564,39 @@ const deleteSelectionColumn = columnHelper.display({
   ),
   cell: ({ row, table }) => {
     const data = row.original;
-    if (data.kind !== ItemKind.DAG) {
-      return null;
+    if (data.kind === ItemKind.Group) {
+      const fileNames = (data.subRows ?? [])
+        .filter((item): item is DAGRow => item.kind === ItemKind.DAG)
+        .map((item) => item.dag.fileName);
+      if (fileNames.length === 0) {
+        return null;
+      }
+      const selected = fileNames.filter((name) =>
+        table.options.meta?.isDeleteSelected?.(name)
+      ).length;
+      return (
+        <div
+          className="flex h-8 items-center justify-center"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <I18nProps>
+            <Checkbox
+              className="size-3.5"
+              aria-label={`Select group ${data.name}`}
+              checked={
+                selected === 0
+                  ? false
+                  : selected === fileNames.length
+                    ? true
+                    : 'indeterminate'
+              }
+              onCheckedChange={() =>
+                table.options.meta?.onToggleGroupDeleteSelection?.(fileNames)
+              }
+            />
+          </I18nProps>
+        </div>
+      );
     }
     const fileName = data.dag.fileName;
     return (
@@ -849,8 +894,14 @@ const defaultColumns = [
     ),
     cell: ({ row, table }) => {
       const data = row.original!;
-      if (data.kind !== ItemKind.DAG) {
-        return null;
+      if (data.kind === ItemKind.Group) {
+        return (
+          <GroupScheduleCell
+            name={data.name}
+            members={groupMembers(data)}
+            refresh={table.options.meta?.refreshFn}
+          />
+        );
       }
       return (
         <ScheduleCell dag={data.dag} refresh={table.options.meta?.refreshFn} />
@@ -868,8 +919,10 @@ const defaultColumns = [
     ),
     cell: ({ row }) => {
       const data = row.original!;
-      if (data.kind !== ItemKind.DAG) {
-        return null;
+      if (data.kind === ItemKind.Group) {
+        return (
+          <GroupWebhookCell name={data.name} members={groupMembers(data)} />
+        );
       }
       return <WebhookCell dag={data.dag} />;
     },
@@ -1128,6 +1181,7 @@ function DAGTable({
   onRenameDAG,
   canPinDAG,
   onSetDAGPinned,
+  onSetDAGsPinned,
 }: Props) {
   const { ts } = useI18n();
   const remoteNode = useRemoteNode();
@@ -1193,17 +1247,27 @@ function DAGTable({
     },
     [onSetDAGPinned]
   );
-  // A group is pinned when every workflow of it is: pinning it pins them all,
-  // one after the other, and unpinning it unpins them all.
+  // A group is pinned when every workflow of it is: pinning it pins them all
+  // at once, and unpinning it unpins them all.
   const toggleGroupPin = useCallback(
     async (members: components['schemas']['DAGFile'][]) => {
       const pin = !members.every((dag) => dag.pinned);
-      for (const dag of members) {
-        if (dag.pinned === pin) continue;
-        await togglePin(dag);
+      const fileNames = members
+        .filter((dag) => dag.pinned !== pin)
+        .map((dag) => dag.fileName);
+      if (fileNames.length === 0) return;
+      setPendingPins((current) => new Set([...current, ...fileNames]));
+      try {
+        await onSetDAGsPinned(fileNames, pin);
+      } finally {
+        setPendingPins((current) => {
+          const next = new Set(current);
+          fileNames.forEach((fileName) => next.delete(fileName));
+          return next;
+        });
       }
     },
-    [togglePin]
+    [onSetDAGsPinned]
   );
   const [expanded, setExpanded] = useState<ExpandedState>(() => {
     try {
@@ -1245,6 +1309,19 @@ function DAGTable({
         next.delete(fileName);
       } else {
         next.add(fileName);
+      }
+      return next;
+    });
+  }, []);
+
+  // The checkbox of a group selects all its workflows, or clears them.
+  const toggleGroupDeleteSelection = useCallback((fileNames: string[]) => {
+    setDeleteSelection((current) => {
+      const next = new Set(current);
+      if (fileNames.every((fileName) => next.has(fileName))) {
+        fileNames.forEach((fileName) => next.delete(fileName));
+      } else {
+        fileNames.forEach((fileName) => next.add(fileName));
       }
       return next;
     });
@@ -1568,6 +1645,7 @@ function DAGTable({
       getDeleteSelectionState,
       isDeleteSelected: (fileName) => deleteSelection.has(fileName),
       onToggleDeleteSelection: toggleDeleteSelection,
+      onToggleGroupDeleteSelection: toggleGroupDeleteSelection,
       onToggleAllDeleteSelection: toggleAllDeleteSelection,
       canRenameDAGs,
       onOpenRenameDAG: openRenameDAG,
@@ -1732,9 +1810,9 @@ function DAGTable({
             </Button>
           )}
 
-          {/* Pagination - pushed to right */}
+          {/* Pagination: after the buttons of the views */}
           {pagination && (
-            <div className="flex-shrink-0">
+            <div className="order-2 flex-shrink-0">
               <DAGPagination
                 totalPages={pagination.totalPages}
                 page={pagination.page}
@@ -1909,7 +1987,7 @@ function DAGTable({
                         row.original?.kind === ItemKind.Group
                           ? 'bg-muted/50 font-semibold cursor-pointer hover:bg-muted/70'
                           : 'cursor-pointer hover:bg-muted/50'
-                      } ${isDAGRow && 'dag' in row.original && (row.original as DAGRow).dag.latestDAGRun?.status === Status.Running ? 'animate-running-row' : ''} group/row`}
+                      } ${row.depth > 0 ? 'animate-in fade-in-0 duration-200' : ''} ${isDAGRow && 'dag' in row.original && (row.original as DAGRow).dag.latestDAGRun?.status === Status.Running ? 'animate-running-row' : ''} group/row`}
                       onClick={(e) => {
                         // Handle group row clicks - toggle expanded state
                         if ((row.original as Data)?.kind === ItemKind.Group) {
