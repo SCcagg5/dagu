@@ -252,13 +252,27 @@ export function useVisibleRuns({
     [history.runs]
   );
   const pool = useMemo(() => {
+    // A preset ends now, but its clock ticks once a minute: a run that
+    // started after the last tick is in it too.
+    const within =
+      bounds !== null && preset !== 'custom'
+        ? { from: bounds.from, to: Infinity }
+        : bounds;
     const kept = history.runs.filter(
       (r) =>
         (isTestRun(r) ? showTests : !hiddenTypes.includes(triggerOf(r))) &&
-        (bounds === null || runInRange(r, rangeNow, bounds, showCached))
+        (within === null || runInRange(r, rangeNow, within, showCached))
     );
     return timelineRuns(kept);
-  }, [history.runs, showTests, hiddenTypes, bounds, rangeNow, showCached]);
+  }, [
+    history.runs,
+    showTests,
+    hiddenTypes,
+    bounds,
+    preset,
+    rangeNow,
+    showCached,
+  ]);
 
   const selection = run.selection;
   // The shown run is the selected one. With 'latest' it is the run of ?run:

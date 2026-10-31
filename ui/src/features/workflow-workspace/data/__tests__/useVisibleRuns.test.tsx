@@ -169,6 +169,33 @@ describe('useVisibleRuns', () => {
     expect(result.current.adjacentId('older')).toBeNull();
   });
 
+  // The clock of a preset ticks once a minute, but the preset ends now: a
+  // run that starts between two ticks is in the range at once.
+  it('keeps a run that started after the last tick of a preset', () => {
+    window.localStorage.setItem(RUN_MODE_KEY, 'range');
+    window.localStorage.setItem(RUN_RANGE_KEY, '{"preset":"1h"}');
+    const view = renderHook(() => useVisibleRuns({ enabled: true }));
+    vi.setSystemTime(NOW + 20_000);
+    const fresh = at('n3', new Date(NOW + 10_000).toISOString());
+    h.history = { runs: [fresh, ...HISTORY], isLoading: false };
+    view.rerender();
+    expect(ids(view.result.current.runs)).toEqual(['n2', 'n3']);
+  });
+
+  it('cuts a custom range at its end', () => {
+    window.localStorage.setItem(RUN_MODE_KEY, 'range');
+    window.localStorage.setItem(
+      RUN_RANGE_KEY,
+      JSON.stringify({
+        preset: 'custom',
+        from: Date.parse('2026-03-02T08:30:00Z'),
+        to: Date.parse('2026-03-02T10:30:00Z'),
+      })
+    );
+    const { result } = renderHook(() => useVisibleRuns({ enabled: true }));
+    expect(ids(result.current.runs)).toEqual(['n1', 't1']);
+  });
+
   it('reads nothing while disabled', () => {
     renderHook(() => useVisibleRuns({ enabled: false }));
     expect(h.args[0]).toMatchObject({ enabled: false });

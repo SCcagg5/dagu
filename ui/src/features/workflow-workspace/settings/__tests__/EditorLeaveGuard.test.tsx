@@ -18,7 +18,10 @@ import {
 } from '../../canvas/WorkspaceEditorContext';
 import type { WorkspaceEditorState } from '../../contracts';
 import { EditorLeaveGuard } from '../EditorLeaveGuard';
-import { SettingsLeaveGuardProvider } from '../useSettingsLeaveGuard';
+import {
+  SettingsLeaveGuardProvider,
+  useSettingsLeaveGuard,
+} from '../useSettingsLeaveGuard';
 
 function Editor({ dirty }: { dirty: boolean }) {
   const { onEditorStateChange } = useWorkspaceEditorBinding();
@@ -28,16 +31,30 @@ function Editor({ dirty }: { dirty: boolean }) {
   return null;
 }
 
+// A section of the Workflow panel with a draft that is not saved.
+function SettingsDraft() {
+  const { setDirty } = useSettingsLeaveGuard();
+  useEffect(() => setDirty('notifications', true), [setDirty]);
+  return null;
+}
+
 function Where() {
   const { pathname } = useLocation();
   return <output data-testid="where">{pathname}</output>;
 }
 
-function Page({ dirty }: { dirty: boolean }) {
+function Page({
+  dirty,
+  settingsDirty,
+}: {
+  dirty: boolean;
+  settingsDirty: boolean;
+}) {
   return (
     <WorkspaceEditorProvider>
       <SettingsLeaveGuardProvider>
         <Editor dirty={dirty} />
+        {settingsDirty && <SettingsDraft />}
         <EditorLeaveGuard />
         <Link to="/dags/etl/executions">in workflow</Link>
         <Link to="/dag-runs">leave</Link>
@@ -47,13 +64,14 @@ function Page({ dirty }: { dirty: boolean }) {
   );
 }
 
-function renderPage(dirty: boolean) {
+function renderPage(dirty: boolean, settingsDirty = false) {
+  const page = <Page dirty={dirty} settingsDirty={settingsDirty} />;
   return render(
     <BrowserRouter>
       <Where />
       <Routes>
-        <Route path="/dags/:fileName" element={<Page dirty={dirty} />} />
-        <Route path="/dags/:fileName/:tab" element={<Page dirty={dirty} />} />
+        <Route path="/dags/:fileName" element={page} />
+        <Route path="/dags/:fileName/:tab" element={page} />
         <Route path="*" element={<div>elsewhere</div>} />
       </Routes>
     </BrowserRouter>
@@ -160,6 +178,28 @@ describe('EditorLeaveGuard', () => {
     await userEvent
       .setup()
       .click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(go.mock.calls).toEqual([[-5]]);
+  });
+
+  // Leaving the workflow page also drops the drafts of the Workflow panel.
+  it('asks before a link that leaves the workflow with a settings draft', async () => {
+    const user = userEvent.setup();
+    renderPage(false, true);
+    await user.click(screen.getByRole('link', { name: 'leave' }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/dags/etl');
+    expect(await screen.findByRole('dialog')).toHaveTextContent(
+      'The changes in this section are not saved'
+    );
+  });
+
+  it('holds back a Back to another page with a settings draft', async () => {
+    const go = vi.spyOn(window.history, 'go').mockImplementation(() => {});
+    renderPage(false, true);
+    backToAnotherPage();
+    expect(screen.getByTestId('where')).toHaveTextContent('/dags/etl');
+    expect(await screen.findByRole('dialog')).toHaveTextContent(
+      'The changes in this section are not saved'
+    );
     expect(go.mock.calls).toEqual([[-5]]);
   });
 

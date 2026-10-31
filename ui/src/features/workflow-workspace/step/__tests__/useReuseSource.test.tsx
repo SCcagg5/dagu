@@ -650,6 +650,18 @@ describe('the choice of the run', () => {
     });
   });
 
+  // The chosen cache gives the reads: no run is waited for.
+  it('does not wait for an active run when the cache is chosen', async () => {
+    h.history = [runOf('active', Status.Running)];
+    cacheStep('a', SPEC);
+    cacheStep('b', SPEC);
+    sourceChoiceStore.set(SCOPE, { kind: 'cache' });
+    const view = render({ liveText: SPEC });
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    expect(view.result.current.selectedOptionId).toBe('cache');
+    expect(view.result.current.waitingFor).toBeNull();
+  });
+
   it('offers no cached values when no entry is fresh', async () => {
     cacheStep('a', SPEC.replace('echo a', 'echo other'));
     const view = render({ liveText: SPEC });

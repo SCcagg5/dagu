@@ -11,15 +11,15 @@ function insideBase(pathname: string, base: string): boolean {
 }
 
 /**
- * Asks before the editor draft is lost. The router has no blocker (the app
- * uses BrowserRouter), so three exits are covered by hand: unload (reload,
- * close, external link), a click on a link that leaves the workflow, and
- * browser Back or Forward. The run page entry calls
- * guardLeave itself. Renders nothing.
+ * Asks before the editor draft or a draft of the Workflow panel is lost. The
+ * router has no blocker (the app uses BrowserRouter), so three exits are
+ * covered by hand: unload (reload, close, external link), a click on a link
+ * that leaves the workflow, and browser Back or Forward. The run page entry
+ * calls guardLeave itself. Renders nothing.
  */
 export function EditorLeaveGuard() {
   const { state } = useWorkspaceEditor();
-  const { setEditorDirty, guardLeave } = useSettingsLeaveGuard();
+  const { setEditorDirty, guardLeave, atRisk } = useSettingsLeaveGuard();
   const { pathname, key } = useLocation();
   const { tab } = useParams<{ tab?: string }>();
   const trimmed = pathname.replace(/\/+$/, '');
@@ -43,7 +43,7 @@ export function EditorLeaveGuard() {
   }, [key]);
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !atRisk) return;
     // Set while a confirmed exit replays the event that was held back.
     let replaying = false;
 
@@ -97,7 +97,7 @@ export function EditorLeaveGuard() {
       document.removeEventListener('click', onClick, true);
       window.removeEventListener('popstate', onPopState, true);
     };
-  }, [dirty, baseHref, guardLeave]);
+  }, [dirty, atRisk, baseHref, guardLeave]);
 
   return null;
 }

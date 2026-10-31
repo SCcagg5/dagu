@@ -58,7 +58,7 @@ export interface ReuseSourceState {
   selectedOptionId: string | null;
   /** The user chose a line of the picker. */
   choose(option: SourceOption): void;
-  /** The active run that the step waits for. */
+  /** The active run that the step waits for when it has no source or cache. */
   waitingFor: string | null;
   /**
    * Previous steps that changed since the source run (parsed compare) and
@@ -474,7 +474,8 @@ export function useReuseSource(p: {
     selectedOptionId,
     choose,
     resolveRun,
-    waitingFor: source ? null : (current?.pick.waitingFor ?? null),
+    waitingFor:
+      source || cacheChosen ? null : (current?.pick.waitingFor ?? null),
     stale: cover.stale,
     missing: cover.missing,
     cached: cover.cached,
