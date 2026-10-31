@@ -795,6 +795,17 @@ describe('DAGSpec compact notices: notice line', () => {
     expect(screen.queryByText(FROZEN_TEXT)).not.toBeInTheDocument();
   });
 
+  it('names the line that the editor cannot read', async () => {
+    await renderSpec();
+    act(() =>
+      visual.props?.onStateChange?.({ ...visualState(true), unparsedLine: 40 })
+    );
+
+    expect(screen.getByTestId('notice-line')).toHaveTextContent(
+      'The editor cannot read the YAML at line 40: the canvas shows the steps the server read'
+    );
+  });
+
   // parity:edit-notice-bar
   it('shows a refused edit as an alert with its actions', async () => {
     await renderSpec();
