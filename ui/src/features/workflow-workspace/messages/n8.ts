@@ -28,7 +28,7 @@ export default defineMessages({
     'Older run': '前の実行',
     'Newer run': '新しい実行',
     Latest: '最新',
-    'Follow latest': '最新を追従',
+    'Follow latest': '最新に追従',
     'A newer run is active': '新しい実行が進行中です',
   },
 });

@@ -31,7 +31,7 @@ export default defineMessages({
     'Show in all workspaces': 'すべてのワークスペースで表示',
     'Back to latest': '最新に戻る',
     'Latest run': '最新の実行',
-    'Following the latest run': '最新の実行を追従中',
+    'Following the latest run': '最新の実行に追従中',
     'Showing the latest {count} runs.':
       '最新の {count} 件の実行を表示しています。',
   },
