@@ -20,6 +20,18 @@ describe('dagRunUrls', () => {
     ).toBe('/dags/root%20dag?remoteNode=edge-a&run=run+1');
   });
 
+  // The name of a DAG can differ from the name of its file.
+  it('opens the workflow file of the root run when the caller has it', () => {
+    expect(
+      buildDAGRunPageURL({
+        rootDAGRunName: 'etl',
+        rootDAGRunId: 'r1',
+        fileName: 'etl_file',
+        remoteNode: 'local',
+      })
+    ).toBe('/dags/etl_file?remoteNode=local&run=r1');
+  });
+
   it('opens the root run for a sub-DAG run, as the workflow page has no sub-run address', () => {
     expect(
       buildDAGRunPageURL({
