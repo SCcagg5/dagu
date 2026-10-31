@@ -99,6 +99,7 @@ import type {
   VisualEditorValidation,
 } from '@/features/visual-editor';
 import type { EditResult, TextEdit } from '@/features/visual-editor/contracts';
+import { frozenMessage } from '@/features/visual-editor/editMessages';
 import {
   InspectorViewProvider,
   useInspectorViewState,
@@ -1287,6 +1288,7 @@ function DAGSpec({
   const panelPlacement = usePanelPlacement();
   const viewport = useViewportWidth();
   const [visualFrozen, setVisualFrozen] = React.useState(false);
+  const [unparsedLine, setUnparsedLine] = React.useState<number>();
   const [editorNotice, setEditorNotice] = React.useState<EditorNotice | null>(
     null
   );
@@ -1295,6 +1297,7 @@ function DAGSpec({
       visualStateRef.current = state;
       setVisualStepName(state.selectedStepName);
       setVisualFrozen(state.frozen);
+      setUnparsedLine(state.unparsedLine);
       onStateChange?.(state);
       emitEditorState();
     },
@@ -1742,7 +1745,7 @@ function DAGSpec({
       noticeItems.push({
         id: 'frozen',
         tone: 'warning',
-        message: ts('YAML has errors: the canvas shows the last valid version'),
+        message: frozenMessage(ts, unparsedLine),
         priority: NOTICE_PRIORITY.frozen,
       });
     }

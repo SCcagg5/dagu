@@ -1377,6 +1377,8 @@ const baseEnglish = {
     'Edges of this DAG type cannot be changed on the canvas.',
   'YAML has errors: the canvas shows the last valid version':
     'YAML has errors: the canvas shows the last valid version',
+  'The editor cannot read the YAML at line {line}: the canvas shows the steps the server read':
+    'The editor cannot read the YAML at line {line}: the canvas shows the steps the server read',
   'Read-only': 'Read-only',
   'Add step': 'Add step',
   'Fit view': 'Fit view',
@@ -4344,6 +4346,8 @@ const baseChinese = {
     '无法在画布上更改此类型 DAG 的连线。',
   'YAML has errors: the canvas shows the last valid version':
     'YAML 有错误：画布显示最近一个有效版本',
+  'The editor cannot read the YAML at line {line}: the canvas shows the steps the server read':
+    '编辑器无法读取第 {line} 行的 YAML：画布显示服务器读取的步骤',
   'Read-only': '只读',
   'Add step': '添加步骤',
   'Fit view': '适应视图',
@@ -7305,6 +7309,8 @@ const baseJapanese = {
     'この種類の DAG の接続はキャンバス上では変更できません。',
   'YAML has errors: the canvas shows the last valid version':
     'YAML にエラーがあります: キャンバスには最後の有効なバージョンが表示されます',
+  'The editor cannot read the YAML at line {line}: the canvas shows the steps the server read':
+    'エディターは {line} 行目の YAML を読み取れません: キャンバスにはサーバーが読み取ったステップが表示されます',
   'Read-only': '読み取り専用',
   'Add step': 'ステップを追加',
   'Fit view': '全体を表示',

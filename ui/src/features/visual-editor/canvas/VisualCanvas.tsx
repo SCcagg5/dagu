@@ -18,6 +18,7 @@ import { useResolvedTheme } from '@/contexts/UserPreference';
 import { useI18n } from '@/i18n/I18nProvider';
 import { readClipboardText } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
+import { frozenMessage } from '../editMessages';
 import type {
   CanvasDirection,
   CanvasViewHandle,
@@ -230,6 +231,7 @@ function CanvasView({
   direction,
   selected,
   frozen,
+  unparsedLine,
   readOnly,
   hideReadOnlyChip = false,
   onSelect,
@@ -1284,9 +1286,7 @@ function CanvasView({
                 id: 'frozen',
                 tone: 'warning',
                 priority: 0,
-                message: ts(
-                  'YAML has errors: the canvas shows the last valid version'
-                ),
+                message: frozenMessage(ts, unparsedLine),
               },
             ]}
           />
