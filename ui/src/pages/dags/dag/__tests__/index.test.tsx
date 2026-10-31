@@ -388,9 +388,10 @@ describe('DAGDetails page', () => {
       '/dags/release-notes?dagRunId=run-7&subDAGRunId=child-2&dagRunName=release-notes&step=deploy'
     );
 
+    // The step of the sub-run is not a step of the root run.
     await waitFor(() => {
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/dags/release-notes?remoteNode=local&run=run-7&step=deploy'
+        /^\/dags\/release-notes\?remoteNode=local&run=run-7$/
       );
     });
     // The redirect target is this page: the body mounts once it is there.
