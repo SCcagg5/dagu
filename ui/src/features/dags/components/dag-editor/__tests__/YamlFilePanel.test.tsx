@@ -284,6 +284,23 @@ describe('useYamlSection', () => {
     expect(h.onStateChange).toHaveBeenCalledWith('expanded');
   });
 
+  // A link that opens a step (Open step, a run tab) turns the host
+  // expanded: the step shows, and the file is not written back.
+  it.each([['docked'], [null]] as const)(
+    'shows the step when the host turns from %s to expanded',
+    (from) => {
+      const onStateChange = vi.fn();
+      const { result, rerender } = renderHook(
+        (state: YamlSectionHost['state']) =>
+          useYamlSection({ state, onStateChange }),
+        { initialProps: from as YamlSectionHost['state'] }
+      );
+      rerender('expanded');
+      expect(result.current.yamlKind).toBe('step');
+      expect(onStateChange).not.toHaveBeenCalled();
+    }
+  );
+
   it('follows the host, and never writes, when its pane is hidden', () => {
     const h = host('expanded', false);
     const { result } = renderHook(() => useYamlSection(h));

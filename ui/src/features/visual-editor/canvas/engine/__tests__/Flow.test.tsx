@@ -133,7 +133,7 @@ function handleOf(id: string, handleId: string): HTMLElement {
 
 function pointer(
   target: Element | Window,
-  type: 'pointerdown' | 'pointermove' | 'pointerup',
+  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
   x: number,
   y: number
 ) {
@@ -633,6 +633,19 @@ describe('Flow', () => {
       expect(onConnectEnd).toHaveBeenCalledWith(
         expect.objectContaining({ isValid: false, toNode: { id: 'b' } })
       );
+    });
+
+    it('makes no link and reports no drop for a cancelled drag', () => {
+      const onConnect = vi.fn();
+      const onConnectEnd = vi.fn();
+      renderFlow({ onConnect, onConnectEnd });
+      pointer(handleOf('a', 'source'), 'pointerdown', 0, 0);
+      pointer(window, 'pointermove', 150, 5);
+      // The target handle of B is near: a drop here would link.
+      pointer(window, 'pointercancel', 288, 0);
+      expect(onConnect).not.toHaveBeenCalled();
+      expect(onConnectEnd).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('flow-connection')).toBeNull();
     });
 
     it('treats a click on a handle as nothing', () => {
