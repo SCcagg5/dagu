@@ -23,6 +23,19 @@ describe('readEnv', () => {
   ])('%j', (value, expected) => {
     expect(readEnv(value)).toEqual(expected);
   });
+
+  // An env name is user text: `__proto__` stays an entry of its own.
+  it('keeps an entry named __proto__', () => {
+    const maps = JSON.parse('[{ "__proto__": "1" }, { "B": "2" }]');
+    expect(Object.entries(readEnv(maps).entries)).toEqual([
+      ['__proto__', '1'],
+      ['B', '2'],
+    ]);
+    expect(Object.entries(readEnv(['__proto__=1', 'B=2']).entries)).toEqual([
+      ['__proto__', '1'],
+      ['B', '2'],
+    ]);
+  });
 });
 
 describe('envOps', () => {

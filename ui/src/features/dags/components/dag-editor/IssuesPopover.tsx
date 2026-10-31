@@ -237,6 +237,11 @@ export function IssuesPopover({
           }
         }
       : undefined;
+  // A row is a button only when `reveal` acts on it.
+  const canReveal = (row: ShownRow) =>
+    row.issue && onRevealIssue
+      ? row.target !== undefined || row.line !== undefined
+      : row.target !== undefined && !!onRevealStep;
 
   const announcement =
     shownCount > 0
@@ -311,6 +316,7 @@ export function IssuesPopover({
               title={ts('Warnings')}
               rows={warningRows}
               onReveal={reveal}
+              canReveal={canReveal}
               onFix={applyFixes}
             />
             <IssueGroup
@@ -318,6 +324,7 @@ export function IssuesPopover({
               tone="error"
               rows={errorRows}
               onReveal={reveal}
+              canReveal={canReveal}
               onFix={applyFixes}
             />
             <IssueGroup
@@ -329,6 +336,7 @@ export function IssuesPopover({
                 target: stepOnly(stepOf(notice.message, notice.fieldPath)),
               }))}
               onReveal={reveal}
+              canReveal={canReveal}
             >
               {/* The dialog opens over the page: the popover closes first. */}
               <div className="px-2 pt-1" onClickCapture={close}>
@@ -354,6 +362,7 @@ function IssueGroup({
   rows,
   tone = 'warning',
   onReveal,
+  canReveal,
   onFix,
   children,
 }: {
@@ -361,6 +370,8 @@ function IssueGroup({
   rows: ShownRow[];
   tone?: 'warning' | 'error';
   onReveal?(row: ShownRow): void;
+  /** True when `onReveal` acts on the row; any other row is text. */
+  canReveal?(row: ShownRow): boolean;
   onFix?(fixes: QuickFix[]): void;
   children?: React.ReactNode;
 }) {
@@ -390,8 +401,7 @@ function IssueGroup({
           ]
             .filter(Boolean)
             .join(' \u00b7 ');
-          const actionable =
-            onReveal && (row.target || (row.issue && row.line !== undefined));
+          const actionable = onReveal && canReveal?.(row);
           return (
             <li
               key={`${index}:${row.message}`}
