@@ -91,6 +91,30 @@ describe('KeyValueEditor', () => {
     expect(Object.keys(onChange.mock.lastCall?.[0] ?? {})).toEqual(['Z', 'B']);
   });
 
+  // A map holds one value for each key: sending rows that share a key would
+  // drop one of the values while both rows stay on screen.
+  it('sends nothing while two rows have the same key', () => {
+    const onChange = vi.fn();
+    render(
+      <KeyValueEditor
+        value={{ A: 'one', B: 'two' }}
+        readOnly={false}
+        onChange={onChange}
+      />
+    );
+    const keys = screen.getAllByLabelText('Key');
+    fireEvent.change(keys[0]!, { target: { value: 'B' } });
+    fireEvent.blur(keys[0]!);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(keys[0]).toHaveAttribute('aria-invalid', 'true');
+    expect(keys[1]).toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.change(keys[0]!, { target: { value: 'C' } });
+    fireEvent.blur(keys[0]!);
+    expect(onChange).toHaveBeenCalledWith({ C: 'one', B: 'two' });
+    expect(keys[0]).not.toHaveAttribute('aria-invalid');
+  });
+
   it('disables every input when read-only', () => {
     render(<KeyValueEditor value={{ X: 'a' }} readOnly onChange={vi.fn()} />);
     expect(screen.getByLabelText('Key')).toBeDisabled();
