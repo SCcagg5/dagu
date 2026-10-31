@@ -239,6 +239,14 @@ func (r *reader) Samples(ctx context.Context, q SampleQuery) (Series, error) {
 
 func (r *reader) Events(ctx context.Context, q EventQuery) (EventPage, error) {
 	var page EventPage
+	before := int64(-1)
+	if q.Before != "" {
+		off, err := decodeCursor(q.Before)
+		if err != nil {
+			return page, err
+		}
+		before = off
+	}
 	f, err := os.Open(r.st.eventsPath())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -252,12 +260,8 @@ func (r *reader) Events(ctx context.Context, q EventQuery) (EventPage, error) {
 		return page, err
 	}
 	end := st.Size()
-	if q.Before != "" {
-		off, err := decodeCursor(q.Before)
-		if err != nil {
-			return page, err
-		}
-		end = min(end, off)
+	if before >= 0 {
+		end = min(end, before)
 	}
 	limit := q.Limit
 	if limit <= 0 {
@@ -380,7 +384,8 @@ func (r *reader) Availability(ctx context.Context, nowT time.Time) (Availability
 
 // streak returns the count of samples after the last failed sample, and the
 // time of that sample. When the finer tiers no longer hold the failed sample,
-// the time is the start of its bucket.
+// the time is the start of its bucket, and the count leaves out the samples
+// after the failure in that bucket: it is a lower bound.
 func (v *view) streak() (uint64, time.Time, error) {
 	var streak uint64
 	oldest := int64(noLimit)
