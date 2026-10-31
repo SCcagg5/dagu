@@ -124,8 +124,8 @@ function DAGActions({
   const canManageProfiles = useCanManageProfiles();
   const [isEnqueueModal, setIsEnqueueModal] = React.useState(false);
   // Once opened, the modal stays mounted, so that it can close with its exit.
-  const startModalOpened = React.useRef(false);
-  if (isEnqueueModal) startModalOpened.current = true;
+  const [startModalOpened, setStartModalOpened] = React.useState(false);
+  if (isEnqueueModal && !startModalOpened) setStartModalOpened(true);
   const [startModalDag, setStartModalDag] =
     React.useState<components['schemas']['DAGDetails']>();
   const [startModalLoading, setStartModalLoading] = React.useState(false);
@@ -877,7 +877,7 @@ function DAGActions({
             </div>
           </ConfirmModal>
         </I18nProps>
-        {(isEnqueueModal || startModalOpened.current) && (
+        {(isEnqueueModal || startModalOpened) && (
           <React.Suspense fallback={null}>
             <StartDAGModal
               dag={startModalDag}
