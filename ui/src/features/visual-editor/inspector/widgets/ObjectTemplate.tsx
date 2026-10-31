@@ -3,7 +3,7 @@
 
 import { Templates } from '@rjsf/shadcn';
 import type { ObjectFieldTemplateProps } from '@rjsf/utils';
-import type { ComponentType, ReactElement } from 'react';
+import { useState, type ComponentType, type ReactElement } from 'react';
 
 const BaseObjectFieldTemplate =
   Templates.ObjectFieldTemplate as ComponentType<ObjectFieldTemplateProps>;
@@ -27,13 +27,31 @@ export function CollapsibleObjectFieldTemplate(
   if (props.fieldPathId.path.length === 0) {
     return <BaseObjectFieldTemplate {...props} />;
   }
+  return <NestedObjectFieldTemplate {...props} />;
+}
+
+function NestedObjectFieldTemplate(
+  props: ObjectFieldTemplateProps
+): ReactElement {
+  const filled = hasData(props.formData);
+  const [open, setOpen] = useState(filled);
+  // A value that appears opens the block. A value that goes keeps it open,
+  // so that clearing the last field does not hide it while the user types.
+  const [seenFilled, setSeenFilled] = useState(filled);
+  if (filled !== seenFilled) {
+    setSeenFilled(filled);
+    if (filled) {
+      setOpen(true);
+    }
+  }
   const label =
     props.title ||
     String(props.fieldPathId.path[props.fieldPathId.path.length - 1] ?? '');
   return (
     <details
       className="rounded border border-border"
-      open={hasData(props.formData)}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="cursor-pointer select-none px-2 py-1 text-xs font-medium text-foreground">
         {label}

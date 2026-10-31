@@ -348,7 +348,8 @@ function DAGRunActions({
                 );
                 return;
               }
-              showToast(ts('Stop signal sent'));
+              // The run stops later; the note confirms the request.
+              showToast(ts('Stop signal sent'), { variant: 'info' });
               reloadData();
             }}
           >
