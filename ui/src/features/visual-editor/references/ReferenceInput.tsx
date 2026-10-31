@@ -59,6 +59,7 @@ export function ReferenceInput({
   const listboxId = `${useId()}-references`;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<FieldElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const pickerRef = useRef<ReferencePickerHandle>(null);
   const selectionRef = useRef({ start: 0, end: 0 });
   const pendingRef = useRef<{ text: string; caret: number } | null>(null);
@@ -101,6 +102,15 @@ export function ReferenceInput({
 
   const syncCaret = (el: FieldElement) =>
     setCaret(el.selectionStart ?? el.value.length);
+
+  // The chips stand over the text of the field: they keep its scroll offset.
+  const syncOverlay = () => {
+    const overlay = overlayRef.current;
+    const el = fieldRef.current;
+    if (!overlay || !el) return;
+    overlay.scrollTop = el.scrollTop;
+    overlay.scrollLeft = el.scrollLeft;
+  };
 
   const apply = (result: { text: string; caret: number }) => {
     pendingRef.current = result;
@@ -180,12 +190,15 @@ export function ReferenceInput({
     },
     onFocus: (e: { currentTarget: FieldElement }) => {
       setFocused(true);
+      // The button picker gives the keys back to the field.
+      setButtonOpen(false);
       syncCaret(e.currentTarget);
     },
     onBlur: (e: { currentTarget: FieldElement }) => {
       setFocused(false);
       e.currentTarget.scrollLeft = 0;
     },
+    onScroll: syncOverlay,
     onSelect: (e: { currentTarget: FieldElement }) =>
       syncCaret(e.currentTarget),
     onKeyUp: (e: { currentTarget: FieldElement }) => syncCaret(e.currentTarget),
@@ -252,6 +265,10 @@ export function ReferenceInput({
       )}
       {showChips ? (
         <div
+          ref={(el) => {
+            overlayRef.current = el;
+            syncOverlay();
+          }}
           aria-hidden="true"
           className={cn(
             'pointer-events-none absolute inset-0 overflow-hidden border-transparent text-foreground',
