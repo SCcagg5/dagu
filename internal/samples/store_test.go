@@ -159,7 +159,9 @@ func TestCrashLosesOneMinute(t *testing.T) {
 	clk := &clock{t: t0}
 	r := newRecorder(t, dir, clk)
 	feed(t, r, clk, t0, 150, time.Second, okFn)
-	// No Close: the recorder is dropped.
+	// No Close: the recorder is dropped. The operating system releases the
+	// files of a process that ends, so the test releases them too.
+	require.NoError(t, r.(*recorder).st.closeAll())
 	aggs, err := readAggFile(filepath.Join(dir, "minute", "20260301.jsonl"))
 	require.NoError(t, err)
 	require.Len(t, aggs, 2)

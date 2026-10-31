@@ -49,6 +49,8 @@ func (t Tier) Width() time.Duration {
 		return time.Minute
 	case TierHour:
 		return time.Hour
+	case TierDay:
+		fallthrough
 	default:
 		return 24 * time.Hour
 	}
@@ -63,6 +65,8 @@ func (t Tier) Retention() time.Duration {
 		return 7 * 24 * time.Hour
 	case TierHour:
 		return 30 * 24 * time.Hour
+	case TierDay:
+		fallthrough
 	default:
 		return 0
 	}

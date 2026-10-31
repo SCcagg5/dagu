@@ -197,7 +197,7 @@ func (r *recorder) flush() error {
 	return r.st.syncAll()
 }
 
-func (r *recorder) Close(ctx context.Context) error {
+func (r *recorder) Close(_ context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
