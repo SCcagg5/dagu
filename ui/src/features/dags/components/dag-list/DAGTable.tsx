@@ -370,15 +370,20 @@ function DAGCard({
   );
 }
 
-// Pinned DAGs lead the rows; the card view puts a divider after them.
+// Pinned groups and DAGs lead the rows; the card view puts a divider after them.
 function countLeadingPinnedRows(rows: Row<Data>[]): number {
   let count = 0;
   for (const row of rows) {
-    if (
-      row.depth !== 0 ||
-      row.original.kind !== ItemKind.DAG ||
-      !(row.original as DAGRow).dag.pinned
-    ) {
+    const item = row.original;
+    const pinned =
+      item.kind === ItemKind.Group
+        ? (item.subRows ?? []).length > 0 &&
+          (item.subRows ?? []).every(
+            (sub) => sub.kind === ItemKind.DAG && sub.dag.pinned
+          )
+        : (item as DAGRow).dag.pinned;
+    // The rows of an unfolded pinned group belong to the leading part.
+    if (row.depth > 0 ? count === 0 : !pinned) {
       break;
     }
     count++;
@@ -1455,7 +1460,7 @@ function DAGTable({
   );
 
   // Transform the flat list of DAGs into a hierarchical structure with groups.
-  // Pinned DAGs lead as flat rows, unless their whole group is pinned.
+  // The order: pinned groups, pinned workflows, groups, workflows.
   const data = useMemo(() => {
     const sortedDags = [...dags];
 
@@ -1519,8 +1524,8 @@ function DAGTable({
 
     const groupRows = Object.values(groups);
     const hierarchicalData: Data[] = [
-      ...pinnedRows,
       ...groupRows.filter((group) => pinnedGroupNames.has(group.name)),
+      ...pinnedRows,
       ...groupRows.filter((group) => !pinnedGroupNames.has(group.name)),
     ];
     // Add DAGs without a group

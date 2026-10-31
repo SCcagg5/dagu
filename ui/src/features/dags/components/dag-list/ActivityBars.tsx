@@ -1,7 +1,14 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Status, type components } from '@/api/v1/schema';
 import { CACHED_WASH } from '@/features/workflow-workspace/dock/runTimelineModel';
 import { useClock } from '@/hooks/useClock';
@@ -59,18 +66,30 @@ function ActivityBars({
 }: ActivityBarsProps) {
   const { ts } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
-  const [measured, setMeasured] = useState(ACTIVITY_WIDTH_PX);
-  useEffect(() => {
+  // A fluid strip draws its bars only once it knows its width: the layout
+  // effect measures before the first paint, so a row that mounts (an unfolded
+  // group) does not show the bars at a default width and then move them.
+  const [measured, setMeasured] = useState<number | null>(null);
+  const present = activity !== undefined;
+  useLayoutEffect(() => {
     const el = ref.current;
-    if (!fluid || !el || typeof ResizeObserver === 'undefined') return;
+    if (!fluid || !el) return;
+    const width = Math.floor(el.getBoundingClientRect().width);
+    if (width > 0) setMeasured(width);
+    if (typeof ResizeObserver === 'undefined') {
+      // No layout to measure (a test renderer): the default width stands.
+      setMeasured((current) => current ?? ACTIVITY_WIDTH_PX);
+      return;
+    }
     const observer = new ResizeObserver(([entry]) => {
-      const width = Math.floor(entry?.contentRect.width ?? 0);
-      if (width > 0) setMeasured(width);
+      const next = Math.floor(entry?.contentRect.width ?? 0);
+      if (next > 0) setMeasured(next);
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [fluid]);
-  const width = fluid ? measured : ACTIVITY_WIDTH_PX;
+  }, [fluid, present]);
+  const width = fluid ? (measured ?? ACTIVITY_WIDTH_PX) : ACTIVITY_WIDTH_PX;
+  const ready = !fluid || measured !== null;
   const minute = useClock(activity?.runs.length ? REFRESH_MS : null, (now) =>
     Math.floor(now / REFRESH_MS)
   );
@@ -127,15 +146,19 @@ function ActivityBars({
         data-testid="dag-activity-axis"
         className="absolute inset-x-0 bottom-0 border-b border-border"
       />
-      {bars.map((bar) => (
-        <Bar
-          key={bar.id}
-          bar={bar}
-          band={healthy && bar.status === Status.Running}
-          title={barTitle(bar, ts)}
-          onOpenRun={onOpenRun}
-        />
-      ))}
+      {ready && (
+        <span className="absolute inset-0 block animate-in fade-in-0 duration-300">
+          {bars.map((bar) => (
+            <Bar
+              key={bar.id}
+              bar={bar}
+              band={healthy && bar.status === Status.Running}
+              title={barTitle(bar, ts)}
+              onOpenRun={onOpenRun}
+            />
+          ))}
+        </span>
+      )}
     </div>
   );
 }
