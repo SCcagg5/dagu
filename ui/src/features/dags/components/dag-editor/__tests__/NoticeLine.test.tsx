@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { NoticeLine, type NoticeLineItem } from '../NoticeLine';
 
@@ -216,6 +216,30 @@ describe('NoticeLine', () => {
     const panel = screen.getByRole('dialog', { name: 'More notices' });
     fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' }));
     expect(offer).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the focus in the line when the last notice in the popover goes', () => {
+    render(
+      <NoticeLine
+        notices={[
+          frozen(),
+          {
+            id: 'monitoring-offer',
+            tone: 'info',
+            message: 'Get an email if this server stops',
+            dismissible: true,
+            priority: -100,
+          },
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: '1 more notice' }));
+    const panel = screen.getByRole('dialog', { name: 'More notices' });
+    const dismiss = within(panel).getByRole('button', { name: 'Dismiss' });
+    act(() => dismiss.focus());
+    fireEvent.click(dismiss);
+    expect(screen.queryByRole('dialog', { name: 'More notices' })).toBeNull();
+    expect(screen.getByTestId('notice-line')).toHaveFocus();
   });
 
   it('closes the popover when no other notice is left', () => {

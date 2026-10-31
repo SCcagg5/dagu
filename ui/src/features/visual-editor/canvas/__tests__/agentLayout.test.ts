@@ -249,4 +249,14 @@ describe('agent layout', () => {
       graphShapeKey(classic, 'TB', 6)
     );
   });
+
+  it('changes with the card shape of a node', () => {
+    const step = { ...tool(0), tool: undefined } as CanvasNode;
+    const keyOf = (node: CanvasNode) =>
+      graphShapeKey({ nodes: [node], edges: [], editableEdges: true }, 'TB');
+    const base = keyOf(step);
+    // A router with no routes yet still has the router size.
+    expect(keyOf({ ...step, action: 'router.route' })).not.toBe(base);
+    expect(keyOf(tool(0))).not.toBe(base);
+  });
 });
