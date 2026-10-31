@@ -119,6 +119,36 @@ describe('ScheduleLine', () => {
     expect(text[2]).not.toContain('Next');
   });
 
+  // The row that holds the line opens the workflow on a click.
+  it('keeps a click in the schedule list from the row', async () => {
+    const user = userEvent.setup();
+    const openRow = vi.fn();
+    render(
+      <UserPreferencesProvider>
+        <I18nProvider>
+          <div onClick={openRow}>
+            <ScheduleLine
+              dag={dagFile({
+                schedule: [
+                  { kind: ScheduleKind.cron, expression: '0 9 * * 1-5' },
+                  { kind: ScheduleKind.cron, expression: '*/30 * * * *' },
+                ],
+              })}
+            />
+          </div>
+        </I18nProvider>
+      </UserPreferencesProvider>
+    );
+
+    await user.hover(
+      screen.getByRole('button', { name: 'Show all 2 schedules' })
+    );
+    const [list] = await screen.findAllByTestId('schedule-list');
+    await user.click(list!);
+
+    expect(openRow).not.toHaveBeenCalled();
+  });
+
   it('shows the schedule muted with Suspended instead of a time', () => {
     renderLine(
       dagFile({

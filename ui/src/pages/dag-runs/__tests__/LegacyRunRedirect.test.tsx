@@ -58,13 +58,15 @@ describe('LegacyRunRedirect', () => {
     );
   });
 
-  it('opens the root run for a sub-run link', () => {
+  // The form of the sub-run links of notifications and incidents. Their step
+  // is a step of the sub-run.
+  it('opens the sub-run of a sub-run link over its root run', () => {
     renderAt(
-      '/dag-runs/root/root-run?subDAGRunId=child&dagRunId=root-run&dagRunName=root&remoteNode=local'
+      '/dag-runs/root/root-run?subDAGRunId=child&dagRunId=root-run&dagRunName=root&remoteNode=local&step=load'
     );
 
     expect(screen.getByTestId('location')).toHaveTextContent(
-      '/dags/root?remoteNode=local&run=root-run'
+      '/dags/root?remoteNode=local&run=root-run&subRun=child&step=load'
     );
   });
 
