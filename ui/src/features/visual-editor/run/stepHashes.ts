@@ -27,25 +27,51 @@ export function hashText(text: string): string {
 const STEP_REFERENCE = /\$\{steps\.([A-Za-z0-9_-]+)\./g;
 
 interface Item {
-  name: string;
+  /** Undefined for a step with no name: it is hashed but not returned. */
+  name: string | undefined;
   id: string | undefined;
   canon: string;
   written: readonly string[];
   index: number;
 }
 
+// The rows of a panel ask for the hashes of the same few texts: one parse
+// serves them all.
+const RECENT_SIZE = 8;
+const recent: {
+  text: string;
+  details: ApiDAGDetails | undefined;
+  hashes: ReadonlyMap<string, string>;
+}[] = [];
+
 /**
  * A hash of each step of a definition, by step name. The hash covers the
- * parsed step (comments and spacing do not count), the top-level keys of the
- * definition other than the steps, and the hashes of the steps that it needs:
- * its `depends`, the steps whose outputs it references, and in a chain the
- * step before it. A change of a step, or of a step upstream of it, gives it
+ * parsed step (comments and spacing do not count), the head of the
+ * definition (`headOf`: the top-level keys other than the steps, and the
+ * later documents), and the hashes of the steps that it needs: its
+ * `depends`, the steps whose outputs it references, and in a chain the step
+ * before it. A change of a step, or of a step upstream of it, gives it
  * another hash. A step that has no name stays out of the result. A text that
- * cannot be read gives an empty map, so nothing counts as fresh.
+ * cannot be read gives an empty map, so nothing counts as fresh. Calls with
+ * the same text and details share one result.
  */
 export function stepHashes(
   text: string,
   details?: ApiDAGDetails
+): ReadonlyMap<string, string> {
+  const known = recent.find(
+    (entry) => entry.text === text && entry.details === details
+  );
+  if (known) return known.hashes;
+  const hashes = computeStepHashes(text, details);
+  recent.unshift({ text, details, hashes });
+  if (recent.length > RECENT_SIZE) recent.pop();
+  return hashes;
+}
+
+function computeStepHashes(
+  text: string,
+  details: ApiDAGDetails | undefined
 ): Map<string, string> {
   const out = new Map<string, string>();
   const model = parseDagDocLenient(text);
@@ -56,8 +82,8 @@ export function stepHashes(
 
   const items: Item[] = [];
   model.steps.forEach((step, index) => {
+    // A step with no name still links the steps around it in a chain.
     const name = names[step.key] ?? step.explicitName ?? step.id;
-    if (name === undefined) return;
     items.push({
       name,
       id: step.id,
@@ -66,7 +92,11 @@ export function stepHashes(
       index,
     });
   });
-  const byName = new Map(items.map((item) => [item.name, item]));
+  const byName = new Map(
+    items.flatMap((item) =>
+      item.name !== undefined ? [[item.name, item] as const] : []
+    )
+  );
   const byId = new Map(
     items.flatMap((item) => (item.id ? [[item.id, item] as const] : []))
   );
@@ -105,6 +135,8 @@ export function stepHashes(
     memo.set(item, hash);
     return hash;
   };
-  for (const item of items) out.set(item.name, hashOf(item));
+  for (const item of items) {
+    if (item.name !== undefined) out.set(item.name, hashOf(item));
+  }
   return out;
 }

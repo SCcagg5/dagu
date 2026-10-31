@@ -44,7 +44,10 @@ function lightStepSchema(
   }
   const properties: Record<string, JSONSchema> = {};
   for (const key of keys) {
-    const property = step.properties[key];
+    // A key such as `constructor` is not a step property.
+    const property = Object.prototype.hasOwnProperty.call(step.properties, key)
+      ? step.properties[key]
+      : undefined;
     if (property) {
       properties[key] = property;
     }

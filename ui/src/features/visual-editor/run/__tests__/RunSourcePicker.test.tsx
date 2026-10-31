@@ -105,8 +105,10 @@ describe('RunSourcePicker', () => {
 
   it('lists the runs, the automatic one first, and the cached values last', async () => {
     const { menu } = await open('run:RunAAAAAAAA1');
-    const items = within(menu).getAllByRole('menuitem');
+    const items = within(menu).getAllByRole('menuitemradio');
     expect(items).toHaveLength(4);
+    expect(items[0]).toHaveAttribute('aria-checked', 'true');
+    expect(items[1]).toHaveAttribute('aria-checked', 'false');
     expect(items[0]).toHaveTextContent('RunAAAAA');
     expect(items[0]).toHaveTextContent('Automatic');
     expect(items[3]).toHaveTextContent('Cached values (from run RunAAAAA');

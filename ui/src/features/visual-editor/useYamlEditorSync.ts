@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import {
   changeBarDecorations,
   CHANGE_BAR_DELAY_MS,
@@ -85,9 +85,11 @@ export interface CursorSelection {
   positionColumn: number;
 }
 
-/** Monaco `KeyCode.Backspace` and `KeyCode.Delete`. */
+/** Monaco `KeyCode.Backspace`, `Delete`, `UpArrow` and `DownArrow`. */
 const KEY_BACKSPACE = 1;
 const KEY_DELETE = 20;
+const KEY_UP = 16;
+const KEY_DOWN = 18;
 
 interface Spot {
   line: number;
@@ -274,7 +276,9 @@ export function useYamlEditorSync({
 }: YamlEditorSyncArgs): void {
   // The listeners live as long as the drawer shows and read the latest values.
   const live = useRef({ model, onCursorStep, baseline });
-  live.current = { model, onCursorStep, baseline };
+  useLayoutEffect(() => {
+    live.current = { model, onCursorStep, baseline };
+  });
   // The editor loads after the drawer: the host renders again when it mounts,
   // and the effects below start again with it.
   const mounted = editorRef.current;
@@ -508,7 +512,6 @@ export function useYamlEditorSync({
         if (next === null) {
           needsResync.current = true;
         } else if (next.first !== first || next.last !== last) {
-          const moved = next.first !== first;
           first = next.first;
           last = next.last;
           shownLines.current = { key: selected, first, last };
@@ -517,7 +520,6 @@ export function useYamlEditorSync({
           queueMicrotask(() => {
             if (closed) return;
             reapply();
-            if (moved) showNumbers();
           });
         }
         showNumbers();
@@ -525,12 +527,31 @@ export function useYamlEditorSync({
       });
       if (content) guards.push(content);
       // Backspace at the first column of the step and Delete at the end of it
-      // would join the step to a hidden line.
+      // would join the step to a hidden line. Alt+Up on the first line and
+      // Alt+Down on the last swap a line with a hidden one.
       const keys = editor.onKeyDown?.((event) => {
+        const selections = editor.getSelections?.() ?? [];
+        if (
+          event.altKey &&
+          !event.shiftKey &&
+          (event.keyCode === KEY_UP || event.keyCode === KEY_DOWN)
+        ) {
+          const edge = event.keyCode === KEY_UP ? first : last;
+          if (
+            selections.some(
+              (item) =>
+                item.positionLineNumber === edge ||
+                item.selectionStartLineNumber === edge
+            )
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          return;
+        }
         if (event.keyCode !== KEY_BACKSPACE && event.keyCode !== KEY_DELETE) {
           return;
         }
-        const selections = editor.getSelections?.() ?? [];
         const atEdge = selections.some((item) =>
           event.keyCode === KEY_BACKSPACE
             ? item.positionLineNumber === first &&
