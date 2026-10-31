@@ -884,6 +884,31 @@ describe('DAGStatus', () => {
       ).not.toBeInTheDocument();
     });
 
+    // The conversation of a waiting agent needs the full view of the run.
+    it('links to the run page while an agent waits', () => {
+      const run = agentSessionRun();
+      renderSummary({
+        ...run,
+        nodes: [
+          {
+            ...run.nodes![1]!,
+            agentSession: {
+              ...run.nodes![1]!.agentSession!,
+              state: AgentSessionState.waiting,
+            },
+          },
+        ],
+      });
+
+      expect(
+        screen.getByText('An agent is waiting for an answer.')
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Open run/ })).toHaveAttribute(
+        'href',
+        '/dags/example?remoteNode=local&run=run-1'
+      );
+    });
+
     // Answering a human task must not require leaving the workflow page.
     it('keeps a waiting human task on the page instead of switching tabs', () => {
       renderSummary(waitingHumanTaskRun('run-1'));
