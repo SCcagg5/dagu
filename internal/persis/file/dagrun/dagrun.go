@@ -257,6 +257,24 @@ func (dr DAGRun) LatestAttempt(ctx context.Context, cache *fileutil.Cache[*ir.DA
 	return nil, dagrun.ErrNoStatusData
 }
 
+// newestAttemptID returns the ID of the newest visible attempt, including an
+// attempt that has no status file yet.
+func (dr DAGRun) newestAttemptID() (string, error) {
+	attDirs, err := dr.listAttemptDirs()
+	if err != nil {
+		return "", err
+	}
+	for _, attDir := range attDirs {
+		if strings.HasPrefix(attDir, ".") {
+			continue
+		}
+		if id, ok := attemptIDFromDir(attDir); ok {
+			return id, nil
+		}
+	}
+	return "", nil
+}
+
 // AttemptByDir constructs an Attempt directly from a known attempt directory name,
 // skipping the directory listing and sorting done by LatestAttempt.
 func (dr DAGRun) AttemptByDir(attemptDir string, cache *fileutil.Cache[*ir.DAGRunStatus]) (*Attempt, error) {
