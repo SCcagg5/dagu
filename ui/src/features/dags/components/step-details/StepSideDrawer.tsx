@@ -344,7 +344,12 @@ export function StepSideDrawer({
         return;
       }
 
-      if (event.shiftKey && document.activeElement === firstElement) {
+      // The drawer itself, focused on open, comes before its first control.
+      if (
+        event.shiftKey &&
+        (document.activeElement === firstElement ||
+          document.activeElement === drawerRef.current)
+      ) {
         event.preventDefault();
         lastElement.focus();
       } else if (!event.shiftKey && document.activeElement === lastElement) {
@@ -406,7 +411,12 @@ export function StepSideDrawer({
             : 'opacity-0',
         modal && isVisible && 'translate-x-0'
       )}
-      style={{ width: panelWidth(drawerWidth, viewport) }}
+      style={{
+        // A modal drawer covers the page: the cap beside the page does not apply.
+        width: modal
+          ? `min(100vw, ${drawerWidth}px)`
+          : panelWidth(drawerWidth, viewport),
+      }}
     >
       <I18nProps>
         <div
