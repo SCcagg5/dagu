@@ -30,6 +30,8 @@ export default defineMessages({
     'Pin group {name}': 'Pin group {name}',
     'Pin group': 'Pin group',
     'Unpin group': 'Unpin group',
+    'Choose the shared default, or remove views saved for this remote and workspace.':
+      'Choose the shared default, or remove views saved for this remote and workspace.',
     'Could not update the schedules': 'Could not update the schedules',
     'Schedules of group {name}': 'Schedules of group {name}',
     'Webhooks of group {name}': 'Webhooks of group {name}',
@@ -63,6 +65,8 @@ export default defineMessages({
     'Pin group {name}': '固定分组 {name}',
     'Pin group': '固定分组',
     'Unpin group': '取消固定分组',
+    'Choose the shared default, or remove views saved for this remote and workspace.':
+      '选择共享的默认视图，或删除为此远程和工作区保存的视图。',
     'Could not update the schedules': '无法更新计划',
     'Schedules of group {name}': '分组 {name} 的计划',
     'Webhooks of group {name}': '分组 {name} 的 Webhook',
@@ -96,6 +100,8 @@ export default defineMessages({
     'Pin group {name}': 'グループ {name} をピン留め',
     'Pin group': 'グループをピン留め',
     'Unpin group': 'グループのピン留めを解除',
+    'Choose the shared default, or remove views saved for this remote and workspace.':
+      '共有のデフォルトビューを選択するか、このリモートとワークスペースに保存されたビューを削除します。',
     'Could not update the schedules': 'スケジュールを更新できませんでした',
     'Schedules of group {name}': 'グループ {name} のスケジュール',
     'Webhooks of group {name}': 'グループ {name} の Webhook',

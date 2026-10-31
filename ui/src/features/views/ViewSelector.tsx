@@ -9,7 +9,6 @@ import {
   RotateCcw,
   Save,
   Settings2,
-  Star,
   Trash2,
 } from 'lucide-react';
 import React from 'react';
@@ -69,7 +68,7 @@ const VIEW_COPY: Record<
       'Save the current name and label filters, plus the sort order, for this remote and workspace.',
     manageTitle: 'Manage workflow views',
     manageDescription:
-      'Star shared sidebar shortcuts, choose the shared default, or remove views saved for this remote and workspace.',
+      'Choose the shared default, or remove views saved for this remote and workspace.',
     deleteTitle: 'Delete workflow view?',
     deleteBody:
       '“{name}” will be removed for everyone with access to this workspace scope. Workflows are not affected.',
@@ -83,7 +82,7 @@ const VIEW_COPY: Record<
       'Save the current name, run ID, status, label, and date filters for this remote and workspace.',
     manageTitle: 'Manage run views',
     manageDescription:
-      'Star shared sidebar shortcuts, choose the shared default, or remove views saved for this remote and workspace.',
+      'Choose the shared default, or remove views saved for this remote and workspace.',
     deleteTitle: 'Delete run view?',
     deleteBody:
       '“{name}” will be removed for everyone with access to this workspace scope. Runs are not affected.',
@@ -97,7 +96,7 @@ const VIEW_COPY: Record<
       'Save the current DAG name, file name, and date filters for this remote and workspace.',
     manageTitle: 'Manage artifact views',
     manageDescription:
-      'Star shared sidebar shortcuts, choose the shared default, or remove views saved for this remote and workspace.',
+      'Choose the shared default, or remove views saved for this remote and workspace.',
     deleteTitle: 'Delete artifact view?',
     deleteBody:
       '“{name}” will be removed for everyone with access to this workspace scope. Artifacts are not affected.',
@@ -150,7 +149,6 @@ export function ViewSelector({
   onSaveView,
   onUpdateView,
   onSetDefault,
-  onSetPinned,
   onDeleteView,
   onRenameView,
   filtersAlreadySaved = false,
@@ -159,7 +157,6 @@ export function ViewSelector({
   const [manageDialogOpen, setManageDialogOpen] = React.useState(false);
   const [viewName, setViewName] = React.useState('');
   const [makeDefault, setMakeDefault] = React.useState(false);
-  const [pinToSidebar, setPinToSidebar] = React.useState(false);
   const [isMutating, setIsMutating] = React.useState(false);
   const [pendingDelete, setPendingDelete] =
     React.useState<SavedViewItem | null>(null);
@@ -186,7 +183,6 @@ export function ViewSelector({
   const openSaveDialog = () => {
     setViewName('');
     setMakeDefault(false);
-    setPinToSidebar(false);
     setSaveDialogOpen(true);
   };
 
@@ -205,9 +201,7 @@ export function ViewSelector({
       return;
     }
     try {
-      await runMutation(() =>
-        onSaveView(normalizedName, makeDefault, pinToSidebar)
-      );
+      await runMutation(() => onSaveView(normalizedName, makeDefault, false));
       setSaveDialogOpen(false);
     } catch {
       // The page displays the server error alongside the view controls.
@@ -281,11 +275,7 @@ export function ViewSelector({
               className="h-9 min-w-[190px] max-w-[280px] justify-start px-3"
               aria-label={copy.triggerAria(selectedLabel)}
             >
-              {activeView?.pinned ? (
-                <Star className="fill-current text-primary" />
-              ) : (
-                <Bookmark />
-              )}
+              <Bookmark />
               <span className="min-w-0 flex-1 truncate text-left">
                 {selectedLabel}
               </span>
@@ -327,9 +317,6 @@ export function ViewSelector({
                     <span className="min-w-0 flex-1 whitespace-normal break-words">
                       {view.name}
                     </span>
-                    {view.pinned && (
-                      <Star className="fill-current text-primary" />
-                    )}
                     {view.id === defaultViewId && (
                       <Badge variant="primary">
                         <I18nText text={'Default'} />
@@ -477,18 +464,6 @@ export function ViewSelector({
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
-                  id={`view-pinned-${kind}`}
-                  checked={pinToSidebar}
-                  onCheckedChange={(checked) =>
-                    setPinToSidebar(checked === true)
-                  }
-                />
-                <Label htmlFor={`view-pinned-${kind}`} className="font-normal">
-                  <I18nText text={'Star and add to the sidebar for everyone'} />
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
                   id={`view-default-${kind}`}
                   checked={makeDefault}
                   onCheckedChange={(checked) =>
@@ -586,29 +561,6 @@ export function ViewSelector({
                     key={view.id}
                     className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
                   >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-pressed={view.pinned}
-                      aria-label={
-                        view.pinned
-                          ? `Remove ${view.name} from the sidebar`
-                          : `Add ${view.name} to the sidebar`
-                      }
-                      disabled={isMutating}
-                      onClick={() =>
-                        void runMutation(() =>
-                          onSetPinned(view.id, !view.pinned)
-                        ).catch(() => undefined)
-                      }
-                    >
-                      <Star
-                        className={
-                          view.pinned ? 'fill-current text-primary' : undefined
-                        }
-                      />
-                    </Button>
                     <span className="min-w-0 flex-1 whitespace-normal break-words text-sm font-medium">
                       {view.name}
                     </span>
