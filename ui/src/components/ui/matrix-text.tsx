@@ -1,6 +1,7 @@
-import React, { useSyncExternalStore } from 'react';
+import React from 'react';
 
 import { useClock } from '@/hooks/useClock';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { cn } from '@/lib/utils';
 
 type MatrixTextProps = {
@@ -9,24 +10,8 @@ type MatrixTextProps = {
   glowSpeed?: number;
 };
 
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
-
-function subscribeReducedMotion(onChange: () => void): () => void {
-  const query = window.matchMedia(REDUCED_MOTION);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
-}
-
-function prefersReducedMotion(): boolean {
-  return window.matchMedia(REDUCED_MOTION).matches;
-}
-
 function MatrixText({ text, className, glowSpeed = 175 }: MatrixTextProps) {
-  const reducedMotion = useSyncExternalStore(
-    subscribeReducedMotion,
-    prefersReducedMotion,
-    () => false
-  );
+  const reducedMotion = usePrefersReducedMotion();
   const textChars = text.split('');
   // The glow reads the shared clock: all chips glow in step, on one timer,
   // and none runs while the tab is hidden.
