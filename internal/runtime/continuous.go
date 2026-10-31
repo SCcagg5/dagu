@@ -156,8 +156,8 @@ func (c *continuousStep) record(ctx context.Context, s samples.Sample) {
 	ctx = context.WithoutCancel(ctx)
 	if c.recState == recorderUnopened {
 		c.recState = recorderOff
-		switch {
-		case c.dir == "":
+		switch c.dir {
+		case "":
 			logger.Debug(ctx, "No sample store for this run; samples are not recorded")
 		default:
 			open := c.runner.openRecorder
