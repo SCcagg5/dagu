@@ -110,6 +110,8 @@ const planted: Array<[string, string, string]> = [
   ['dayjs toNow', 'const a = d.toNow();', 'RelativeTime'],
   ['clipboard', 'navigator.clipboard.writeText(t);', 'copyText'],
   ['window clipboard', 'window.navigator.clipboard.readText();', 'copyText'],
+  ['computed clipboard', "navigator['clipboard'].writeText(t);", 'copyText'],
+  ['destructured clipboard', 'const { clipboard } = navigator;', 'copyText'],
   ['toLocaleString', 'const a = d.toLocaleString();', 'formatAbsoluteTime'],
   [
     'toLocaleDateString',
@@ -124,6 +126,7 @@ const planted: Array<[string, string, string]> = [
   ['showError literal', "showError('Failed to save');", 'ts()'],
   ['showToast literal', "showToast('Saved');", 'ts()'],
   ['showToast template', 'showToast(`Saved ${n}`);', 'ts()'],
+  ['showToast branch', "showToast(ok ? 'Saved' : 'Failed');", 'ts()'],
   [
     'ring literal',
     "const c = 'focus-visible:ring-primary';",
@@ -159,8 +162,12 @@ const planted: Array<[string, string, string]> = [
 const passing = [
   'const a = Array.from(set);',
   'const a = Uint8Array.from(list);',
+  'const m = YAMLMap.from(schema, value);',
+  'const s = YAMLSeq.from(schema, list);',
+  'const i = Iterator.from(source);',
   "showError(ts('Failed to save'));",
   "showToast(ts('Saved'), { tone: 'error' });",
+  "showToast(ok ? ts('Saved') : ts('Failed'));",
   'const c = `focus-visible:ring-ring ${x}`;',
   'const n = formatElapsed(a, b);',
   "import { formatElapsed } from '@/lib/dagRunTiming';",
@@ -189,6 +196,30 @@ describe('shared-module guards', { timeout: 60_000 }, () => {
     expect(await guardMessages('const a = d.fromNow();', outsideFile)).toEqual(
       []
     );
+  });
+});
+
+// The probes lint planted text. CI runs no UI lint step, so this block
+// lints the real files of the guarded folders with the same rules.
+describe('guarded folders', { timeout: 120_000 }, () => {
+  it('break no guard rule', async () => {
+    const results = await eslint.lintFiles([
+      'src/features/workflow-workspace',
+      'src/features/visual-editor',
+      'src/features/dags/components/dag-editor',
+    ]);
+    const errors = results.flatMap((result) =>
+      result.messages
+        .filter(
+          (m) => m.ruleId?.startsWith('no-restricted-') && m.severity === 2
+        )
+        .map(
+          (m) =>
+            `${path.relative(uiRoot, result.filePath)}:${m.line} ${m.message}`
+        )
+    );
+    expect(results.length).toBeGreaterThan(100);
+    expect(errors).toEqual([]);
   });
 });
 

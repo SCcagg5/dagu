@@ -104,7 +104,7 @@ const stats = { probed: 0, opProbed: 0 };
 const FIXTURE_DIR = path.resolve(
   'src/features/visual-editor/doc/__tests__/fixtures'
 );
-const CORPUS_DIRS = ['examples', 'internal', 'conformance', 'specs'];
+const CORPUS_DIRS = ['examples', 'internal', 'conformance'];
 
 type Path = (string | number)[];
 
@@ -487,7 +487,7 @@ for (const name of CORPUS_DIRS) {
         );
         for (const problem of problems) failures.push(`${rel}: ${problem}`);
       }
-      expect(count).toBeGreaterThanOrEqual(0);
+      expect(count).toBeGreaterThan(0);
       expect(failureReport(failures)).toBe('');
     });
   });

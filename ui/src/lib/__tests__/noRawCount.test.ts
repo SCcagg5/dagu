@@ -21,9 +21,10 @@ const RAW_FORMS: RegExp[] = [
   /×\$\{(?!formatCompactCount\()/,
   // `×{count}` in JSX, but not the limit of a repeat policy.
   /×\{(?!formatCompactCount\()(?![\w.?]*limit\b)/,
-  // The count of a node, written as it is. A prop (`count={...}`) is not text.
-  /String\([\w.?]*doneCount\)/,
-  /(?<![=\w])\{[\w.?]*doneCount\}/,
+  // The count of a node, written as it is or with a fallback such as `?? 0`.
+  // A prop (`count={...}`) is not text.
+  /String\([\w.?]*doneCount(?:\s*(?:\?\?|\|\|)\s*\w+)?\)/,
+  /(?<![=\w])\{[\w.?]*doneCount(?:\s*(?:\?\?|\|\|)\s*\w+)?\}/,
 ];
 
 /** The raw forms that a source text contains. */
@@ -51,7 +52,10 @@ describe('raw execution counts', () => {
     expect(rawCountForms('`×${count}`')).toHaveLength(1);
     expect(rawCountForms('<b>×{node.doneCount}</b>')).toHaveLength(2);
     expect(rawCountForms('String(node.doneCount)')).toHaveLength(1);
+    expect(rawCountForms('<b>{node.doneCount ?? 0}</b>')).toHaveLength(1);
+    expect(rawCountForms('String(node.doneCount || 0)')).toHaveLength(1);
     expect(rawCountForms('<X count={node.doneCount} />')).toEqual([]);
+    expect(rawCountForms('<X count={node.doneCount ?? 0} />')).toEqual([]);
     expect(rawCountForms('`×${formatCompactCount(count)}`')).toEqual([]);
     expect(rawCountForms('×{step.repeatPolicy.limit}')).toEqual([]);
   });

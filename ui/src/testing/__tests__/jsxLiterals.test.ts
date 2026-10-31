@@ -35,8 +35,23 @@ const fixture: Record<string, string> = {
       <button title={name ?? 'Fallback'} />
       <button aria-label={\`\${step} run\`} />
       <button aria-label="..." title="12" />
+      <button aria-label={'Open ' + name} />
       <div data-testid="not-read" className="flex gap-2" role="group" />
     </form>
+  );
+}
+`,
+  'children.tsx': `export function E({ on, name }: { on: boolean; name: string }) {
+  return (
+    <p className={on ? 'bold' : 'thin'}>
+      {on ? 'Running' : ts('Stopped')}
+      {name ?? 'Unnamed'}
+      {on && 'Live'}
+      {'Run ' + name}
+      {\`\${name} done\`}
+      {on ? '—' : null}
+      {/* a comment */}
+    </p>
   );
 }
 `,
@@ -96,6 +111,17 @@ describe('findJsxLiterals', () => {
       '8 title: Stop',
       '9 title: Fallback',
       '10 aria-label: run',
+      '12 aria-label: Open',
+    ]);
+  });
+
+  it('reports literals in JSX child expressions and not in other attributes', () => {
+    expect(summary(findJsxLiterals(['children.tsx'], { srcDir }))).toEqual([
+      '4 text: Running',
+      '5 text: Unnamed',
+      '6 text: Live',
+      '7 text: Run',
+      '8 text: done',
     ]);
   });
 

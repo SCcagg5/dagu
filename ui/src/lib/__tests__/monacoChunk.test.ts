@@ -30,26 +30,42 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-// Static value imports (not `import type`) of one module specifier.
+// The specifiers of static value imports and re-exports (not `import type`
+// or `export type`): a barrel that re-exports a module loads it too.
+function staticSpecifiers(text: string): string[] {
+  const pattern =
+    /^(?:import|export)\s+(?!type\b)[^;]*?from\s+(['"])([^'"]+)\1|^import\s+(['"])([^'"]+)\3/gm;
+  return [...text.matchAll(pattern)].flatMap((m) => m[2] ?? m[4] ?? []);
+}
+
 function staticImporters(match: (specifier: string) => boolean): string[] {
-  const found: string[] = [];
-  for (const file of sourceFiles(srcRoot)) {
-    const text = readFileSync(file, 'utf8');
-    const pattern =
-      /^import\s+(?!type\b)[^;]*?from\s+'([^']+)'|^import\s+'([^']+)'/gm;
-    for (const m of text.matchAll(pattern)) {
-      const specifier = m[1] ?? m[2];
-      if (specifier !== undefined && match(specifier)) {
-        found.push(path.relative(srcRoot, file));
-        break;
-      }
-    }
-  }
-  return found.sort();
+  return sourceFiles(srcRoot)
+    .filter((file) => staticSpecifiers(readFileSync(file, 'utf8')).some(match))
+    .map((file) => path.relative(srcRoot, file))
+    .sort();
 }
 
 const ends = (name: string) => (specifier: string) =>
   specifier === name || specifier.endsWith(`/${name}`);
+
+describe('staticSpecifiers', () => {
+  it('reads both quote styles and re-exports, and skips type-only lines', () => {
+    const text = [
+      'import * as monaco from "monaco-editor";',
+      "import 'monaco-yaml';",
+      "export { DAGEditor } from './DAGEditor';",
+      'export * from "./MonacoFieldEditor";',
+      "import type { editor } from 'monaco-editor';",
+      "export type { Props } from './types';",
+    ].join('\n');
+    expect(staticSpecifiers(text)).toEqual([
+      'monaco-editor',
+      'monaco-yaml',
+      './DAGEditor',
+      './MonacoFieldEditor',
+    ]);
+  });
+});
 
 describe('modules that hold Monaco', () => {
   it('lets only the editor modules import the Monaco packages', () => {
