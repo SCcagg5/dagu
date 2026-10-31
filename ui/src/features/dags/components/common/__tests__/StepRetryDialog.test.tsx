@@ -292,8 +292,10 @@ describe('StepRetryDialog', () => {
     configMock.runDags = false;
     const { user } = renderDialog();
     const dialog = await openDialog(user);
+    const retry = within(dialog).getByRole('button', { name: 'Retry' });
+    expect(retry).toBeDisabled();
 
-    await user.click(within(dialog).getByRole('button', { name: 'Retry' }));
+    await user.click(retry);
 
     expect(postMock).not.toHaveBeenCalled();
   });

@@ -5,6 +5,7 @@ import { Status } from '@/api/v1/schema';
 import { useRemoteNode } from '@/contexts/RemoteNodeContext';
 import { useQuery } from '@/hooks/api';
 import {
+  hasContinuousStep,
   runDisplayStatus,
   summaryDisplayStatus,
   type RunDisplayStatus,
@@ -16,9 +17,10 @@ const RUNNING_REFRESH_MS = 10_000;
 /**
  * The status that a list prints for a run. The summary of a run has no steps,
  * so a running run reads its details (once, cached for each run, and again
- * every 10 s while it runs): runDisplayStatus then decides, with the failed
- * steps in view. Until the details are there, and for every run that is not
- * running, the API status stands.
+ * every 10 s while it runs when it has a continuous step, the only kind that
+ * can be Healthy): runDisplayStatus then decides, with the failed steps in
+ * view. Until the details are there, and for every run that is not running,
+ * the API status stands.
  */
 export function useListRunDisplay(
   name: string,
@@ -37,7 +39,13 @@ export function useListRunDisplay(
           },
         }
       : null,
-    { revalidateOnFocus: false, refreshInterval: RUNNING_REFRESH_MS }
+    {
+      revalidateOnFocus: false,
+      refreshInterval: (latest) =>
+        hasContinuousStep(latest?.dagRunDetails.nodes?.map((node) => node.step))
+          ? RUNNING_REFRESH_MS
+          : 0,
+    }
   );
   if (status === undefined) return undefined;
   const details = data?.dagRunDetails;

@@ -114,7 +114,8 @@ function runPage(
     rootDAGRunId: runId,
     remoteNode: text(search, 'remoteNode') ?? 'local',
     subDAGRunId: subDAGRunId ?? undefined,
-    step: text(search, 'step') ?? undefined,
+    // The root run opens: a step of the sub-run is not one of its steps.
+    step: subDAGRunId ? undefined : (text(search, 'step') ?? undefined),
   });
   const extra = carried(search);
   extra.delete('remoteNode');
