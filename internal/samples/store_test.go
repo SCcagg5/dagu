@@ -297,10 +297,11 @@ func TestAppendAfterCutLine(t *testing.T) {
 
 // Two steps never share a store, whatever their names.
 func TestDirIsUniquePerStep(t *testing.T) {
-	names := []string{"a.b", "a b", "a_b", "抽出", "変換", strings.Repeat("x", 100), strings.Repeat("x", 101)}
+	names := []string{"a.b", "a b", "a_b", "Beat", "beat", "抽出", "変換", strings.Repeat("x", 100), strings.Repeat("x", 101)}
 	seen := map[string]string{}
 	for _, name := range names {
-		dir := Dir("attempt", name)
+		// Some file systems ignore case, so the directories differ in more than case.
+		dir := strings.ToLower(Dir("attempt", name))
 		require.NotContains(t, seen, dir, "%q and %q", seen[dir], name)
 		seen[dir] = name
 	}
