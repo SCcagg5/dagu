@@ -333,6 +333,81 @@ func TestBackfillClosesOnError(t *testing.T) {
 	require.Error(t, err)
 }
 
+// A backfill that ends inside an hour still writes that hour and its day, so
+// that the tiers hold every sample, also past the retention of the finer tiers.
+func TestBackfillWritesOpenBuckets(t *testing.T) {
+	start := time.Date(2029, 3, 10, 0, 0, 0, 0, time.UTC)
+	end := start.Add(26*time.Hour + 30*time.Minute)
+	const n = 26*60 + 30
+	for _, now := range []time.Time{end, end.Add(60 * 24 * time.Hour)} {
+		dir := t.TempDir()
+		err := Backfill(context.Background(), dir, BackfillOptions{
+			Start: start, End: end, Interval: time.Minute, Now: now,
+			Next: func(int64) (time.Duration, int, string) { return time.Second, 0, "" },
+		})
+		require.NoError(t, err)
+		tiers := []Tier{TierMinute, TierHour, TierDay}
+		if now.After(end) {
+			tiers = []Tier{TierDay}
+		}
+		for _, tier := range tiers {
+			got, _ := sumAggs(t, dir, tier)
+			require.EqualValues(t, n, got, "%v at %v", tier, now)
+		}
+	}
+}
+
+// A backfill that ends inside an outage leaves the count to the next start.
+func TestBackfillOutageAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	start := time.Date(2029, 3, 10, 0, 0, 0, 0, time.UTC)
+	end := start.Add(90 * time.Minute)
+	err := Backfill(ctx, dir, BackfillOptions{
+		Start: start, End: end, Interval: time.Minute, Now: end,
+		Next: func(int64) (time.Duration, int, string) { return time.Second, 1, "x" },
+	})
+	require.NoError(t, err)
+	clk := &clock{t: end}
+	r := newRecorder(t, dir, clk)
+	feed(t, r, clk, end, 1, time.Second, okFn)
+	require.NoError(t, r.Close(ctx))
+
+	page, err := OpenReader(dir).Events(ctx, EventQuery{})
+	require.NoError(t, err)
+	rec := page.Events[1]
+	require.Equal(t, EventRecovered, rec.Kind)
+	require.EqualValues(t, 90, rec.FailedCount)
+	require.Equal(t, 90*time.Minute, rec.Outage)
+}
+
+// A clock that steps back stores the sample at the time of the newest sample,
+// so that the raw buckets stay in time order.
+func TestClockStepsBack(t *testing.T) {
+	dir := t.TempDir()
+	clk := &clock{t: t0}
+	r := newRecorder(t, dir, clk)
+	ctx := context.Background()
+	for _, ts := range []time.Time{t0.Add(59 * time.Second), t0.Add(-time.Second), t0.Add(10 * time.Second), t0.Add(70 * time.Second)} {
+		require.NoError(t, r.Record(ctx, Sample{Time: ts, Duration: time.Second}))
+	}
+	require.NoError(t, r.Flush(ctx))
+
+	rd := OpenReaderWith(dir, Options{Now: func() time.Time { return t0.Add(2 * time.Minute) }})
+	s, err := rd.Samples(ctx, SampleQuery{From: t0.Add(-time.Minute), To: t0.Add(2 * time.Minute)})
+	require.NoError(t, err)
+	require.Equal(t, TierRaw, s.Tier)
+	var times []time.Time
+	var counts []uint64
+	for _, b := range s.Buckets {
+		times = append(times, b.Time)
+		counts = append(counts, b.Count)
+	}
+	require.Equal(t, []time.Time{t0.Add(59 * time.Second), t0.Add(70 * time.Second)}, times)
+	require.Equal(t, []uint64{3, 1}, counts)
+	require.NoError(t, r.Close(ctx))
+}
+
 func TestEmptyStore(t *testing.T) {
 	rd := OpenReader(filepath.Join(t.TempDir(), "none"))
 	ctx := context.Background()
