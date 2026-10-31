@@ -876,7 +876,7 @@ describe('DAGStatus', () => {
       expect(screen.getByText('Node status table')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /Open run/ })).toHaveAttribute(
         'href',
-        `/dag-runs/${dagRun.name}/${dagRun.dagRunId}?remoteNode=local`
+        `/dags/${dagRun.name}?remoteNode=local&run=${dagRun.dagRunId}`
       );
     });
 
