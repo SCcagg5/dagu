@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { RepeatBadge } from '@/components/ui/repeat-badge';
 import { readRepeatPolicy } from '@/components/ui/repeat-summary';
-import { TabStrip } from '@/components/ui/tab-strip';
+import { TabStrip, tabStripTabId } from '@/components/ui/tab-strip';
 import { useRightPanelClaim } from '@/contexts/RightPanelContext';
 import NodeStatusChip from '@/features/dags/components/common/NodeStatusChip';
 import {
@@ -177,6 +177,9 @@ const DRAWER_WIDTH_STORAGE_KEY = 'dagu.stepDetailsDrawer.width';
 const MIN_DOCKED_WIDTH = 420;
 const MAX_DOCKED_WIDTH = 960;
 const WIDTH_STEP = 40;
+
+/** Prefix of the DOM ids of the step tabs, for the panels they label. */
+const TAB_ID_PREFIX = 'ndv';
 
 /** A docked width inside the bounds and the viewport. */
 export function clampDockedWidth(width: number, viewport: number): number {
@@ -537,6 +540,14 @@ export function NodeDetailsFrame({
           },
         ];
 
+  // In the sheet, the Parameters and YAML tabs both control the center.
+  const centerTab =
+    layout === 'sheet' && stepTabs
+      ? formMode
+        ? 'parameters'
+        : 'yaml'
+      : undefined;
+
   // The two side parts share their classes in each layout.
   const sideClass = {
     columns: 'shrink-0 overflow-y-auto',
@@ -700,6 +711,7 @@ export function NodeDetailsFrame({
           >
             <TabStrip
               label={ts('Step data')}
+              idPrefix={TAB_ID_PREFIX}
               tabs={tabs.map(({ id, label, disabled, controls }) => ({
                 id,
                 label,
@@ -724,6 +736,10 @@ export function NodeDetailsFrame({
           <div
             id="ndv-center"
             data-testid="ndv-center"
+            role={centerTab ? 'tabpanel' : undefined}
+            aria-labelledby={
+              centerTab ? tabStripTabId(TAB_ID_PREFIX, centerTab) : undefined
+            }
             hidden={!shows.center}
             className={cn(
               'flex min-h-0 min-w-0 flex-1 flex-col',

@@ -81,5 +81,8 @@ export function actionIcon(
   if (SQL_NAMESPACES.has(namespace)) {
     return Database;
   }
-  return NAMESPACE_ICONS[namespace] ?? Box;
+  // The namespace is user text: only an own key of the table is an icon.
+  return Object.prototype.hasOwnProperty.call(NAMESPACE_ICONS, namespace)
+    ? NAMESPACE_ICONS[namespace]!
+    : Box;
 }

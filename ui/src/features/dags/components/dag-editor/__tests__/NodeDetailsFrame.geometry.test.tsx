@@ -216,6 +216,24 @@ describe('node view tabs layout', () => {
   });
 });
 
+describe('node view sheet layout', () => {
+  // Parameters and YAML both control the center, so it is their tab panel.
+  it('names the center after the selected Parameters or YAML tab', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    const { rerender } = render(frame());
+    expect(ndv()).toHaveAttribute('data-layout', 'sheet');
+    const center = screen.getByTestId('ndv-center');
+    expect(screen.getByRole('tabpanel', { name: 'YAML' })).toBe(center);
+    rerender(frame({ formMode: true }));
+    expect(screen.getByRole('tabpanel', { name: 'Parameters' })).toBe(center);
+  });
+});
+
 describe('node view header', () => {
   it('has one 48px bar and a 16px title, with the choices below it', () => {
     render(frame());

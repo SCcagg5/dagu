@@ -34,8 +34,9 @@ export function actionTitle(name: string): string {
   return words
     .map((word, index) => {
       const lower = word.toLowerCase();
-      if (ACRONYMS[lower]) {
-        return ACRONYMS[lower];
+      // Only an own key is an acronym: `constructor` is a word too.
+      if (Object.prototype.hasOwnProperty.call(ACRONYMS, lower)) {
+        return ACRONYMS[lower]!;
       }
       return index === 0
         ? lower.charAt(0).toUpperCase() + lower.slice(1)

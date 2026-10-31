@@ -73,4 +73,10 @@ describe('actionIcon', () => {
     expect(actionIcon({ kind: 'action' })).toBe(Box);
     expect(actionIcon({ kind: 'other' })).toBe(Box);
   });
+
+  // The namespace is user text: a key that every object has is no icon.
+  it('gives the default icon for an inherited key', () => {
+    expect(actionIcon({ kind: 'action', action: 'constructor.run' })).toBe(Box);
+    expect(actionIcon({ kind: 'action', action: '__proto__.run' })).toBe(Box);
+  });
 });

@@ -23,7 +23,8 @@ export function splitWithValue(
   known: string[],
   shown: string[]
 ): { formData: Plain; other: [string, unknown][] } {
-  const formData: Plain = {};
+  // No prototype: a field named `__proto__` stays a key of its own.
+  const formData: Plain = Object.create(null);
   const other: [string, unknown][] = [];
   if (!isPlainObject(value)) {
     return { formData, other };
