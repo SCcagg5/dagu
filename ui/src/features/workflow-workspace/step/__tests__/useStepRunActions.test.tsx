@@ -350,6 +350,7 @@ beforeEach(() => {
   editorRun.runStep.mockReset().mockResolvedValue('run-2');
   editorRun.runSteps.mockReset().mockResolvedValue('run-2');
   errors.showError.mockReset();
+  testRunNoted.mockClear();
   dagSteps = undefined;
   probeStay = false;
   navigations = [];
@@ -872,6 +873,7 @@ describe('useStepRunActions dialogs', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
       await waitFor(() => expect(editorRun.runSteps).toHaveBeenCalled());
+      await act(() => editorRun.runSteps.mock.results[0]!.value);
       expect(actions.followed).toEqual([]);
     });
   });

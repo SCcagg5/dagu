@@ -8,7 +8,9 @@ import {
   Route,
   Routes,
   useLocation,
+  useNavigate,
   useNavigationType,
+  type NavigateFunction,
 } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NodeStatus, Status } from '@/api/v1/schema';
@@ -48,6 +50,7 @@ interface Probe {
   dock: DockController;
   location: string;
   navigation: string;
+  navigate: NavigateFunction;
   setDetails(d: ApiDAGRunDetails | null): void;
 }
 
@@ -83,6 +86,7 @@ function renderAutoOpen(
     const location = useLocation();
     probe.location = location.pathname + location.search;
     probe.navigation = useNavigationType();
+    probe.navigate = useNavigate();
     return null;
   }
 
@@ -215,6 +219,13 @@ describe('useDockAutoOpen', () => {
     expect(probe.dock.open).toBe(false);
     expect(probe.dock.autoStep).toBeNull();
     expect(probe.location).toBe(url);
+
+    // The run stays handled after the link is cleared.
+    act(() => {
+      void probe.navigate('/dags/demo');
+    });
+    expect(probe.dock.open).toBe(false);
+    expect(probe.dock.autoStep).toBeNull();
   });
 
   // The ?dock link opens the dock itself; the rules do not change its tab.

@@ -258,7 +258,7 @@ describe('RunTimelineView', () => {
     expect(bar('r3')).toHaveAttribute('tabindex', '0');
     expect(bar('r1')).toHaveAttribute('tabindex', '-1');
     // Without a selected bar, the newest one is the stop.
-    document.body.innerHTML = '';
+    cleanup();
     renderView({ selectedId: null });
     expect(bar('r6')).toHaveAttribute('tabindex', '0');
   });
@@ -516,7 +516,7 @@ describe('RunTimelineView', () => {
       const top = block().style.top;
       const plotHeight = plot().style.height;
       expect(height).toBe('26px');
-      document.body.innerHTML = '';
+      cleanup();
       renderView({ runs: stack(5), selectedId: 'k0' });
       expect(block().style.height).toBe(height);
       expect(block().style.top).toBe(top);
@@ -866,7 +866,7 @@ describe('RunTimelineView', () => {
         .height;
       expect(width).toBe(`${Y_AXIS_PX}px`);
       expect(canvasLeft).toBe(`${Y_AXIS_PX}px`);
-      document.body.innerHTML = '';
+      cleanup();
       renderView({
         runs: [timed('s2', 8, 2), timed('s5', 9, 5)],
         selectedId: 's5',
@@ -1144,7 +1144,7 @@ describe('RunTimeline', () => {
     expect(window.localStorage.getItem(RUN_COUNT_KEY)).toBe('5');
     expect(bars()).toHaveLength(5);
     // A new mount reads it back.
-    document.body.innerHTML = '';
+    cleanup();
     renderTimeline();
     expect(screen.getByRole('combobox')).toHaveValue('5');
     expect(bars()).toHaveLength(5);
@@ -1364,10 +1364,12 @@ describe('test runs in the timeline', () => {
   describe('the toggle', () => {
     // A filter with nothing to choose stays, greyed and off.
     it('is greyed and off when the history holds no test run', () => {
-      renderView({ hasTestRuns: false, onShowTestsChange: vi.fn() });
+      const onShowTestsChange = vi.fn();
+      renderView({ hasTestRuns: false, onShowTestsChange });
       const toggle = screen.getByTestId('ww-run-timeline-tests');
       expect(toggle).toBeDisabled();
       fireEvent.click(toggle);
+      expect(onShowTestsChange).not.toHaveBeenCalled();
     });
 
     it('is pressed by default and gives the new state on a click', () => {
