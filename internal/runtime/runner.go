@@ -451,9 +451,11 @@ func (r *Runner) runGraphLoop(ctx context.Context, plan *Plan, nodes []*Node, pr
 				// Set step context for all logs in this goroutine
 				ctx := logger.WithValues(ctx, tag.Step(n.Name()))
 
-				// Ensure node is finished and wg is decremented
+				// Finish the node and clamp its dependents before the wait group
+				// lets the run end, so that the final status holds the clamped times.
 				defer func() {
-					r.finishNode(n, &wg)
+					defer wg.Done()
+					r.finishNode(n, nil)
 					r.clampDependentStarts(plan, n)
 				}()
 				// Recover from panics and signal progress for status updates
@@ -947,12 +949,18 @@ func (r *Runner) runHumanTask(ctx context.Context, plan *Plan, node *Node, progr
 // start while the finish is being recorded, because its status is final before
 // its finish time is set.
 func (r *Runner) clampDependentStarts(plan *Plan, node *Node) {
-	finished := node.State().FinishedAt
-	if finished.IsZero() {
+	state := node.State()
+	if state.FinishedAt.IsZero() {
 		return
 	}
 	for _, depID := range plan.Dependents(node.id) {
-		plan.GetNode(depID).ClampStartedAt(finished)
+		dep := plan.GetNode(depID)
+		// A dependent that started before this node did keeps the times of an
+		// earlier run, such as a step retry without its downstream steps.
+		if dep.State().StartedAt.Before(state.StartedAt) {
+			continue
+		}
+		dep.ClampStartedAt(state.FinishedAt)
 	}
 }
 
@@ -2128,6 +2136,10 @@ func (r *Runner) prepareNodeForRepeat(ctx context.Context, node *Node, progressC
 		step.RepeatPolicy.MaxInterval,
 		node.State().DoneCount,
 	)
+	// A failed or a recovered execution is written at once, not after the wait.
+	if cont != nil && cont.writeDue && cont.reportDue() {
+		r.report(ctx, progressCh, node)
+	}
 	if !waitForExecution(ctx, interval) {
 		node.SetStatus(ir.NodeAborted)
 		return
