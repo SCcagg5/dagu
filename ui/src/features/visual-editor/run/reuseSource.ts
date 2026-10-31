@@ -3,6 +3,7 @@
 
 import type { components } from '@/api/v1/schema';
 import { NodeStatus } from '@/api/v1/schema';
+import { parseParams } from '@/lib/parseParams';
 import type { CacheEntries, CacheEntry } from './outputCache';
 import type { RunSpecDiff } from './runSpecDiff';
 import { isReusedNode, isRunActive } from './stepRunInfo';
@@ -313,13 +314,19 @@ export function defaultChoice(p: {
   return p.stale.length > 0 || p.missing.length > 0 ? 'changed' : 'only';
 }
 
+// The server lists the parameters of a run unquoted (`A=1`) and the defaults
+// of a workflow quoted (`A="1"`): both read as unquoted pairs.
 function normalizeParams(params: string | null | undefined): string {
-  return (params ?? '').trim().replace(/\s+/g, ' ');
+  return parseParams(params ?? '')
+    .map((param) => (param.Name ? `${param.Name}=${param.Value}` : param.Value))
+    .join(' ')
+    .trim()
+    .replace(/\s+/g, ' ');
 }
 
 /**
  * True when the parameters of the source run differ from the defaults of the
- * workflow. A new step run uses the defaults. Spacing does not count.
+ * workflow. A new step run uses the defaults. Spacing and quotes do not count.
  */
 export function paramsDiffer(
   runParams: string | null | undefined,

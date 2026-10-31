@@ -487,4 +487,12 @@ describe('paramsDiffer', () => {
     expect(paramsDiffer(' A=1   B=2 ', 'A=1 B=2')).toBe(false);
     expect(paramsDiffer(undefined, '')).toBe(false);
   });
+
+  // The server quotes each default value and none of a run.
+  it('reads the quoted defaults of the workflow', () => {
+    expect(paramsDiffer('A=1 MSG=hi there', 'A="1" MSG="hi there"')).toBe(
+      false
+    );
+    expect(paramsDiffer('A=2', 'A="1"')).toBe(true);
+  });
 });
