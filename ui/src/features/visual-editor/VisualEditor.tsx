@@ -28,7 +28,7 @@ import { useSchema } from '@/contexts/SchemaContext';
 import { useI18n } from '@/i18n/I18nProvider';
 import { copyText } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
-import { buildCanvasGraph, VisualCanvas } from './canvas';
+import { buildCanvasGraph, buildDetailsGraph, VisualCanvas } from './canvas';
 import { AgentRunContext } from './canvas/agentRunContext';
 import { CanvasToolbar } from './canvas/CanvasToolbar';
 import { useCanvasToolbarHost } from './canvas/toolbarHost';
@@ -222,6 +222,7 @@ function own<T>(record: Record<string, T>, key: string): T | undefined {
 function sameState(a: VisualEditorState, b: VisualEditorState): boolean {
   return (
     a.frozen === b.frozen &&
+    a.unparsedLine === b.unparsedLine &&
     a.canUndo === b.canUndo &&
     a.canRedo === b.canRedo &&
     a.selectedStepName === b.selectedStepName &&
@@ -424,9 +425,16 @@ export function VisualEditor(props: VisualEditorProps): ReactElement {
     isDirty,
   });
 
+  // Until a text parses, the canvas shows the steps that the server read,
+  // and the banner names the line of the first YAML error.
+  const serverDag = model.ok ? undefined : details;
+  const unparsedLine = serverDag ? model.parseErrors[0]?.line : undefined;
   const graph = useMemo(
-    () => buildCanvasGraph({ model, names, details, issues, overlay }),
-    [model, names, details, issues, overlay]
+    () =>
+      serverDag
+        ? buildDetailsGraph(serverDag)
+        : buildCanvasGraph({ model, names, details, issues, overlay }),
+    [serverDag, model, names, details, issues, overlay]
   );
 
   const [selected, setSelected] = useState<StepKey | null>(null);
@@ -1402,6 +1410,7 @@ export function VisualEditor(props: VisualEditorProps): ReactElement {
               : 'none';
   const editorState: VisualEditorState = {
     frozen,
+    unparsedLine,
     canUndo: editable && session.canUndo,
     canRedo: editable && session.canRedo,
     selectedStepName: serverNameOf(selected),
@@ -1607,6 +1616,7 @@ export function VisualEditor(props: VisualEditorProps): ReactElement {
               direction={direction}
               selected={selected}
               frozen={frozen}
+              unparsedLine={unparsedLine}
               readOnly={readOnly}
               hideReadOnlyChip={chrome?.hideReadOnlyChip}
               catalog={catalog}
