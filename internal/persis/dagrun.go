@@ -105,6 +105,9 @@ type DAGRunRetentionRequest struct {
 type DAGRunRemoveRequest struct {
 	DAGRun       ir.DAGRunRef
 	RejectActive bool
+	// ExpectedAttemptID, when set, refuses the removal with ErrDAGRunActive
+	// unless it names the newest attempt of the run.
+	ExpectedAttemptID string
 }
 
 // ArtifactPruneRequest describes a sweep for orphaned artifact directories.
@@ -209,6 +212,9 @@ type DAGRunRetentionOptions struct {
 type DAGRunRemoveOptions struct {
 	// RejectActive refuses to remove an active DAG run.
 	RejectActive bool
+	// ExpectedAttemptID refuses to remove a DAG run whose newest attempt is
+	// another one, such as a retry that is starting.
+	ExpectedAttemptID string
 }
 
 // TimeInUTC wraps a time normalized to UTC.
