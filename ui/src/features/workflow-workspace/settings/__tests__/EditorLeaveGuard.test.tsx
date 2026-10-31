@@ -11,7 +11,7 @@ import {
   Routes,
   useLocation,
 } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useWorkspaceEditorBinding,
   WorkspaceEditorProvider,
@@ -60,6 +60,15 @@ function renderPage(dirty: boolean) {
   );
 }
 
+// The router starts at index 0; the browser goes back to the entry at index 5
+// of another page.
+function backToAnotherPage() {
+  act(() => {
+    window.history.replaceState({ idx: 5 }, '', '/dag-runs');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+}
+
 function unloadPrevented() {
   const event = new Event('beforeunload', { cancelable: true });
   window.dispatchEvent(event);
@@ -70,6 +79,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/dags/etl');
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   window.history.replaceState(null, '', '/');
 });
 
@@ -127,17 +137,30 @@ describe('EditorLeaveGuard', () => {
   });
 
   it('holds back a Back to another page and asks first', async () => {
+    const go = vi.spyOn(window.history, 'go').mockImplementation(() => {});
     renderPage(true);
-    // The browser went back to an entry of another page.
-    act(() => {
-      window.history.replaceState({ idx: 5 }, '', '/dag-runs');
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    });
+    backToAnotherPage();
     // The router never saw the event, so it still shows the workflow.
     expect(screen.getByTestId('where')).toHaveTextContent('/dags/etl');
     expect(await screen.findByRole('dialog')).toHaveTextContent(
       'The workflow has unsaved changes'
     );
+    // The guard undoes the Back, and replays it once the user confirms.
+    expect(go.mock.calls).toEqual([[-5]]);
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Leave' }));
+    expect(go.mock.calls).toEqual([[-5], [5]]);
+  });
+
+  it('does not replay a held Back when the question is cancelled', async () => {
+    const go = vi.spyOn(window.history, 'go').mockImplementation(() => {});
+    renderPage(true);
+    backToAnotherPage();
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(go.mock.calls).toEqual([[-5]]);
   });
 
   it('lets a Back inside the workflow pass', () => {

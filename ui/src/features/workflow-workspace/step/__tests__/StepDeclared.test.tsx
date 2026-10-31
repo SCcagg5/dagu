@@ -4,6 +4,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { Status } from '@/api/v1/schema';
 import { WorkspaceDataContext } from '../../data/context';
 import type { DAGPageData, WorkspaceRunValue } from '../../data/types';
 import { StepDeclared } from '../StepDeclared';
@@ -24,10 +25,14 @@ const dag = {
 function renderDeclared(
   step: string,
   runId: string | null,
-  path = '/dags/example.yaml?remoteNode=edge'
+  path = '/dags/example.yaml?remoteNode=edge',
+  latestRunId: string | null = runId
 ) {
   const run = {
     ref: runId ? { name: 'example', runId } : null,
+    latestRef: latestRunId
+      ? { runId: latestRunId, status: Status.Success }
+      : null,
   } as WorkspaceRunValue;
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -82,5 +87,22 @@ describe('StepDeclared', () => {
     expect(href).toContain('run=run-7');
     expect(href).toContain('step=plain');
     expect(href).toContain('remoteNode=edge');
+  });
+
+  it('links the last run while an older run is selected', () => {
+    renderDeclared('plain', 'old-run', undefined, 'run-7');
+    const href =
+      screen
+        .getByRole('link', { name: 'Open last run' })
+        .getAttribute('href') ?? '';
+    expect(href).toContain('run=run-7');
+    expect(href).not.toContain('old-run');
+  });
+
+  it('links the run of the host when the last run is not known', () => {
+    renderDeclared('plain', 'run-7', undefined, null);
+    expect(
+      screen.getByRole('link', { name: 'Open last run' }).getAttribute('href')
+    ).toContain('run=run-7');
   });
 });
