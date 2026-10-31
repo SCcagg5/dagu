@@ -30,12 +30,25 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-// The specifiers of static value imports and re-exports (not `import type`
-// or `export type`): a barrel that re-exports a module loads it too.
+// `{ type A, type B }` names only types, so the bundler drops the import.
+function typeOnlyClause(clause: string): boolean {
+  const names = /^\{([^}]*)\}$/
+    .exec(clause.trim())?.[1]
+    ?.split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+  return !!names?.length && names.every((name) => /^type\s/.test(name));
+}
+
+// The specifiers of static value imports and re-exports (not `import type`,
+// `export type`, or a clause of type bindings only): a barrel that
+// re-exports a module loads it too.
 function staticSpecifiers(text: string): string[] {
   const pattern =
-    /^(?:import|export)\s+(?!type\b)[^;]*?from\s+(['"])([^'"]+)\1|^import\s+(['"])([^'"]+)\3/gm;
-  return [...text.matchAll(pattern)].flatMap((m) => m[2] ?? m[4] ?? []);
+    /^(?:import|export)\s+(?!type\b)([^;]*?)from\s+(['"])([^'"]+)\2|^import\s+(['"])([^'"]+)\4/gm;
+  return [...text.matchAll(pattern)].flatMap((m) =>
+    m[3] === undefined ? (m[5] ?? []) : typeOnlyClause(m[1]!) ? [] : m[3]
+  );
 }
 
 function staticImporters(match: (specifier: string) => boolean): string[] {
@@ -49,7 +62,7 @@ const ends = (name: string) => (specifier: string) =>
   specifier === name || specifier.endsWith(`/${name}`);
 
 describe('staticSpecifiers', () => {
-  it('reads both quote styles and re-exports, and skips type-only lines', () => {
+  it('reads both quote styles and re-exports, and skips type-only imports', () => {
     const text = [
       'import * as monaco from "monaco-editor";',
       "import 'monaco-yaml';",
@@ -57,12 +70,16 @@ describe('staticSpecifiers', () => {
       'export * from "./MonacoFieldEditor";',
       "import type { editor } from 'monaco-editor';",
       "export type { Props } from './types';",
+      "import { type editor, type IRange } from 'monaco-editor';",
+      "export {\n  type Props,\n  type Theme,\n} from './themes';",
+      "import { type editor, Range } from '@monaco-editor/react';",
     ].join('\n');
     expect(staticSpecifiers(text)).toEqual([
       'monaco-editor',
       'monaco-yaml',
       './DAGEditor',
       './MonacoFieldEditor',
+      '@monaco-editor/react',
     ]);
   });
 });

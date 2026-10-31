@@ -504,7 +504,9 @@ describe.skipIf(!existsSync(path.resolve('..', 'specs')))(
       for (const entry of readdirSync(root).sort()) {
         if (!entry.endsWith('.md')) continue;
         const markdown = readFileSync(path.join(root, entry), 'utf8');
-        for (const match of markdown.matchAll(/^```ya?ml\n([\s\S]*?)^```/gm)) {
+        for (const match of markdown.matchAll(
+          /^```ya?ml\r?\n([\s\S]*?)^```/gm
+        )) {
           blocks++;
           const line = markdown.slice(0, match.index).split('\n').length + 1;
           for (const problem of checkText(match[1]!)) {

@@ -73,7 +73,7 @@ const srcDir = path.resolve(
 );
 
 const PALETTE =
-  'red|green|blue|yellow|amber|pink|purple|violet|emerald|orange|rose|sky|indigo|lime|teal|cyan|fuchsia|slate|gray|zinc';
+  'red|green|blue|yellow|amber|pink|purple|violet|emerald|orange|rose|sky|indigo|lime|teal|cyan|fuchsia|slate|gray|zinc|neutral|stone';
 const PATTERNS: Array<[TokenRule, RegExp]> = [
   [
     'hex-colour',
@@ -83,7 +83,7 @@ const PATTERNS: Array<[TokenRule, RegExp]> = [
   [
     'tailwind-palette',
     new RegExp(
-      `\\b(?:bg|text|border|ring|stroke|fill)-(?:${PALETTE})-\\d{2,3}\\b`
+      `\\b(?:bg|text|border|ring|stroke|fill|from|via|to|shadow|outline|divide|decoration|accent|caret)-(?:${PALETTE})-\\d{2,3}\\b`
     ),
   ],
   ['animate-spin', /\banimate-spin\b/],
@@ -287,6 +287,8 @@ describe('tokenRules', () => {
     ["className='text-slate-500'", 'tailwind-palette'],
     ["className='dark:bg-zinc-900'", 'tailwind-palette'],
     ["className='border-gray-200'", 'tailwind-palette'],
+    ["className='text-neutral-500'", 'tailwind-palette'],
+    ["className='bg-gradient-to-r from-red-500'", 'tailwind-palette'],
     ['<Loader2 className="size-4 animate-spin" />', 'animate-spin'],
     ["className='motion-safe:animate-spin'", 'animate-spin'],
   ] as const)('flags %s', (source, rule) => {
