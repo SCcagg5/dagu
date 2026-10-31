@@ -12,6 +12,8 @@ import {
   Status,
   StatusLabel,
 } from '@/api/v1/schema';
+import { UserPreferencesProvider } from '@/contexts/UserPreference';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import DAGStatusOverview from '../../dag-details/DAGStatusOverview';
 import {
   PreconditionErrors,
@@ -126,6 +128,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  localStorage.removeItem('user_preferences');
 });
 
 // parity:run-overview-progress
@@ -192,6 +195,18 @@ describe('RunSummaryBlocks', () => {
   ])('gives the message of status %s', (status, message) => {
     render(<RunStatusMessage status={status} />);
     expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it('translates the status message', () => {
+    localStorage.setItem('user_preferences', JSON.stringify({ locale: 'ja' }));
+    render(
+      <UserPreferencesProvider>
+        <I18nProvider>
+          <RunStatusMessage status={Status.Rejected} />
+        </I18nProvider>
+      </UserPreferencesProvider>
+    );
+    expect(screen.getByText('実行は拒否されました')).toBeInTheDocument();
   });
 
   it.each([Status.Success, Status.Failed, Status.NotStarted])(
