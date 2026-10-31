@@ -686,7 +686,8 @@ function ensureMap(parent: YAMLMap, key: string): YAMLMap | Failure {
 /**
  * Sets the targets of one pattern of the `with.routes` of an
  * `action: router.route` step. An empty list removes the pattern. A target is
- * the name or the id of a step. A target that would make a cycle is refused.
+ * the name or the id of a step; the YAML gets the name. A target that would
+ * make a cycle is refused.
  */
 export function opSetRouteTargets(
   text: string,
@@ -714,20 +715,24 @@ export function opSetRouteTargets(
       return fail('invalidYaml', 'A route pattern must not be empty.');
     }
 
-    const byReference = new Map<string, StepKey>();
+    const byReference = new Map<string, IndexedStep>();
     for (const step of indexSteps(doc).steps) {
-      for (const ref of referencesOf(step, options))
-        byReference.set(ref, step.key);
+      for (const ref of referencesOf(step, options)) byReference.set(ref, step);
     }
     const graph = downstreamGraph(doc, options);
+    // The server reads a target as a step name only: an id becomes the
+    // explicit name of its step.
+    const targets: string[] = [];
     for (const target of op.targets) {
-      const key = byReference.get(target);
-      if (key === undefined) {
+      const step = byReference.get(target);
+      if (step === undefined) {
         return fail('unknownStep', `No step has the name or id "${target}".`);
       }
-      if (reaches(graph, key, router.key)) {
-        return cycleError(key, op.step);
+      if (reaches(graph, step.key, router.key)) {
+        return cycleError(step.key, op.step);
       }
+      const name = explicitNameOf(step);
+      targets.push(name !== undefined && name.trim() !== '' ? name : target);
     }
 
     const withMap = ensureMap(entry, 'with');
@@ -736,7 +741,7 @@ export function opSetRouteTargets(
     if ('ok' in routes) return routes;
     const at = routes.items.findIndex((p) => textOf(p.key)?.trim() === pattern);
     const pair = at >= 0 ? routes.items[at] : undefined;
-    if (op.targets.length === 0) {
+    if (targets.length === 0) {
       if (!pair) {
         return fail('noop', `The router has no pattern "${pattern}".`);
       }
@@ -745,12 +750,12 @@ export function opSetRouteTargets(
     }
     const current = pair?.value;
     if (isSeq(current)) {
-      setNames(current, op.targets);
-    } else if (isScalar(current) && op.targets.length === 1) {
-      current.value = op.targets[0];
+      setNames(current, targets);
+    } else if (isScalar(current) && targets.length === 1) {
+      current.value = targets[0];
     } else {
       const list = new YAMLSeq();
-      list.items = op.targets.map((t) => new Scalar(t));
+      list.items = targets.map((t) => new Scalar(t));
       const sibling = routes.items.map((p) => p.value).find(isSeq);
       list.flow = sibling ? sibling.flow === true : true;
       if (isScalar(current) && current.comment) list.comment = current.comment;

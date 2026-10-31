@@ -182,6 +182,25 @@ describe('CanvasToolbar compact', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('returns the focus to Tools when the sheet closes', async () => {
+    render(
+      <CanvasToolbar
+        compact
+        direction="TB"
+        onDirectionChange={vi.fn()}
+        toolbarEnd={toolbarEnd()}
+      />
+    );
+    const tools = screen.getByRole('button', { name: 'Tools' });
+    tools.focus();
+    fireEvent.click(tools);
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // The focus moves after the sheet unmounts, in the next task.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(tools).toHaveFocus();
+  });
+
   // The Issues popover of the sheet opens in a portal as role=dialog.
   it('stays open for a layer that a control of the sheet opens', async () => {
     render(
