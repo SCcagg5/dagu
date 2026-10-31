@@ -699,9 +699,14 @@ function DAGSpec({
     React.useState<ClientIssuesModule | null>(null);
   React.useEffect(() => {
     let alive = true;
-    void import('@/features/visual-editor/doc/clientIssues').then((module) => {
-      if (alive) setClientIssues(module);
-    });
+    import('@/features/visual-editor/doc/clientIssues')
+      .then((module) => {
+        if (alive) setClientIssues(module);
+      })
+      .catch((error: unknown) => {
+        // The server issues stay; the second pass and its quick fixes are off.
+        console.warn('Failed to load the client issue checks:', error);
+      });
     return () => {
       alive = false;
     };
