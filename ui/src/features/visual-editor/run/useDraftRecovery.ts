@@ -38,6 +38,20 @@ interface DraftRecovery {
   discard(): void;
 }
 
+interface PendingDraft {
+  key: string;
+  text: string;
+  baseSha256?: string;
+}
+
+function writePending(next: PendingDraft): void {
+  writeDraft(next.key, {
+    text: next.text,
+    savedAt: Date.now(),
+    baseSha256: next.baseSha256,
+  });
+}
+
 /**
  * Keeps unsaved editor text in browser storage, with `baseSha256`, and offers
  * it back after a reload.
@@ -89,14 +103,14 @@ export function useDraftRecovery({
     }
   }, [storageKey, serverText, currentText, isDirty, isSame]);
 
-  // Text not yet written, for the flush on page hide and on unmount.
-  const pending = useRef<{
-    key: string;
-    text: string;
-    baseSha256?: string;
-  } | null>(null);
+  // Text not yet written, for the flush on page hide, on unmount and when
+  // the editor switches to another key before the delay ends.
+  const pending = useRef<PendingDraft | null>(null);
 
   useEffect(() => {
+    if (pending.current !== null && pending.current.key !== storageKey) {
+      writePending(pending.current);
+    }
     if (!isDirty || currentText === undefined) {
       pending.current = null;
       return;
@@ -118,11 +132,7 @@ export function useDraftRecovery({
       const next = pending.current;
       if (next === null) return;
       pending.current = null;
-      writeDraft(next.key, {
-        text: next.text,
-        savedAt: Date.now(),
-        baseSha256: next.baseSha256,
-      });
+      writePending(next);
     };
     window.addEventListener('pagehide', flush);
     return () => {

@@ -439,6 +439,41 @@ describe('useDraftRecovery', () => {
       expect(readDraft(KEY)?.text).toBe('b');
     });
 
+    // The editor switches to another workflow before the delay ends. Its
+    // first render under the new key can still carry the old dirty text.
+    it('writes the pending draft of the previous key when the key changes', () => {
+      const OTHER = 'visual-editor:draft:other';
+      const { rerender } = setup({
+        storageKey: KEY,
+        serverText: 'a',
+        currentText: 'b',
+        isDirty: true,
+        baseSha256: 'h1',
+      });
+      rerender({
+        storageKey: OTHER,
+        serverText: 'a',
+        currentText: 'b',
+        isDirty: true,
+        baseSha256: 'h1',
+      });
+      rerender({
+        storageKey: OTHER,
+        serverText: 'x',
+        currentText: 'x',
+        isDirty: false,
+      });
+      expect(readDraft(KEY)).toEqual({
+        text: 'b',
+        savedAt: 5000,
+        baseSha256: 'h1',
+      });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(readDraft(OTHER)).toBeNull();
+    });
+
     it('writes nothing on pagehide or unmount when clean', () => {
       const { unmount } = setup({
         storageKey: KEY,
