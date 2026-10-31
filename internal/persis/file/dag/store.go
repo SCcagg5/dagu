@@ -15,7 +15,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/dagucloud/dagu/v2/internal/cmn/dirlock"
 	"github.com/dagucloud/dagu/v2/internal/cmn/fileutil"
 	"github.com/dagucloud/dagu/v2/internal/cmn/logger"
 	"github.com/dagucloud/dagu/v2/internal/cmn/logger/tag"
@@ -28,6 +30,13 @@ import (
 )
 
 var _ persis.DAGDefinitionStore = (*Store)(nil)
+
+// The lock of a conditional update of a DAG file.
+const (
+	specLockDirName        = "spec-locks"
+	specLockStaleThreshold = 30 * time.Second
+	specLockRetryInterval  = 50 * time.Millisecond
+)
 
 // Option configures filesystem DAG definition storage.
 type Option func(*Options)
@@ -373,6 +382,43 @@ func (store *Store) Update(ctx context.Context, name string, yamlSpec []byte) er
 	if resolved.ExternalSymlink {
 		return fmt.Errorf("%w: external DAG file symlink", persis.ErrDAGReadOnly)
 	}
+	return store.write(ctx, resolved, yamlSpec)
+}
+
+// UpdateIfMatch replaces the DAG file when it still has the SHA-256
+// expectedSHA256. The check and the write hold a lock in the directory of the
+// index, which every process that shares the store uses.
+func (store *Store) UpdateIfMatch(ctx context.Context, name, expectedSHA256 string, yamlSpec []byte) error {
+	resolved, err := store.locateDAG(ctx, name)
+	if err != nil {
+		return fmt.Errorf("failed to locate DAG %s: %w", name, err)
+	}
+	if resolved.ExternalSymlink {
+		return fmt.Errorf("%w: external DAG file symlink", persis.ErrDAGReadOnly)
+	}
+	key := sha256.Sum256([]byte(resolved.ResolvedPath))
+	lock := dirlock.New(filepath.Join(filepath.Dir(store.indexPath), specLockDirName, hex.EncodeToString(key[:8])), &dirlock.LockOptions{
+		StaleThreshold: specLockStaleThreshold,
+		RetryInterval:  specLockRetryInterval,
+	})
+	if err := lock.Lock(ctx); err != nil {
+		return fmt.Errorf("failed to lock DAG %s: %w", name, err)
+	}
+	defer func() { _ = lock.Unlock() }()
+
+	current, err := fileutil.ReadFile(resolved.ResolvedPath)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(current)
+	if actual := hex.EncodeToString(sum[:]); actual != expectedSHA256 {
+		return fmt.Errorf("%w: DAG %s has sha256 %s", persis.ErrConflict, name, actual)
+	}
+	return store.write(ctx, resolved, yamlSpec)
+}
+
+// write replaces a located DAG file and announces the change.
+func (store *Store) write(ctx context.Context, resolved ResolvedFile, yamlSpec []byte) error {
 	if err := fileutil.WriteFileAtomic(resolved.ResolvedPath, yamlSpec, defaultPerm); err != nil {
 		return err
 	}
