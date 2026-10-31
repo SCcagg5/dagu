@@ -499,6 +499,33 @@ func scanRaw(f fileInfo, fn func(ms, us int64, exit int) bool) error {
 	})
 }
 
+// newestRaw returns the time of the newest sample of the raw tier, in
+// milliseconds.
+func (s *store) newestRaw() (int64, bool) {
+	for _, file := range slices.Backward(s.list(TierRaw)) {
+		f, err := os.Open(file.path) //nolint:gosec
+		if err != nil {
+			continue
+		}
+		var ms int64
+		found := false
+		if st, err := f.Stat(); err == nil {
+			_ = scanLinesBackward(f, st.Size(), func(_ int64, line []byte) bool {
+				if off, _, _, ok := parseRaw(line); ok {
+					ms, found = file.start*1000+off, true
+					return false
+				}
+				return true
+			})
+		}
+		_ = f.Close()
+		if found {
+			return ms, true
+		}
+	}
+	return 0, false
+}
+
 // scanLinesBackward calls fn for the lines of a file before the offset end,
 // the last line first, until fn returns false. It reads the file in blocks.
 func scanLinesBackward(f *os.File, end int64, fn func(off int64, line []byte) bool) error {

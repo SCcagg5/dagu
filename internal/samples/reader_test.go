@@ -140,7 +140,7 @@ func TestAvailability(t *testing.T) {
 	now := fx.now.Unix()
 	const day = 86400
 	lo := map[Window]int64{
-		Window24h:  ceilTo(now-day, 60),
+		Window24h:  now - day,
 		Window7d:   ceilTo(now-7*day, 60),
 		Window30d:  ceilTo(now-30*day, 3600),
 		Window365d: ceilTo(now-365*day, day),
@@ -167,6 +167,23 @@ func TestAvailability(t *testing.T) {
 	}
 	require.Equal(t, streak, av.Streak)
 	require.EqualValues(t, len(fx.all), av.TotalCount)
+}
+
+// The 24 hours window starts 24 hours before now, to the second, and the
+// longer windows count a sample once.
+func TestAvailability24hCutoff(t *testing.T) {
+	dir := t.TempDir()
+	at := t0.Add(12*time.Hour + 45*time.Second)
+	clk := &clock{t: at}
+	r := newRecorder(t, dir, clk)
+	feed(t, r, clk, at, 1, time.Second, okFn)
+	require.NoError(t, r.Close(context.Background()))
+
+	av, err := OpenReader(dir).Availability(context.Background(), at.Add(24*time.Hour-15*time.Second))
+	require.NoError(t, err)
+	for _, w := range av.Windows {
+		require.EqualValues(t, 1, w.Count, w.Window)
+	}
 }
 
 // With no failure in the raw tier, the streak goes on in the aggregates.

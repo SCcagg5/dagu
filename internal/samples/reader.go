@@ -63,39 +63,14 @@ func (v *view) newestStart(t Tier) (int64, bool) {
 	}
 	var nb newestBucket
 	if t == TierRaw {
-		nb.start, nb.ok = v.newestRaw()
+		if ms, ok := v.r.st.newestRaw(); ok {
+			nb = newestBucket{ms / 1000, true}
+		}
 	} else if s, ok := v.newestStart(t - 1); ok {
 		nb = newestBucket{floorTo(s, tierSec(t)), true}
 	}
 	v.newest[t] = nb
 	return nb.start, nb.ok
-}
-
-// newestRaw returns the second of the newest sample.
-func (v *view) newestRaw() (int64, bool) {
-	files := v.r.st.list(TierRaw)
-	for _, file := range slices.Backward(files) {
-		f, err := os.Open(file.path) //nolint:gosec
-		if err != nil {
-			continue
-		}
-		var sec int64
-		found := false
-		if st, err := f.Stat(); err == nil {
-			_ = scanLinesBackward(f, st.Size(), func(_ int64, line []byte) bool {
-				if off, _, _, ok := parseRaw(line); ok {
-					sec, found = (file.start*1000+off)/1000, true
-					return false
-				}
-				return true
-			})
-		}
-		_ = f.Close()
-		if found {
-			return sec, true
-		}
-	}
-	return 0, false
 }
 
 // rawSamples calls fn for the samples with lo <= second < hi.
@@ -306,16 +281,21 @@ func (r *reader) Availability(ctx context.Context, nowT time.Time) (Availability
 	now := nowT.Unix()
 	const day = int64(24 * 3600)
 	// Each part of the longest window comes from the finest tier that holds it.
-	// The parts do not overlap: the boundaries are on the buckets of the finer tier.
+	// The parts do not overlap: the boundaries are on the buckets of the finer
+	// tier. The raw tier holds the whole 24 hours window, to the second.
 	m1 := ceilTo(now-day, 60)
 	h1 := ceilTo(now-7*day, 3600)
 	h0 := ceilTo(now-30*day, day)
 
-	var rawC, m7, m, h30, h, d count
-	err := v.rawSamples(m1, noLimit, func(_, _ int64, exit int) {
-		rawC.n++
+	var raw24, rawC, m7, m, h30, h, d count
+	err := v.rawSamples(now-day, noLimit, func(ms, _ int64, exit int) {
+		c := count{n: 1}
 		if exit != 0 {
-			rawC.f++
+			c.f = 1
+		}
+		raw24.add(c)
+		if ms/1000 >= m1 {
+			rawC.add(c)
 		}
 	})
 	if err != nil {
@@ -362,7 +342,7 @@ func (r *reader) Availability(ctx context.Context, nowT time.Time) (Availability
 		return s
 	}
 	av := Availability{Windows: []WindowStat{
-		stat(Window24h, rawC),
+		stat(Window24h, raw24),
 		stat(Window7d, rawC, m7),
 		stat(Window30d, rawC, m, h30),
 		stat(Window365d, rawC, m, h, d),
