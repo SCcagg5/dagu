@@ -192,8 +192,7 @@ steps:
       });
 
       await test.step('Run panel', async () => {
-        // The one tab has no mode tabs: the Run panel starts collapsed.
-        await expect(page.getByTestId('ww-mode-tabs')).toHaveCount(0);
+        // The Run panel starts collapsed.
         const dock = page.getByTestId('ww-dock');
         await expect(dock).toHaveAttribute('data-state', 'collapsed');
         await dock

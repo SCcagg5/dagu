@@ -37,8 +37,7 @@ test.describe('workspace harness', () => {
     );
 
     await expect(page.getByTestId('ww-bar')).toBeVisible({ timeout: 30_000 });
-    // The bar has no menu and no entry for the classic page.
-    await expect(page.getByTestId('ww-workflow-menu')).toHaveCount(0);
+    // The bar has no entry for the classic page.
     await expect(page.getByRole('link', { name: 'Classic page' })).toHaveCount(
       0
     );

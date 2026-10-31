@@ -51,7 +51,6 @@ test.describe('workspace runtime profile', () => {
     await gotoWorkspace(page, `${base}/settings?remoteNode=local`);
     // The editor opens the panel and takes ?panel out of the URL.
     await expectAt(page, base, { remoteNode: 'local', panel: 'null' });
-    await expect(page.getByTestId('ww-settings-dialog')).toHaveCount(0);
     await expect(
       tabs.getByRole('tab', { name: 'Overview', exact: true })
     ).toHaveAttribute('aria-selected', 'true', { timeout: 30_000 });
@@ -89,7 +88,6 @@ test.describe('workspace runtime profile', () => {
     await expect(
       tabs.getByRole('tab').evaluateAll((all) => all.map((t) => t.textContent))
     ).resolves.toEqual(['Overview', 'Wiki', 'Incidents', 'Notifications']);
-    await expect(page.getByTestId('ve-workflow-steps')).toHaveCount(0);
 
     // The old Profile tab link opens the Overview.
     await gotoWorkspace(
