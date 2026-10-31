@@ -205,6 +205,43 @@ describe.skipIf(realSchema === null)('VisualEditor', () => {
     }
   });
 
+  // The browser parser rejects a closing quote that is less indented than
+  // its step, while the server reads the file and runs it.
+  it('shows the steps that the server read while no text has parsed', () => {
+    renderEditor({
+      initial: [
+        'type: graph',
+        'steps:',
+        '- id: a',
+        "  run: 'echo x",
+        '',
+        "'",
+        '- id: b',
+        '  depends: [a]',
+        '  run: echo y',
+        '',
+      ].join('\n'),
+      validation: {
+        issues: [],
+        dag: {
+          name: 'example',
+          steps: [{ name: 'a' }, { name: 'b', depends: ['a'] }],
+        },
+      } as never,
+    });
+
+    expect(screen.getByTestId('ve-canvas-node-a')).toBeInTheDocument();
+    expect(screen.getByTestId('ve-canvas-node-b')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The editor cannot read the YAML at line 5: the canvas shows the steps the server read'
+      )
+    ).toBeInTheDocument();
+    // The canvas is frozen: the n key does not open the list of steps.
+    fireEvent.keyDown(screen.getByTestId('ve-canvas'), { key: 'n' });
+    expect(screen.queryByTestId('ve-add-step')).toBeNull();
+  });
+
   // "At the end of the workflow" chains the step after the last leaf.
   it('adds a step from the palette', () => {
     renderEditor({ initial: yamlArraySteps });
