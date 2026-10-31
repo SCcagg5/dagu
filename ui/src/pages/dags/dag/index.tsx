@@ -39,7 +39,6 @@ import {
 } from '@/components/PageStates';
 import { MonitoringOffer } from '@/components/MonitoringOffer';
 import { isNotFoundQueryError } from '@/lib/queryErrors';
-import { buildDAGRunPageURL } from '@/features/dag-runs/lib/dagRunUrls';
 
 type Params = {
   fileName: string;
@@ -49,6 +48,55 @@ type Params = {
 
 type DAGRunDetails = components['schemas']['DAGRunDetails'];
 
+/** The run page tab for a dock tab of the workflow page. */
+const RUN_PAGE_TAB: Readonly<Record<string, string>> = {
+  timeline: 'timeline',
+  outputs: 'outputs',
+  artifacts: 'artifacts',
+  agent: 'agent',
+  chat: 'chat',
+  tasks: 'tasks',
+  actions: 'approval',
+};
+
+type RunPageURLInput = {
+  name: string;
+  dagRunId: string;
+  remoteNode: string;
+  subDAGRunId?: string;
+  step?: string;
+  dock?: string;
+};
+
+/**
+ * The run page URL. Run links name a run on the workflow page (?run), which
+ * does not show runs yet, so the page sends them here.
+ */
+function runPageURL({
+  name,
+  dagRunId,
+  remoteNode,
+  subDAGRunId,
+  step,
+  dock,
+}: RunPageURLInput): string {
+  const params = new URLSearchParams();
+  params.set('remoteNode', remoteNode);
+  if (subDAGRunId) {
+    params.set('subDAGRunId', subDAGRunId);
+    params.set('dagRunId', dagRunId);
+    params.set('dagRunName', name);
+  }
+  if (step) {
+    params.set('step', step);
+  }
+  const tab = dock ? RUN_PAGE_TAB[dock] : undefined;
+  if (tab) {
+    params.set('tab', tab);
+  }
+  return `/dag-runs/${encodeURIComponent(name)}/${encodeURIComponent(dagRunId)}?${params}`;
+}
+
 function DAGDetails() {
   const params = useParams<Params>();
   const navigate = useNavigate();
@@ -56,7 +104,8 @@ function DAGDetails() {
   const [searchParams] = useSearchParams();
   const { ts } = useI18n();
 
-  const dagRunId = searchParams.get('dagRunId');
+  const dagRunId = searchParams.get('dagRunId') ?? searchParams.get('run');
+  const dock = searchParams.get('dock');
   const stepName = searchParams.get('step');
   const logStream =
     searchParams.get('stream') === Stream.stderr
@@ -152,20 +201,37 @@ function DAGDetails() {
 
   // A run is selected on the run page. Links that name a run on the
   // workflow's Overview, from older versions or bookmarks, redirect there.
-  const runRootName = queriedDAGRunName || dagData?.dag?.name;
+  // A run link names the workflow by its DAG name, which finds no file when
+  // the DAG name differs from the file name: the name is then the path.
+  const runRootName =
+    queriedDAGRunName ||
+    dagData?.dag?.name ||
+    (searchParams.has('run') && isNotFoundQueryError(dagError)
+      ? fileName
+      : undefined);
   useEffect(() => {
     if (tab !== 'status' || !dagRunId || !runRootName) return;
     navigate(
-      buildDAGRunPageURL({
-        rootDAGRunName: runRootName,
-        rootDAGRunId: dagRunId,
+      runPageURL({
+        name: runRootName,
+        dagRunId,
         subDAGRunId: subDAGRunId ?? undefined,
         remoteNode,
         step: stepName ?? undefined,
+        dock: dock ?? undefined,
       }),
       { replace: true }
     );
-  }, [dagRunId, navigate, remoteNode, runRootName, stepName, subDAGRunId, tab]);
+  }, [
+    dagRunId,
+    dock,
+    navigate,
+    remoteNode,
+    runRootName,
+    stepName,
+    subDAGRunId,
+    tab,
+  ]);
 
   const dagLabels = [
     ...(dagData?.dag?.labels ?? []),
