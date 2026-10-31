@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/dagucloud/dagu/v2/api/v1"
@@ -95,11 +96,17 @@ func toStepOutputs(node *ir.Node) api.StepOutputs {
 		State: runtimepkg.NodeState{
 			OutputValue:      node.OutputValue,
 			OutputVariables:  node.OutputVariables,
+			OutputsValue:     node.OutputsValue,
 			StepOutputsValue: node.StepOutputsValue,
 		},
 	}
 
+	// As in a ${steps.<id>.outputs.<name>} reference, the published payload
+	// stands in for a step that has no declared outputs.
 	values := data.StepOutputsValueMap()
+	if node.StepOutputsValue == nil {
+		values = data.OutputsValueStringMap()
+	}
 	names := make([]string, 0, len(values))
 	for name := range values {
 		names = append(names, name)
@@ -119,11 +126,27 @@ func toStepOutputs(node *ir.Node) api.StepOutputs {
 	if node.Step.ID != "" {
 		result.StepId = ptrOf(node.Step.ID)
 	}
-	if value, ok := data.StringFormOutputValue(); ok {
+	if value, ok := outputVariableValue(data); ok {
 		v := toStepOutputValue(node.Step.Output, value)
 		result.OutputVariable = &v
 	}
 	return result
+}
+
+// outputVariableValue returns the value that ${NAME} gives for a step with
+// output: NAME. The captured variable comes first: with output_schema, the
+// output value holds a normalized copy of it.
+func outputVariableValue(data runtimepkg.NodeData) (string, bool) {
+	if vars := data.State.OutputVariables; data.Step.Output != "" && vars != nil {
+		if raw, ok := vars.Load(data.Step.Output); ok {
+			if entry, ok := raw.(string); ok {
+				if _, value, found := strings.Cut(entry, "="); found {
+					return value, true
+				}
+			}
+		}
+	}
+	return data.StringFormOutputValue()
 }
 
 // toStepOutputValue cuts value at maxStepOutputBytes without splitting a rune.

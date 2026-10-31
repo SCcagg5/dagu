@@ -9748,13 +9748,13 @@ export interface operations {
                     outputsFromRuns?: {
                         [key: string]: components["schemas"]["DAGRunId"];
                     };
-                    /** @description Outputs of skipped steps, keyed by step name or ID and then by output name. For clients that are not the web UI; the web UI sends no values. A declared output, or any name when the step declares none, resolves through ${steps.<id>.outputs.<name>}; the name of the step's string-form output variable sets that variable. Takes precedence over outputs from outputsFromRunId and outputsFromRuns, and works without them: the caller can supply every value itself, but each step must name the run its values come from in outputsSources. A reference to an output that nobody supplied stays unresolved text in the step. Requires steps. */
+                    /** @description Outputs of skipped steps, keyed by step name or ID and then by output name. For clients that are not the web UI; the web UI sends no values. A declared output, or any name when the step declares none, resolves through ${steps.<id>.outputs.<name>}; the name of the step's string-form output variable sets that variable. Takes precedence over outputs from outputsFromRunId and outputsFromRuns, and works without them: the caller can supply every value itself, and can name the run the values of each step come from in outputsSources. A reference to an output that nobody supplied stays unresolved text in the step. Requires steps. */
                     outputs?: {
                         [key: string]: {
                             [key: string]: string;
                         };
                     };
-                    /** @description The run each step of outputs was captured from, keyed by step name or ID. Required for every step present in outputs, and only for those steps: a step in outputs without an entry, or an entry for a step not in outputs, returns 400. The run is not required to exist any more. Dagu records it in the reusedInputs of the new run. Requires steps. */
+                    /** @description Optional. The run each step of outputs was captured from, keyed by step name or ID. Dagu records it in the reusedInputs of the new run; a step of outputs without an entry has no entry there. An entry for a step not in outputs returns 400. The run is not required to exist any more. Requires steps. */
                     outputsSources?: {
                         [key: string]: components["schemas"]["ReusedOutputSource"];
                     };
@@ -10938,13 +10938,13 @@ export interface operations {
                     outputsFromRuns?: {
                         [key: string]: components["schemas"]["DAGRunId"];
                     };
-                    /** @description Outputs of skipped steps, keyed by step name or ID and then by output name. For clients that are not the web UI; the web UI sends no values. A declared output, or any name when the step declares none, resolves through ${steps.<id>.outputs.<name>}; the name of the step's string-form output variable sets that variable. Takes precedence over outputs from outputsFromRunId and outputsFromRuns, and works without them: the caller can supply every value itself, but each step must name the run its values come from in outputsSources. A reference to an output that nobody supplied stays unresolved text in the step. Requires steps. */
+                    /** @description Outputs of skipped steps, keyed by step name or ID and then by output name. For clients that are not the web UI; the web UI sends no values. A declared output, or any name when the step declares none, resolves through ${steps.<id>.outputs.<name>}; the name of the step's string-form output variable sets that variable. Takes precedence over outputs from outputsFromRunId and outputsFromRuns, and works without them: the caller can supply every value itself, and can name the run the values of each step come from in outputsSources. A reference to an output that nobody supplied stays unresolved text in the step. Requires steps. */
                     outputs?: {
                         [key: string]: {
                             [key: string]: string;
                         };
                     };
-                    /** @description The run each step of outputs was captured from, keyed by step name or ID. Required for every step present in outputs, and only for those steps: a step in outputs without an entry, or an entry for a step not in outputs, returns 400. The run is not required to exist any more. Dagu records it in the reusedInputs of the new run. Requires steps. */
+                    /** @description Optional. The run each step of outputs was captured from, keyed by step name or ID. Dagu records it in the reusedInputs of the new run; a step of outputs without an entry has no entry there. An entry for a step not in outputs returns 400. The run is not required to exist any more. Requires steps. */
                     outputsSources?: {
                         [key: string]: components["schemas"]["ReusedOutputSource"];
                     };
@@ -12327,6 +12327,15 @@ export interface operations {
                     "application/json": components["schemas"]["StepSamples"];
                 };
             };
+            /** @description A query parameter is not valid or out of its range, or from is after to */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description DAG-run or step not found, or the step is not a continuous step */
             404: {
                 headers: {
@@ -12352,8 +12361,11 @@ export interface operations {
             query?: {
                 /** @description name of the remote node */
                 remoteNode?: components["parameters"]["RemoteNode"];
+                /** @description Start of the window (RFC 3339), inclusive. Default: no bound. */
                 from?: string;
+                /** @description End of the window (RFC 3339), exclusive. Default: no bound. */
                 to?: string;
+                /** @description Most events to return. */
                 limit?: number;
                 /** @description Opaque cursor from `nextCursor` of a previous response. */
                 before?: string;
@@ -12378,6 +12390,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StepEvents"];
+                };
+            };
+            /** @description A query parameter is not valid or out of its range, from is after to, or before is not a cursor that the server gave */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description DAG-run or step not found, or the step is not a continuous step */

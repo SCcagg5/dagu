@@ -31,7 +31,7 @@ import (
 
 var _ persis.DAGDefinitionStore = (*Store)(nil)
 
-// The lock of a conditional update of a DAG file.
+// The lock that orders the writes of a DAG file.
 const (
 	specLockDirName        = "spec-locks"
 	specLockStaleThreshold = 30 * time.Second
@@ -382,12 +382,22 @@ func (store *Store) Update(ctx context.Context, name string, yamlSpec []byte) er
 	if resolved.ExternalSymlink {
 		return fmt.Errorf("%w: external DAG file symlink", persis.ErrDAGReadOnly)
 	}
+	switch unlock, err := store.lockSpec(ctx, name, resolved); {
+	case err == nil:
+		defer unlock()
+	case ctx.Err() != nil:
+		return err
+	default:
+		// A lock directory that cannot hold the lock fails every conditional
+		// write as well, so no write can race with this one.
+		logger.Warn(ctx, "Writing DAG file without the spec lock", tag.Name(name), tag.Error(err))
+	}
 	return store.write(ctx, resolved, yamlSpec)
 }
 
 // UpdateIfMatch replaces the DAG file when it still has the SHA-256
-// expectedSHA256. The check and the write hold a lock in the directory of the
-// index, which every process that shares the store uses.
+// expectedSHA256. The check and the write hold the lock of the file that
+// Update takes too, so no other write lands between them.
 func (store *Store) UpdateIfMatch(ctx context.Context, name, expectedSHA256 string, yamlSpec []byte) error {
 	resolved, err := store.locateDAG(ctx, name)
 	if err != nil {
@@ -396,15 +406,11 @@ func (store *Store) UpdateIfMatch(ctx context.Context, name, expectedSHA256 stri
 	if resolved.ExternalSymlink {
 		return fmt.Errorf("%w: external DAG file symlink", persis.ErrDAGReadOnly)
 	}
-	key := sha256.Sum256([]byte(resolved.ResolvedPath))
-	lock := dirlock.New(filepath.Join(filepath.Dir(store.indexPath), specLockDirName, hex.EncodeToString(key[:8])), &dirlock.LockOptions{
-		StaleThreshold: specLockStaleThreshold,
-		RetryInterval:  specLockRetryInterval,
-	})
-	if err := lock.Lock(ctx); err != nil {
-		return fmt.Errorf("failed to lock DAG %s: %w", name, err)
+	unlock, err := store.lockSpec(ctx, name, resolved)
+	if err != nil {
+		return err
 	}
-	defer func() { _ = lock.Unlock() }()
+	defer unlock()
 
 	current, err := fileutil.ReadFile(resolved.ResolvedPath)
 	if err != nil {
@@ -415,6 +421,21 @@ func (store *Store) UpdateIfMatch(ctx context.Context, name, expectedSHA256 stri
 		return fmt.Errorf("%w: DAG %s has sha256 %s", persis.ErrConflict, name, actual)
 	}
 	return store.write(ctx, resolved, yamlSpec)
+}
+
+// lockSpec takes the lock that orders the writes of a located DAG file. The
+// lock lives in the directory of the index, which every process that shares
+// the store uses. The returned function releases it.
+func (store *Store) lockSpec(ctx context.Context, name string, resolved ResolvedFile) (func(), error) {
+	key := sha256.Sum256([]byte(resolved.ResolvedPath))
+	lock := dirlock.New(filepath.Join(filepath.Dir(store.indexPath), specLockDirName, hex.EncodeToString(key[:8])), &dirlock.LockOptions{
+		StaleThreshold: specLockStaleThreshold,
+		RetryInterval:  specLockRetryInterval,
+	})
+	if err := lock.Lock(ctx); err != nil {
+		return nil, fmt.Errorf("failed to lock DAG %s: %w", name, err)
+	}
+	return func() { _ = lock.Unlock() }, nil
 }
 
 // write replaces a located DAG file and announces the change.
