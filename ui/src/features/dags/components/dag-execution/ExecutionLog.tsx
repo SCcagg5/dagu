@@ -651,7 +651,7 @@ function ExecutionLog({
 
         {/* The count is for screen readers: a view that shows all the lines
             has no visible count, and a partial view says so in the row. */}
-        <span role="status" className="sr-only">
+        <span className="sr-only">
           <I18nText
             text={effectiveTotalLines === 1 ? '{count} line' : '{count} lines'}
             values={{ count: effectiveTotalLines }}
@@ -807,7 +807,7 @@ function ExecutionLog({
                 const index = lineAt(row, activityLines.length, newestFirst);
                 return (
                   <ActivityLine
-                    key={row}
+                    key={getLineNumber(index)}
                     line={activityLines[index]!}
                     lineNumber={getLineNumber(index)}
                   />

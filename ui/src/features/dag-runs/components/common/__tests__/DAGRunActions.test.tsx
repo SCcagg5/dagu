@@ -452,6 +452,41 @@ describe('DAGRunActions', () => {
       expect(h.showToast).not.toHaveBeenCalled();
     });
 
+    // The request succeeds with a list of the runs that did not stop.
+    it('shows the runs that did not stop and refreshes', async () => {
+      h.client.POST.mockResolvedValue({
+        data: { errors: ['failed to stop run "run-8": gone'] },
+      });
+      const refresh = vi.fn();
+      render(
+        <DAGRunActions
+          dagRun={runningRun}
+          name="etl"
+          displayMode="full"
+          refresh={refresh}
+          stopAll={{ fileName: 'etl.yaml' }}
+        />
+      );
+
+      const dialog = openStopDialog();
+      fireEvent.click(
+        within(dialog).getByRole('checkbox', {
+          name: 'Stop all running instances',
+        })
+      );
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
+      await waitFor(() =>
+        expect(h.showError).toHaveBeenCalledWith(
+          'Failed to stop all DAG instances',
+          'Some instances may have already completed or the worker is unavailable.',
+          undefined,
+          ['failed to stop run "run-8": gone']
+        )
+      );
+      expect(h.showToast).not.toHaveBeenCalled();
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
     it('is not offered on a cancel of auto-retry', () => {
       render(
         <DAGRunActions
