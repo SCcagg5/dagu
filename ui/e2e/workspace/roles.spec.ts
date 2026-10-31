@@ -218,12 +218,16 @@ steps:
             .getByRole('button', { name: 'Copy to editor' }),
           gates.canWrite
         );
-        // The run menu holds the unsaved draft only: a clean editor has none.
-        await expect(
-          page
-            .getByTestId('ww-run-split')
-            .getByRole('button', { name: 'More run options' })
-        ).toHaveCount(0);
+        // The run menu holds the unsaved draft only. A clean editor keeps
+        // its caret in place, disabled, for a role that may execute.
+        const runOptions = page
+          .getByTestId('ww-run-split')
+          .getByRole('button', { name: 'More run options' });
+        if (gates.canExecute) {
+          await expect(runOptions).toBeDisabled();
+        } else {
+          await expect(runOptions).toHaveCount(0);
+        }
 
         // The bar has no menu: Rename and Delete are buttons that follow
         // canWrite, and no entry leads to the run page.
