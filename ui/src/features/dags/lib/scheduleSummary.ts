@@ -49,15 +49,15 @@ const MINUTE_MS = 60_000;
 // The server rounds a fire time to the minute; the match allows that gap.
 const MATCH_WINDOW_MS = MINUTE_MS;
 
-const DESCRIPTORS: Record<string, string> = {
-  '@hourly': '0 * * * *',
-  '@daily': '0 0 * * *',
-  '@midnight': '0 0 * * *',
-  '@weekly': '0 0 * * 0',
-  '@monthly': '0 0 1 * *',
-  '@yearly': '0 0 1 1 *',
-  '@annually': '0 0 1 1 *',
-};
+const DESCRIPTORS = new Map<string, string>([
+  ['@hourly', '0 * * * *'],
+  ['@daily', '0 0 * * *'],
+  ['@midnight', '0 0 * * *'],
+  ['@weekly', '0 0 * * 0'],
+  ['@monthly', '0 0 1 * *'],
+  ['@yearly', '0 0 1 1 *'],
+  ['@annually', '0 0 1 1 *'],
+]);
 
 function validTimeZone(zone: string | undefined): string | undefined {
   if (!zone) return undefined;
@@ -99,7 +99,7 @@ function describeCron(body: string): ScheduleWording | null {
   const every = parseEveryMs(body);
   if (every !== null) return describeMinutes(every / MINUTE_MS);
 
-  const fields = (DESCRIPTORS[body] ?? body).split(/\s+/);
+  const fields = (DESCRIPTORS.get(body) ?? body).split(/\s+/);
   if (fields.length !== 5) return null;
   const [minute = '', hour = '', dom = '', month = '', dow = ''] = fields;
   if (dom !== '*' || month !== '*') return null;
@@ -145,7 +145,7 @@ function nextFireTime(
     return new Date((Math.floor(now.getTime() / every) + 1) * every);
   }
   try {
-    return CronExpressionParser.parse(DESCRIPTORS[body] ?? body, {
+    return CronExpressionParser.parse(DESCRIPTORS.get(body) ?? body, {
       currentDate: now,
       tz: zone,
     })

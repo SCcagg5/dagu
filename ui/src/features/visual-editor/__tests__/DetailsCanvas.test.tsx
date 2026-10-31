@@ -44,7 +44,9 @@ describe('DetailsCanvas', () => {
     expect(screen.getByTestId('ve-canvas-node-say')).toBeInTheDocument();
     expect(screen.getByTestId('ve-canvas-node-shout')).toBeInTheDocument();
     expect(screen.getByText('Read-only')).toBeInTheDocument();
-    expect(screen.queryByText('Add step')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Add a step' })
+    ).not.toBeInTheDocument();
   });
 
   it('tells the caller which step was picked, by its name', () => {
@@ -172,7 +174,9 @@ describe('DetailsCanvas with a host overlay and selection', () => {
       String(NodeStatus.Skipped)
     );
     expect(
-      status('say')?.querySelector('[data-testid="status-dot"]')
+      within(screen.getByTestId('ve-canvas-node-say')).getByRole('img', {
+        name: 'Reuse previous output',
+      })
     ).toHaveAttribute('title', 'Reuse previous output');
     expect(status('shout')).toHaveAttribute(
       'data-status',

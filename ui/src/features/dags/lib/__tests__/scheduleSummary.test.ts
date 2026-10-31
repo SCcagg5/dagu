@@ -170,5 +170,10 @@ describe('summarizeSchedules', () => {
     expect(summary.lead?.next).toBeNull();
     expect(summary.lead?.wording).toBeNull();
     expect(summary.nextRun).toBeNull();
+
+    // A key of every object is no cron descriptor.
+    const inherited = summarizeSchedules([cron('constructor')], NOW, UTC);
+    expect(inherited.lead?.next).toBeNull();
+    expect(inherited.lead?.wording).toBeNull();
   });
 });

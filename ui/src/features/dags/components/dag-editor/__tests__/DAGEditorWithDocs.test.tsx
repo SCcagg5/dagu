@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import DAGEditorWithDocs from '../DAGEditorWithDocs';
 
 vi.mock('../DAGEditor', () => ({
@@ -18,6 +18,10 @@ vi.mock('../SchemaDocSidebar', () => ({
 // The container queries do not run in jsdom: the test pins the classes
 // that put the docs under the editor of a narrow drawer.
 describe('DAGEditorWithDocs layout', () => {
+  afterEach(() => {
+    localStorage.removeItem('schema-sidebar-open');
+  });
+
   it('stacks the docs under the editor until the container is wide', async () => {
     localStorage.setItem('schema-sidebar-open', 'true');
     const { container } = render(<DAGEditorWithDocs value="steps: []" />);
@@ -28,7 +32,6 @@ describe('DAGEditorWithDocs layout', () => {
     const row = docs.parentElement as HTMLElement;
     expect(row).toHaveClass('@container', 'flex-col', '@[40rem]:flex-row');
     expect(container.contains(row)).toBe(true);
-    localStorage.removeItem('schema-sidebar-open');
   });
 });
 
