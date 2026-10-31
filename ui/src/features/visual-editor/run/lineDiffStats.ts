@@ -63,17 +63,23 @@ export function lineDiffStats(original: string, edited: string): LineDiffStats {
   return { added: y.length - common, removed: x.length - common };
 }
 
+/** The lines of `text`, each with its line end. */
+function linesWithEnds(text: string): string[] {
+  return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+}
+
 /**
  * Where the first change is: its line (from 0) and the number of lines of
- * the longer text, or null when the texts are equal.
+ * the longer text, or null when the texts are equal. A change of only a line
+ * end is on the line that has it.
  */
 export function firstChange(
   original: string,
   edited: string
 ): { line: number; lines: number } | null {
   if (original === edited) return null;
-  const a = splitLines(original);
-  const b = splitLines(edited);
+  const a = linesWithEnds(original);
+  const b = linesWithEnds(edited);
   let head = 0;
   while (head < a.length && head < b.length && a[head] === b[head]) head++;
   return { line: head, lines: Math.max(a.length, b.length) };

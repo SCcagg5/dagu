@@ -22,7 +22,10 @@ function isTextField(target: EventTarget | null): target is TextField {
 export interface LastFocusedField {
   /** Give to `onFocus` of the container; React focus events bubble. */
   onFocus(event: FocusEvent<HTMLElement>): void;
-  /** The last text field that had the focus, while it is in the document. */
+  /**
+   * The last text field that had the focus, while it is in the document and
+   * can be edited.
+   */
   get(): TextField | null;
   /** Forgets the field, as when the form shows another step. */
   reset(): void;
@@ -40,7 +43,7 @@ export function useLastFocusedField(): LastFocusedField {
 
   const get = useCallback(() => {
     const field = last.current;
-    return field?.isConnected ? field : null;
+    return field?.isConnected && isTextField(field) ? field : null;
   }, []);
 
   const reset = useCallback(() => {

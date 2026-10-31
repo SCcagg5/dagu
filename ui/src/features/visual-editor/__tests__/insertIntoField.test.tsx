@@ -60,6 +60,18 @@ describe('insertIntoField', () => {
     expect(getField()).toBeNull();
   });
 
+  // The form can turn read-only after a field had the focus.
+  it('gives no field once it cannot be edited', () => {
+    let getField: () => unknown = () => null;
+    render(<Harness onReady={(get) => (getField = get)} />);
+    const field = screen.getByLabelText('URL') as HTMLInputElement;
+
+    fireEvent.focusIn(field);
+    field.readOnly = true;
+
+    expect(getField()).toBeNull();
+  });
+
   it('forgets the field on reset', () => {
     let getField: () => unknown = () => null;
     let reset = () => {};
