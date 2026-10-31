@@ -233,6 +233,31 @@ describe('DAGDetails page', () => {
       expect(claimHideBreadcrumb).not.toHaveBeenCalled();
     });
 
+    // A run link names the workflow by the DAG name of the run. A DAG whose
+    // name is not the name of its file is found through the run.
+    it('opens a run link of a DAG named apart from its file on that file', async () => {
+      useQueryMock.mockImplementation((path) =>
+        path === '/dag-runs/{name}/{dagRunId}'
+          ? ({
+              data: { dagRunDetails: { sourceFileName: 'etl_file' } },
+              mutate: vi.fn(),
+            } as never)
+          : ({
+              data: undefined,
+              error: { code: 'not_found', message: 'DAG is not found' },
+              mutate: vi.fn(),
+            } as never)
+      );
+
+      renderPage('/dags/etl?remoteNode=local&run=r1');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('location')).toHaveTextContent(
+          '/dags/etl_file?remoteNode=local&run=r1'
+        );
+      });
+    });
+
     it('reports a failed load with the server message and a retry', () => {
       const mutate = vi.fn();
       useQueryMock.mockImplementation(
