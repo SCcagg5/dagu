@@ -44,6 +44,27 @@ describe('CronLauncherPanel', () => {
     expect(second).toHaveValue('@daily');
   });
 
+  // Enter of an input method confirms its text, not the expression.
+  it('ignores Enter and Escape while an input method composes', () => {
+    const onChange = vi.fn();
+    renderPanel(['@daily'], onChange);
+    const row = screen.getByLabelText('Cron expression');
+    fireEvent.change(row, { target: { value: '@hourly' } });
+    fireEvent.keyDown(row, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(row, { key: 'Escape', isComposing: true });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(row).toHaveValue('@hourly');
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(onChange).toHaveBeenLastCalledWith(['@hourly']);
+
+    const added = screen.getByLabelText('New cron expression');
+    fireEvent.change(added, { target: { value: '@weekly' } });
+    fireEvent.keyDown(added, { key: 'Enter', isComposing: true });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(added, { key: 'Enter' });
+    expect(onChange).toHaveBeenLastCalledWith(['@daily', '@weekly']);
+  });
+
   // The scheduler fires in its own time zone, whatever the zone of the
   // browser.
   it('previews the next runs in the time zone of the scheduler', () => {

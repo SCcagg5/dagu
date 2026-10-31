@@ -127,6 +127,7 @@ function ExpressionRow({
           onChange={(event) => setDraft(event.target.value)}
           onBlur={commit}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
             if (event.key === 'Enter') commit();
             if (event.key === 'Escape') setDraft(expression);
           }}
@@ -239,7 +240,9 @@ export function CronLauncherPanel({
               aria-label={ts('New cron expression')}
               onChange={(event) => setAdded(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') add(added);
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                  add(added);
+                }
               }}
               className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
