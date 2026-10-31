@@ -200,6 +200,12 @@ function DAGDetails() {
   ];
   const dagWorkspaceName = workspaceNameFromLabels(dagLabels);
   const dagHasWorkspaceLabel = hasWorkspaceLabel(dagLabels);
+  // The same page in the workspace of the workflow.
+  const ownWorkspaceTo = useMemo(() => {
+    const query = new URLSearchParams(location.search);
+    query.set('workspace', dagWorkspaceName);
+    return `${location.pathname}?${query.toString()}`;
+  }, [dagWorkspaceName, location.pathname, location.search]);
   const dagMatchesWorkspace =
     workspaceSelection.kind === WorkspaceKind.all ||
     (workspaceSelection.kind === WorkspaceKind.default &&
@@ -426,6 +432,16 @@ function DAGDetails() {
                       to={allWorkspacesTo}
                     >
                       {ts('Show in all workspaces')}
+                    </Link>
+                  )}
+                  {dagWorkspaceName && (
+                    <Link
+                      className="underline hover:text-foreground"
+                      to={ownWorkspaceTo}
+                    >
+                      {ts('Show in workspace {name}', {
+                        name: dagWorkspaceName,
+                      })}
                     </Link>
                   )}
                 </div>

@@ -74,13 +74,14 @@ describe('ActionPicker', () => {
   });
 
   it('tells when nothing matches', () => {
-    setup();
+    const onPick = setup();
     open();
     fireEvent.change(screen.getByRole('combobox'), {
       target: { value: 'zzz' },
     });
     expect(screen.getByText('No matching actions')).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+    expect(onPick).not.toHaveBeenCalled();
   });
 
   it('is disabled when read-only', () => {

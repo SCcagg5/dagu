@@ -12,6 +12,7 @@ import { WorkflowWorkspace } from '@/features/workflow-workspace';
 import { LogPopoutPage } from '@/features/workflow-workspace/popout/LogPopoutPage';
 import { useQuery } from '@/hooks/api';
 import { WorkspaceKind } from '@/lib/workspace';
+import LegacyRunRedirect from '@/pages/dag-runs/LegacyRunRedirect';
 import DAGDetails from '..';
 
 vi.mock('@/features/workflow-workspace', async () => {
@@ -88,15 +89,22 @@ function LocationProbe() {
 const claimFullBleed = vi.fn(() => () => undefined);
 const claimHideBreadcrumb = vi.fn(() => () => undefined);
 
-function renderPage(initialEntry = '/dags/release-notes') {
+function renderPage(
+  initialEntry = '/dags/release-notes',
+  appBar = appBarValue
+) {
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <LayoutChromeProvider value={{ claimFullBleed, claimHideBreadcrumb }}>
-        <AppBarContext.Provider value={appBarValue}>
+        <AppBarContext.Provider value={appBar}>
           <LocationProbe />
           <Routes>
             <Route path="/dags/:fileName" element={<DAGDetails />} />
             <Route path="/dags/:fileName/:tab" element={<DAGDetails />} />
+            <Route
+              path="/dag-runs/:name/:dagRunId"
+              element={<LegacyRunRedirect />}
+            />
             <Route path="*" element={null} />
           </Routes>
         </AppBarContext.Provider>
@@ -337,6 +345,29 @@ describe('DAGDetails page', () => {
       expect(workspaceMock).not.toHaveBeenCalled();
     });
 
+    // The old run page read the run alone; its links still reach the run.
+    it('shows the run of an old run page link whose workflow file is gone', async () => {
+      useQueryMock.mockImplementation((path) =>
+        path === '/dag-runs/{name}/{dagRunId}'
+          ? ({
+              data: { dagRunDetails: { name: 'etl', dagRunId: 'r1' } },
+              mutate: vi.fn(),
+            } as never)
+          : ({
+              data: undefined,
+              error: { code: 'not_found', message: 'DAG is not found' },
+              mutate: vi.fn(),
+            } as never)
+      );
+
+      renderPage('/dag-runs/etl/r1');
+
+      expect(await screen.findByTestId('run-details')).toBeInTheDocument();
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/dags/etl?remoteNode=local&run=r1'
+      );
+    });
+
     it('reports a failed load with the server message and a retry', () => {
       const mutate = vi.fn();
       useQueryMock.mockImplementation(
@@ -387,6 +418,45 @@ describe('DAGDetails page', () => {
       expect(workspaceMock).not.toHaveBeenCalled();
       expect(claimFullBleed).not.toHaveBeenCalled();
       expect(claimHideBreadcrumb).not.toHaveBeenCalled();
+    });
+
+    // A run link opens in the app bar scope, which may not hold the workflow.
+    it('offers the workspace of a workflow outside the selected one', () => {
+      useQueryMock.mockImplementation(
+        (path) =>
+          ({
+            data:
+              path === '/dags/{fileName}'
+                ? {
+                    ...dagData,
+                    dag: { ...dagData.dag, labels: ['workspace=team-b'] },
+                  }
+                : undefined,
+            mutate: vi.fn(),
+          }) as never
+      );
+
+      renderPage('/dags/release-notes?remoteNode=local&run=r1', {
+        ...(appBarValue as object),
+        workspaceSelection: {
+          kind: WorkspaceKind.workspace,
+          workspace: 'team-a',
+        },
+      } as never);
+
+      expect(
+        screen.getByText('This workflow is not in the selected workspace.')
+      ).toBeVisible();
+      const own = screen.getByRole('link', {
+        name: 'Show in workspace team-b',
+      });
+      const href = new URL(own.getAttribute('href') ?? '', 'http://x');
+      expect(href.pathname).toBe('/dags/release-notes');
+      expect(Object.fromEntries(href.searchParams)).toEqual({
+        remoteNode: 'local',
+        run: 'r1',
+        workspace: 'team-b',
+      });
     });
 
     it('scopes the workspace to the remote node of the URL', () => {

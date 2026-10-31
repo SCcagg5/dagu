@@ -174,8 +174,9 @@ const LEGACY_RUN_TAB_DOCK: Readonly<Record<string, string>> = {
 /**
  * The workflow page URL for a link to the removed run page
  * /dag-runs/:name/:dagRunId. A sub-run link (?subDAGRunId with the root run
- * in ?dagRunId and ?dagRunName) opens its root run. remoteNode and workspace
- * stay; the old ?tab becomes ?dock.
+ * in ?dagRunId and ?dagRunName) opens its root run with the sub-run in
+ * ?subRun, and ?step is a step of the sub-run. remoteNode and workspace stay;
+ * the old ?tab becomes ?dock.
  */
 export function legacyRunPageRedirectURL(
   name: string,
@@ -193,6 +194,7 @@ export function legacyRunPageRedirectURL(
     remoteNode: search.get('remoteNode')?.trim() || fallbackRemoteNode,
     workspace: search.get('workspace') || undefined,
     run: runId === 'latest' ? undefined : runId,
+    subRun: subDAGRunId && subDAGRunId !== runId ? subDAGRunId : undefined,
     step: search.get('step') || undefined,
     dock: (tab && LEGACY_RUN_TAB_DOCK[tab]) || undefined,
   });

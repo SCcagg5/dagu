@@ -213,10 +213,12 @@ function ScheduleBody({ dag }: { dag: DAGFile }) {
               <Badge size="sm">+{summary.extra}</Badge>
             </button>
           </TooltipTrigger>
+          {/* The list is in a portal, but its clicks reach the row in React. */}
           <TooltipContent
             side="bottom"
             align="start"
             className="w-auto max-w-sm"
+            onClick={(event) => event.stopPropagation()}
           >
             <ScheduleList summary={summary} ts={ts} />
           </TooltipContent>
