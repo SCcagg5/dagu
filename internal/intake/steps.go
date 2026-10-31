@@ -32,9 +32,9 @@ type OutputSource struct {
 	CapturedAt string
 }
 
-// CheckOutputSources makes sure that every step in outputs has an entry in
-// sources, and that every entry of sources is for a step in outputs. Steps are
-// given by name or ID. The caller checks the run IDs.
+// CheckOutputSources makes sure that every entry of sources is for a step in
+// outputs. A step in outputs may have no entry. Steps are given by name or ID.
+// The caller checks the run IDs.
 func CheckOutputSources(dag *ir.DAG, outputs map[string]map[string]string, sources map[string]OutputSource) error {
 	supplied, err := stepRefsByName(dag, slices.Sorted(maps.Keys(outputs)), false)
 	if err != nil {
@@ -43,11 +43,6 @@ func CheckOutputSources(dag *ir.DAG, outputs map[string]map[string]string, sourc
 	named, err := stepRefsByName(dag, slices.Sorted(maps.Keys(sources)), true)
 	if err != nil {
 		return fmt.Errorf("outputsSources: %w", err)
-	}
-	for _, name := range slices.Sorted(maps.Keys(supplied)) {
-		if _, ok := named[name]; !ok {
-			return fmt.Errorf("outputs for step %s must name the run they come from (outputsSources)", supplied[name])
-		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(named)) {
 		if _, ok := supplied[name]; !ok {
@@ -141,11 +136,17 @@ func CheckRunStepSources(dag *ir.DAG, steps []string, fromRuns RunStepSources) e
 		switch {
 		case index < 0:
 			return fmt.Errorf("step %s cannot be reused from run %s: the run has no such step", ref, run.DAGRunID)
-		case !transform.Reusable(run.Nodes[index]):
+		case !carriesOutputs(run.Nodes[index]):
 			return fmt.Errorf("step %s cannot be reused from run %s: the step did not succeed there", ref, run.DAGRunID)
 		}
 	}
 	return nil
+}
+
+// carriesOutputs reports whether a node can give its outputs to another run.
+// A step skipped by retry that carried nothing has no finish time.
+func carriesOutputs(node *ir.Node) bool {
+	return transform.Reusable(node) && (node.Status != ir.NodeSkipped || node.FinishedAt != "")
 }
 
 // stepRefsByName maps the name of each step that refs address to the ref that
@@ -332,7 +333,8 @@ func seedFromRuns(dag *ir.DAG, nodes []runtime.NodeData, fromRuns RunStepSources
 
 // reusedInputs lists, in DAG step order, where each skipped step took its
 // outputs from. A supplied entry wins over a run, as the values do, and a
-// run named for the step wins over the source run.
+// run named for the step wins over the source run. A step of outputs with no
+// entry in sources has no entry, also when a run carries it.
 func reusedInputs(dag *ir.DAG, skipped []string, source *ir.DAGRunStatus, runs map[string]*ir.DAGRunStatus, outputs map[string]map[string]string, sources map[string]OutputSource) ([]ir.ReusedInput, error) {
 	outputsByName, err := stepRefsByName(dag, slices.Sorted(maps.Keys(outputs)), false)
 	if err != nil {
@@ -354,7 +356,7 @@ func reusedInputs(dag *ir.DAG, skipped []string, source *ir.DAGRunStatus, runs m
 			return nil
 		}
 		for _, node := range run.Nodes {
-			if node != nil && node.Step.Name == name && transform.Reusable(node) {
+			if node != nil && node.Step.Name == name && carriesOutputs(node) {
 				return node
 			}
 		}
@@ -365,6 +367,9 @@ func reusedInputs(dag *ir.DAG, skipped []string, source *ir.DAGRunStatus, runs m
 	for _, name := range skipped {
 		if from, ok := cached[name]; ok {
 			reused = append(reused, ir.ReusedInput{Step: name, RunID: from.RunID, CapturedAt: from.CapturedAt, Via: ir.ReusedInputViaCache})
+			continue
+		}
+		if _, supplied := outputsByName[name]; supplied {
 			continue
 		}
 		run := source

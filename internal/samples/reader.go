@@ -6,6 +6,7 @@ package samples
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"slices"
@@ -225,6 +226,9 @@ func (r *reader) Events(ctx context.Context, q EventQuery) (EventPage, error) {
 	f, err := os.Open(r.st.eventsPath())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
+			if before >= 0 {
+				return page, fmt.Errorf("%w %q", ErrInvalidCursor, q.Before)
+			}
 			return page, nil
 		}
 		return page, err
@@ -236,7 +240,14 @@ func (r *reader) Events(ctx context.Context, q EventQuery) (EventPage, error) {
 	}
 	end := st.Size()
 	if before >= 0 {
-		end = min(end, before)
+		issued, err := isEventStart(f, before, end)
+		if err != nil {
+			return page, err
+		}
+		if !issued {
+			return page, fmt.Errorf("%w %q", ErrInvalidCursor, q.Before)
+		}
+		end = before
 	}
 	limit := q.Limit
 	if limit <= 0 {
@@ -270,6 +281,20 @@ func (r *reader) Events(ctx context.Context, q EventQuery) (EventPage, error) {
 		return page, err
 	}
 	return page, ctx.Err()
+}
+
+// isEventStart reports whether off can be a cursor of the events file of the
+// given size: the start of a line that follows another line. The file only
+// grows, so every cursor that the store gave stays one.
+func isEventStart(f *os.File, off, size int64) (bool, error) {
+	if off <= 0 || off >= size {
+		return false, nil
+	}
+	b := make([]byte, 1)
+	if _, err := f.ReadAt(b, off-1); err != nil {
+		return false, err
+	}
+	return b[0] == '\n', nil
 }
 
 type count struct{ n, f uint64 }
