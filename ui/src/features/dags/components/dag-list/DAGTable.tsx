@@ -1577,8 +1577,18 @@ function DAGTable({
       sortedDags.sort(compareDags);
     }
 
-    // Not gathered by group: pinned workflows lead, then the others, flat.
+    // Not gathered by group: pinned workflows lead, then the others, flat. By
+    // name, the order follows what the row shows: the group, then the name.
     if (!groupByGroup) {
+      if (sortField === 'name' && !clientSort) {
+        const direction = sortOrder === 'desc' ? -1 : 1;
+        const label = (dag: (typeof sortedDags)[number]) =>
+          `${dag.dag.group ? `${dag.dag.group} / ` : ''}${dag.dag.name}`.toLowerCase();
+        sortedDags.sort((a, b) => {
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+          return direction * label(a).localeCompare(label(b));
+        });
+      }
       return [
         ...sortedDags.filter((dag) => dag.pinned),
         ...sortedDags.filter((dag) => !dag.pinned),
@@ -1656,7 +1666,7 @@ function DAGTable({
         });
       });
     return hierarchicalData;
-  }, [dags, clientSort, compareDags, groupByGroup]);
+  }, [dags, clientSort, compareDags, groupByGroup, sortField, sortOrder]);
 
   const instance = useReactTable<Data>({
     data,
