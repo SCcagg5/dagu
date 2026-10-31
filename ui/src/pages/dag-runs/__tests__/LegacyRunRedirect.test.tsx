@@ -3,9 +3,23 @@
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppBarContext } from '@/contexts/AppBarContext';
 import LegacyRunRedirect from '../LegacyRunRedirect';
+
+// The latest run of a DAG, as the run endpoint answers for 'latest'.
+const h = vi.hoisted(() => ({
+  latest: undefined as { data?: unknown; error?: unknown } | undefined,
+  calls: [] as unknown[],
+}));
+
+vi.mock('@/hooks/api', () => ({
+  useQuery: (_path: string, init: unknown) => {
+    if (init === null) return { data: undefined };
+    h.calls.push(init);
+    return h.latest ?? { data: undefined };
+  },
+}));
 
 function LocationProbe() {
   const location = useLocation();
@@ -30,6 +44,10 @@ function renderAt(entry: string, selectedRemoteNode?: string) {
   );
 }
 
+beforeEach(() => {
+  h.latest = undefined;
+  h.calls = [];
+});
 afterEach(cleanup);
 
 // parity:run-page-route
@@ -50,7 +68,27 @@ describe('LegacyRunRedirect', () => {
     );
   });
 
-  it('drops ?run for the latest run', () => {
+  // The workflow page finds the file of a run by its ID: a DAG whose name
+  // differs from its file is found through the latest run.
+  it('names the latest run by its ID', () => {
+    h.latest = { data: { dagRunDetails: { dagRunId: 'run-9' } } };
+    renderAt('/dag-runs/nightly/latest');
+
+    expect(h.calls).toEqual([
+      {
+        params: {
+          path: { name: 'nightly', dagRunId: 'latest' },
+          query: { remoteNode: 'local' },
+        },
+      },
+    ]);
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/dags/nightly?remoteNode=local&run=run-9'
+    );
+  });
+
+  it('drops ?run when the DAG has no latest run', () => {
+    h.latest = { data: undefined, error: { code: 'not_found' } };
     renderAt('/dag-runs/etl/latest');
 
     expect(screen.getByTestId('location')).toHaveTextContent(
@@ -67,6 +105,18 @@ describe('LegacyRunRedirect', () => {
 
     expect(screen.getByTestId('location')).toHaveTextContent(
       '/dags/root?remoteNode=local&run=root-run&subRun=child&step=load'
+    );
+  });
+
+  // The old tab of a sub-run link was a tab of the sub-run: the dock of the
+  // root run does not take it.
+  it('keeps the tab of a sub-run link off the dock of its root', () => {
+    renderAt(
+      '/dag-runs/root/root-run?subDAGRunId=child&dagRunId=root-run&dagRunName=root&tab=artifacts'
+    );
+
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      /^\/dags\/root\?remoteNode=local&run=root-run&subRun=child$/
     );
   });
 

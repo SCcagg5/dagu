@@ -97,7 +97,7 @@ describe('ScheduleLine', () => {
           { kind: ScheduleKind.cron, expression: '*/30 * * * *' },
           { kind: ScheduleKind.cron, expression: '0 2 1 * *' },
         ],
-        nextRun: undefined,
+        nextRun: '2026-10-26T10:30:00Z',
       })
     );
     const badge = screen.getByRole('button', { name: 'Show all 3 schedules' });
@@ -160,6 +160,20 @@ describe('ScheduleLine', () => {
     const line = screen.getByTestId('schedule-line');
     expect(line.textContent).toBe('hourly · Suspended');
     expect(line.querySelector('.text-muted-foreground')).not.toBeNull();
+  });
+
+  // The server leaves out the next run when the scheduler plans none, as
+  // while it is paused: the cron expression must not stand in for it.
+  it('shows no upcoming run when the scheduler plans none', () => {
+    renderLine(
+      dagFile({
+        schedule: [{ kind: ScheduleKind.cron, expression: '*/15 * * * *' }],
+        nextRun: undefined,
+      })
+    );
+    expect(screen.getByTestId('schedule-line').textContent).toBe(
+      'No upcoming run · every 15 min'
+    );
   });
 
   it('shows No schedule without a schedule', () => {

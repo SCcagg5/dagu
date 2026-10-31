@@ -188,13 +188,16 @@ export function legacyRunPageRedirectURL(
   const rootId = subDAGRunId ? search.get('dagRunId') : null;
   const rootName = subDAGRunId ? search.get('dagRunName') : null;
   const runId = rootId || dagRunId;
-  const tab = search.get('tab');
+  const subRun = subDAGRunId && subDAGRunId !== runId ? subDAGRunId : undefined;
+  // The tab of a sub-run link is a tab of the sub-run, not of the dock of
+  // its root.
+  const tab = subRun ? null : search.get('tab');
   return buildWorkspaceDAGPageURL({
     fileName: rootName || name,
     remoteNode: search.get('remoteNode')?.trim() || fallbackRemoteNode,
     workspace: search.get('workspace') || undefined,
     run: runId === 'latest' ? undefined : runId,
-    subRun: subDAGRunId && subDAGRunId !== runId ? subDAGRunId : undefined,
+    subRun,
     step: search.get('step') || undefined,
     dock: (tab && LEGACY_RUN_TAB_DOCK[tab]) || undefined,
   });
