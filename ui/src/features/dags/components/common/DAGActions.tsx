@@ -431,85 +431,90 @@ function DAGActions({
         {shows('retry') &&
           !isSubDAGRun &&
           !(retryInPlaceOfStop && stopApplies) && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ActionButton
-                label={displayMode !== 'compact'}
-                icon={<RotateCcw className="h-4 w-4" />}
-                disabled={!buttonState['retry']}
-                data-ww-action={mark('retry')}
-                onClick={async () => {
-                  // Get the current URL parameters
-                  const urlParams = new URLSearchParams(window.location.search);
-                  const idxParam = urlParams.get('idx');
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ActionButton
+                  label={displayMode !== 'compact'}
+                  icon={<RotateCcw className="h-4 w-4" />}
+                  disabled={!buttonState['retry']}
+                  data-ww-action={mark('retry')}
+                  onClick={async () => {
+                    // Get the current URL parameters
+                    const urlParams = new URLSearchParams(
+                      window.location.search
+                    );
+                    const idxParam = urlParams.get('idx');
 
-                  // Default to current status dagRunId
-                  let dagRunIdToUse = status?.dagRunId || '';
+                    // Default to current status dagRunId
+                    let dagRunIdToUse = status?.dagRunId || '';
 
-                  // If we're in the history page or modal history tab with a specific run selected
-                  const isInHistoryPage =
-                    window.location.pathname.includes('/history');
-                  const isInModalHistoryTab =
-                    document.querySelector(
-                      '.dag-modal-content [data-tab="history"]'
-                    ) !== null;
+                    // If we're in the history page or modal history tab with a specific run selected
+                    const isInHistoryPage =
+                      window.location.pathname.includes('/history');
+                    const isInModalHistoryTab =
+                      document.querySelector(
+                        '.dag-modal-content [data-tab="history"]'
+                      ) !== null;
 
-                  if (
-                    (isInHistoryPage || isInModalHistoryTab) &&
-                    idxParam !== null
-                  ) {
-                    try {
-                      // Get all dag-runs for this DAG to find the correct dagRunId
-                      const { data } = await client.GET(
-                        '/dags/{fileName}/dag-runs',
-                        {
-                          params: {
-                            path: {
-                              fileName: fileName,
+                    if (
+                      (isInHistoryPage || isInModalHistoryTab) &&
+                      idxParam !== null
+                    ) {
+                      try {
+                        // Get all dag-runs for this DAG to find the correct dagRunId
+                        const { data } = await client.GET(
+                          '/dags/{fileName}/dag-runs',
+                          {
+                            params: {
+                              path: {
+                                fileName: fileName,
+                              },
+                              query: {
+                                remoteNode,
+                              },
                             },
-                            query: {
-                              remoteNode,
-                            },
-                          },
+                          }
+                        );
+
+                        if (data?.dagRuns && data.dagRuns.length > 0) {
+                          // Convert idx to integer
+                          const selectedIdx = parseInt(idxParam);
+
+                          // Get the dag-run at the selected index (reversed order)
+                          const selectedDagRun = [...data.dagRuns].reverse()[
+                            selectedIdx
+                          ];
+
+                          if (selectedDagRun && selectedDagRun.dagRunId) {
+                            dagRunIdToUse = selectedDagRun.dagRunId;
+                          }
                         }
-                      );
-
-                      if (data?.dagRuns && data.dagRuns.length > 0) {
-                        // Convert idx to integer
-                        const selectedIdx = parseInt(idxParam);
-
-                        // Get the dag-run at the selected index (reversed order)
-                        const selectedDagRun = [...data.dagRuns].reverse()[
-                          selectedIdx
-                        ];
-
-                        if (selectedDagRun && selectedDagRun.dagRunId) {
-                          dagRunIdToUse = selectedDagRun.dagRunId;
-                        }
+                      } catch (err) {
+                        console.error(
+                          'Error fetching dag-runs for retry:',
+                          err
+                        );
                       }
-                    } catch (err) {
-                      console.error('Error fetching dag-runs for retry:', err);
                     }
-                  }
 
-                  // Set the dagRunId to use for retry
-                  setRetryDagRunId(dagRunIdToUse);
+                    // Set the dagRunId to use for retry
+                    setRetryDagRunId(dagRunIdToUse);
 
-                  // Show the modal
-                  setIsRetryModal(true);
-                }}
-                className="cursor-pointer"
-              >
-                <I18nText text={'Retry'} />
-              </ActionButton>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>
-                <I18nText text={'Retry this run'} />
-              </p>
-            </TooltipContent>
-          </Tooltip>
-        )}
+                    // Show the modal
+                    setIsRetryModal(true);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <I18nText text={'Retry'} />
+                </ActionButton>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  <I18nText text={'Retry this run'} />
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         {status && waitingApprovalStepName && (
           <RejectDAGRunDialog
             open={isRejectModal}

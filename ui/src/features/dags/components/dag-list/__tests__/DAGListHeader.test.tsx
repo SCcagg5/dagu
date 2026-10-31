@@ -36,4 +36,54 @@ describe('DAGListHeader', () => {
       /1,?234 workflows/
     );
   });
+
+  it('shows the number of runs in the runs mode', () => {
+    render(
+      <MemoryRouter>
+        <DAGListHeader mode="runs" resultCount={1} />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('workflow-count')).toHaveTextContent(/^1 run$/);
+  });
+
+  it('marks the number of runs with a plus when more are available', () => {
+    render(
+      <MemoryRouter>
+        <DAGListHeader mode="runs" resultCount={100} hasMore />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('workflow-count')).toHaveTextContent(
+      /^100\+ runs$/
+    );
+  });
+
+  it('keeps the plural for one run when more are available', () => {
+    render(
+      <MemoryRouter>
+        <DAGListHeader mode="runs" resultCount={1} hasMore />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('workflow-count')).toHaveTextContent(
+      /^1\+ runs$/
+    );
+  });
+
+  it('puts the mode toggle after the title and before the count', () => {
+    render(
+      <MemoryRouter>
+        <DAGListHeader mode="runs" resultCount={3} />
+      </MemoryRouter>
+    );
+
+    const title = screen.getByRole('heading', { name: /^workflows$/i });
+    const toggle = screen.getByRole('group', { name: 'Show' });
+    const count = screen.getByTestId('workflow-count');
+    const follows = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(title, toggle)).toBe(true);
+    expect(follows(toggle, count)).toBe(true);
+  });
 });

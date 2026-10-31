@@ -20,8 +20,6 @@ export default defineMessages({
     'queued {time}': 'queued {time}',
     'in {time}': 'in {time}',
     'Webhook of {name}': 'Webhook of {name}',
-    'Are you sure you want to {action} the webhook for "{name}"?':
-      'Are you sure you want to {action} the webhook for "{name}"?',
     'Enable webhook': 'Enable webhook',
     'Disable webhook': 'Disable webhook',
     'Could not update the webhook': 'Could not update the webhook',
@@ -30,7 +28,6 @@ export default defineMessages({
     'Pin group {name}': 'Pin group {name}',
     'Pin group': 'Pin group',
     'Unpin group': 'Unpin group',
-    Runs: 'Runs',
     'Gather the workflows by group': 'Gather the workflows by group',
     Show: 'Show',
     'Choose the shared default, or remove views saved for this remote and workspace.':
@@ -58,8 +55,6 @@ export default defineMessages({
     'queued {time}': '排队 {time}',
     'in {time}': '{time}后',
     'Webhook of {name}': '{name} 的 Webhook',
-    'Are you sure you want to {action} the webhook for "{name}"?':
-      '确定要{action} “{name}” 的 Webhook 吗？',
     'Enable webhook': '启用 Webhook',
     'Disable webhook': '停用 Webhook',
     'Could not update the webhook': '无法更新 Webhook',
@@ -68,7 +63,6 @@ export default defineMessages({
     'Pin group {name}': '固定分组 {name}',
     'Pin group': '固定分组',
     'Unpin group': '取消固定分组',
-    Runs: '运行',
     'Gather the workflows by group': '按分组汇总工作流',
     Show: '显示',
     'Choose the shared default, or remove views saved for this remote and workspace.':
@@ -96,8 +90,6 @@ export default defineMessages({
     'queued {time}': '待機 {time}',
     'in {time}': '{time}後',
     'Webhook of {name}': '{name} の Webhook',
-    'Are you sure you want to {action} the webhook for "{name}"?':
-      '「{name}」の Webhook を{action}しますか？',
     'Enable webhook': 'Webhook を有効にする',
     'Disable webhook': 'Webhook を無効にする',
     'Could not update the webhook': 'Webhook を更新できませんでした',
@@ -106,7 +98,6 @@ export default defineMessages({
     'Pin group {name}': 'グループ {name} をピン留め',
     'Pin group': 'グループをピン留め',
     'Unpin group': 'グループのピン留めを解除',
-    Runs: '実行',
     'Gather the workflows by group': 'ワークフローをグループごとにまとめる',
     Show: '表示',
     'Choose the shared default, or remove views saved for this remote and workspace.':

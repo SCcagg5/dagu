@@ -103,6 +103,7 @@ function renderTable(
   const onRenameDAG =
     options.onRenameDAG ?? vi.fn().mockResolvedValue(undefined);
   const onSetDAGPinned = vi.fn().mockResolvedValue(undefined);
+  const onSetDAGsPinned = vi.fn().mockResolvedValue(undefined);
   const result = render(
     <MemoryRouter initialEntries={['/dags']}>
       <LocationProbe />
@@ -148,6 +149,7 @@ function renderTable(
               activeWorkflowViewId={options.activeWorkflowViewId ?? null}
               isAllWorkflowsView={options.isAllWorkflowsView ?? true}
               isWorkflowViewEdited={false}
+              areWorkflowFiltersSaved={false}
               canManageWorkflowViews={true}
               canDeleteDAGs={options.canDeleteDAGs ?? true}
               canRenameDAGs={options.canRenameDAGs ?? true}
@@ -159,10 +161,12 @@ function renderTable(
               onSetDefaultWorkflowView={vi.fn()}
               onSetPinnedWorkflowView={vi.fn()}
               onDeleteWorkflowView={vi.fn()}
+              onRenameWorkflowView={vi.fn()}
               onDeleteDAGs={onDeleteDAGs}
               onRenameDAG={onRenameDAG}
               canPinDAG={options.canPinDAG ?? (() => true)}
               onSetDAGPinned={onSetDAGPinned}
+              onSetDAGsPinned={onSetDAGsPinned}
             />
           </PanelWidthContext.Provider>
         </AppBarContext.Provider>
@@ -176,6 +180,7 @@ function renderTable(
     onDeleteDAGs,
     onRenameDAG,
     onSetDAGPinned,
+    onSetDAGsPinned,
     onShowAllWorkflows,
   };
 }
@@ -239,7 +244,7 @@ describe('DAGTable', () => {
       'Filter by workflow name...'
     );
     expect(searchInput.className).toContain('h-9');
-    expect(searchInput.className).toContain('w-[200px]');
+    expect(searchInput.className).toContain('w-[180px]');
 
     const controlSurface = searchInput.closest(
       '[data-testid="workflow-controls"]'
@@ -249,8 +254,24 @@ describe('DAGTable', () => {
     const labelInput = screen.getByRole('combobox', {
       name: 'Filter by labels...',
     });
-    expect(labelInput.parentElement?.className).toContain('min-h-9');
-    expect(labelInput.parentElement?.className).toContain('bg-card');
+    // The label filter has the same height as the other controls of the row:
+    // its box grows from h-9 when chips wrap, inside the width bounds.
+    const labelBox = labelInput.parentElement;
+    expect(labelBox?.className).toContain('min-h-9');
+    expect(labelBox?.className).toContain('bg-card');
+    const labelWrapper = labelBox?.parentElement;
+    expect(labelWrapper?.className).toContain('h-9');
+    expect(labelWrapper?.className).toContain('min-w-[150px]');
+    expect(labelWrapper?.className).toContain('max-w-[180px]');
+
+    const activeOnly = screen
+      .getByRole('switch', { name: 'Active only' })
+      .closest('label');
+    expect(activeOnly?.className).toContain('h-9');
+    const group = screen
+      .getByRole('switch', { name: 'Gather the workflows by group' })
+      .closest('label');
+    expect(group?.className).toContain('h-9');
   });
 
   it('links grep to the global DAG search with the current workflow keyword', () => {
@@ -471,14 +492,18 @@ describe('DAGTable', () => {
     });
   });
 
-  it('deletes a workflow from the actions column after confirmation', async () => {
+  // The row has no delete button: its checkbox and the "Delete (N)" button do it.
+  it('deletes a workflow selected by its checkbox after confirmation', async () => {
     const { onDeleteDAGs } = renderTable();
+    const table = screen.getByRole('table');
 
+    expect(
+      within(table).queryByRole('button', { name: 'Delete workflow example' })
+    ).not.toBeInTheDocument();
     fireEvent.click(
-      within(screen.getByRole('table')).getByRole('button', {
-        name: 'Delete workflow example',
-      })
+      within(table).getByRole('checkbox', { name: 'Select workflow example' })
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete (1)' }));
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent('Delete workflow?');
@@ -491,6 +516,97 @@ describe('DAGTable', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+    expect(
+      screen.queryByRole('button', { name: /^Delete \(/ })
+    ).not.toBeInTheDocument();
+  });
+
+  // A group row holds its own checkbox, even when the group is folded.
+  it('selects all the workflows of a group from its checkbox', async () => {
+    const { onDeleteDAGs } = renderTable('', {
+      dags: [
+        workflow({ name: 'cleanup', group: 'nightly' }),
+        workflow({ name: 'reports', group: 'nightly' }),
+        workflow({ name: 'alpha' }),
+      ],
+    });
+    const table = screen.getByRole('table');
+
+    fireEvent.click(
+      within(table).getByRole('checkbox', { name: 'Select group nightly' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete (2)' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('cleanup.yaml');
+    expect(dialog).toHaveTextContent('reports.yaml');
+    expect(dialog).not.toHaveTextContent('alpha.yaml');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => {
+      expect(onDeleteDAGs).toHaveBeenCalledWith([
+        'cleanup.yaml',
+        'reports.yaml',
+      ]);
+    });
+  });
+
+  it('pins all the workflows of a group with one call', async () => {
+    const { onSetDAGPinned, onSetDAGsPinned } = renderTable('', {
+      dags: [
+        workflow({ name: 'cleanup', group: 'nightly' }),
+        workflow({ name: 'reports', group: 'nightly' }),
+        workflow({ name: 'alpha' }),
+      ],
+    });
+
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Pin group nightly',
+      })
+    );
+
+    await waitFor(() => {
+      expect(onSetDAGsPinned).toHaveBeenCalledTimes(1);
+    });
+    expect(onSetDAGsPinned).toHaveBeenCalledWith(
+      ['cleanup.yaml', 'reports.yaml'],
+      true
+    );
+    expect(onSetDAGPinned).not.toHaveBeenCalled();
+  });
+
+  // Gathered by group is the default; the switch lists the workflows flat.
+  it('lists the workflows flat by group then name when the Group switch is off', () => {
+    renderTable('', {
+      dags: [
+        workflow({ name: 'zeta', group: 'alpha' }),
+        workflow({ name: 'beta', group: 'beta' }),
+        workflow({ name: 'solo' }),
+        workflow({ name: 'mid', group: 'alpha' }),
+      ],
+    });
+    const table = screen.getByRole('table');
+    expect(within(table).queryByTestId('dag-group-prefix')).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Gather the workflows by group' })
+    );
+
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows.map((row) => row.querySelector('a')?.textContent)).toEqual([
+      'mid',
+      'zeta',
+      'beta',
+      'solo',
+    ]);
+    // The group shows before the name, in the same cell.
+    const prefixes = within(table).getAllByTestId('dag-group-prefix');
+    expect(prefixes.map((prefix) => prefix.textContent)).toEqual([
+      'alpha /',
+      'alpha /',
+      'beta /',
+    ]);
+    expect(prefixes[0]?.nextElementSibling).toHaveTextContent('mid');
   });
 
   it('invites creating the first workflow when none exist and no filters are set', () => {
@@ -731,6 +847,18 @@ describe('DAGTable', () => {
         activity: { runs, truncated },
       } as never;
     }
+    // A workflow that has a run: only then does its row hold the chevron.
+    function withLatestRun() {
+      return {
+        ...workflow({ name: 'alpha' }),
+        latestDAGRun: {
+          dagRunId: 'latest',
+          status: Status.Success,
+          statusLabel: 'Success',
+        },
+        activity: { runs: [], truncated: false },
+      } as never;
+    }
     function run(id: string, agoMs: number, status = Status.Success) {
       const start = Date.now() - agoMs;
       return {
@@ -741,8 +869,26 @@ describe('DAGTable', () => {
       };
     }
 
+    // jsdom has no layout: the observer of the strip tells it a width.
+    class MeasuringObserver {
+      callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+      observe(target: Element) {
+        if (target.getAttribute('data-testid') !== 'dag-activity') return;
+        this.callback(
+          [{ target, contentRect: { width: 300 } } as ResizeObserverEntry],
+          this as unknown as ResizeObserver
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+
     beforeEach(() => {
       recentRuns.dagRuns = [];
+      vi.stubGlobal('ResizeObserver', MeasuringObserver);
     });
 
     it('draws a bar for each run of the window and tells how many', () => {
@@ -764,6 +910,23 @@ describe('DAGTable', () => {
       expect(
         within(strip).getByTestId('dag-activity-ceiling')
       ).toBeInTheDocument();
+    });
+
+    // The strip draws its bars once it knows its width, not at a default width.
+    it('draws no bar until the strip has a width', () => {
+      class SilentObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+      vi.stubGlobal('ResizeObserver', SilentObserver);
+      renderTable('', { dags: [withActivity([run('r1', HOUR)])] });
+
+      const strip = within(screen.getByRole('table')).getByTestId(
+        'dag-activity'
+      );
+      expect(strip).toHaveAttribute('aria-label', '1 run in the last 24 hours');
+      expect(strip.querySelectorAll('[data-run-id]')).toHaveLength(0);
     });
 
     it('says when the window holds no run', () => {
@@ -800,6 +963,29 @@ describe('DAGTable', () => {
       );
     });
 
+    it('has no chevron for a workflow without run', () => {
+      renderTable('', { dags: [withActivity([])] });
+      const table = screen.getByRole('table');
+
+      expect(within(table).getByTestId('dag-activity')).toBeInTheDocument();
+      expect(within(table).queryByTestId('dag-activity-toggle')).toBeNull();
+    });
+
+    it('has a chevron for a workflow whose window holds a run', () => {
+      renderTable('', {
+        dags: [
+          {
+            ...workflow({ name: 'alpha' }),
+            activity: { runs: [run('r1', HOUR)], truncated: false },
+          } as never,
+        ],
+      });
+
+      expect(
+        within(screen.getByRole('table')).getByTestId('dag-activity-toggle')
+      ).toBeInTheDocument();
+    });
+
     it('unfolds the recent runs under the row from the chevron', () => {
       recentRuns.dagRuns = [
         run('older', 3 * HOUR, Status.Failed),
@@ -817,6 +1003,8 @@ describe('DAGTable', () => {
       const panel = within(table).getByTestId('dag-recent-runs');
       expect(within(panel).getByText('older')).toBeInTheDocument();
       expect(within(panel).getByText('newer')).toBeInTheDocument();
+      // The runs have no "Open the workflow" link: a line opens its run.
+      expect(within(panel).queryByText('Open the workflow')).toBeNull();
       // The chevron neither opens the workflow nor selects the row.
       expect(screen.getByTestId('location')).toHaveTextContent(/^\/dags$/);
 
@@ -845,13 +1033,17 @@ describe('DAGTable', () => {
         },
         run('plain', 5 * 60_000),
       ];
-      renderTable('', { dags: [withActivity([])] });
+      renderTable('', { dags: [withLatestRun()] });
       const table = screen.getByRole('table');
       fireEvent.click(within(table).getByTestId('dag-activity-toggle'));
 
       const panel = within(table).getByTestId('dag-recent-runs');
-      expect(within(panel).getByText('Healthy')).toBeInTheDocument();
-      expect(within(panel).queryByText('Running')).toBeNull();
+      // The status is a dot alone: its name is the accessible label.
+      expect(
+        within(panel).getByRole('img', { name: 'Healthy' })
+      ).toBeInTheDocument();
+      expect(within(panel).queryByRole('img', { name: 'Running' })).toBeNull();
+      expect(within(panel).queryByText('Healthy')).toBeNull();
       expect(within(panel).getByText('3h ago')).toBeInTheDocument();
       expect(within(panel).getByText('5m ago')).toBeInTheDocument();
     });
@@ -878,7 +1070,7 @@ describe('DAGTable', () => {
           params: 'DATE=2026-10-29',
         },
       ];
-      renderTable('', { dags: [withActivity([])] });
+      renderTable('', { dags: [withLatestRun()] });
       const table = screen.getByRole('table');
       fireEvent.click(within(table).getByTestId('dag-activity-toggle'));
 
@@ -913,7 +1105,7 @@ describe('DAGTable', () => {
           ],
         },
       ];
-      renderTable('', { dags: [withActivity([])] });
+      renderTable('', { dags: [withLatestRun()] });
       const table = screen.getByRole('table');
       fireEvent.click(within(table).getByTestId('dag-activity-toggle'));
 
