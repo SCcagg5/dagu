@@ -383,13 +383,15 @@ function DAGSpec({
   }, [discardDraft, draft, setCurrentValue]);
 
   // Hash of the newest server version, sent with a save so that the server
-  // refuses to overwrite a file that changed on disk in the meantime.
+  // refuses to overwrite a file that changed on disk in the meantime. A live
+  // event carries no hash: the last one stays until the fresh read, so that
+  // a save in between is refused rather than unconditional.
   const baseShaRef = React.useRef<string | undefined>(undefined);
   React.useEffect(() => {
-    if (data?.spec != null) {
+    if (data?.sha256 !== undefined) {
       baseShaRef.current = data.sha256;
     }
-  }, [data?.spec, data?.sha256]);
+  }, [data?.sha256]);
   // A cache update without a hash (a live event) needs a fresh read.
   React.useEffect(() => {
     if (data?.spec != null && data.sha256 === undefined) {
@@ -469,20 +471,32 @@ function DAGSpec({
   ]);
 
   // The visual editor needs the scope and the inferred edges also for a clean
-  // buffer, so the saved spec is validated once each time it changes.
+  // buffer, so the saved spec is validated once each time it changes. The
+  // definition that the server builds from it also changes with an inherited
+  // base configuration or another node; the last result shows until the new
+  // one comes.
+  const savedContext = React.useMemo(
+    () => JSON.stringify([remoteNode, data?.dag ?? null]),
+    [remoteNode, data?.dag]
+  );
   const [savedValidation, setSavedValidation] = React.useState<{
     spec: string;
+    context: string;
     result: VisualEditorValidation | null;
   } | null>(null);
 
   React.useEffect(() => {
-    if (serverSpec == null || savedValidation?.spec === serverSpec) {
+    if (
+      serverSpec == null ||
+      (savedValidation?.spec === serverSpec &&
+        savedValidation.context === savedContext)
+    ) {
       return;
     }
     let cancelled = false;
     const done = (result: VisualEditorValidation | null) => {
       if (!cancelled) {
-        setSavedValidation({ spec: serverSpec, result });
+        setSavedValidation({ spec: serverSpec, context: savedContext, result });
       }
     };
     void client
@@ -505,7 +519,15 @@ function DAGSpec({
     return () => {
       cancelled = true;
     };
-  }, [client, fileName, remoteNode, savedValidation?.spec, serverSpec]);
+  }, [
+    client,
+    fileName,
+    remoteNode,
+    savedContext,
+    savedValidation?.context,
+    savedValidation?.spec,
+    serverSpec,
+  ]);
 
   const savedResult =
     savedValidation?.spec === serverSpec ? savedValidation.result : null;
@@ -929,6 +951,17 @@ function DAGSpec({
     setSectionOpen(false);
     setDrawerForm(false);
   }, [setSectionOpen]);
+  // The view and the form of a step leave with the visual editor: another
+  // document shows the YAML of the whole file.
+  const switchDocument = React.useCallback(
+    (tab: string) => {
+      setDrawerForm(false);
+      setYamlKind('file');
+      setYamlStepPath(null);
+      handleActiveTabChange(tab);
+    },
+    [handleActiveTabChange, setDrawerForm, setYamlKind]
+  );
   // The node details view claims its own panel.
   useRightPanelClaim(ndv ? null : 'yaml', sectionOpen, closeSection);
 
@@ -1509,7 +1542,7 @@ function DAGSpec({
   const documentSelector = hasLocalDags ? (
     <DocumentSwitcher
       value={activeTab}
-      onChange={handleActiveTabChange}
+      onChange={switchDocument}
       documents={[
         {
           value: 'parent',
