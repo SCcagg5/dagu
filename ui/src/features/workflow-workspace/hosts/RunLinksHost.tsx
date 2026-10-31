@@ -45,6 +45,7 @@ export function RunLinksHost({ children }: { children: ReactNode }) {
         // Only a clear "not found" says that the run is gone.
         return response.status !== 404;
       },
+      scope: `${remoteNode}\u0000${dagName}`,
     }),
     [activate, client, dagName, remoteNode, runs, setUrl]
   );
