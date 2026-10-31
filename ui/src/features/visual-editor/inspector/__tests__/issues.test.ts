@@ -115,6 +115,14 @@ describe('stepIssues', () => {
     );
     expect(groups.byField.run?.map((i) => i.message)).toEqual(['a', 'b']);
   });
+
+  it('groups a field named as a property of an object', () => {
+    const groups = stepIssues(
+      [issue({ fieldPath: 'steps[1].constructor', message: 'a' })],
+      transform
+    );
+    expect(groups.byField['constructor']?.map((i) => i.message)).toEqual(['a']);
+  });
 });
 
 describe('issuesUnder', () => {
