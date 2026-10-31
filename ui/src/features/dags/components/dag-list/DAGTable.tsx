@@ -889,10 +889,16 @@ const defaultColumns = [
               meta?.onOpenRun?.(fileName, runId, event)
             }
           />
-          <ActivityToggle
-            expanded={meta?.isActivityExpanded?.(fileName) ?? false}
-            onToggle={() => meta?.onToggleActivity?.(fileName)}
-          />
+          {data.dag.latestDAGRun?.dagRunId ||
+          (data.dag.activity?.runs.length ?? 0) > 0 ? (
+            <ActivityToggle
+              expanded={meta?.isActivityExpanded?.(fileName) ?? false}
+              onToggle={() => meta?.onToggleActivity?.(fileName)}
+            />
+          ) : (
+            // A workflow with no run has nothing to unfold; the space stays.
+            <span aria-hidden="true" className="size-6 shrink-0" />
+          )}
         </div>
       );
     },

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import type { components } from '@/api/v1/schema';
 import RelativeTime from '@/components/ui/relative-time';
 import { StatusDot } from '@/components/ui/status-dot';
@@ -87,13 +86,6 @@ export function DAGRecentRuns({ fileName }: { fileName: string }) {
           </ul>
         </>
       )}
-      <Link
-        to={buildDAGPageURL({ fileName, remoteNode })}
-        className="inline-block pt-1 text-muted-foreground hover:text-foreground hover:underline"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <I18nText text={'Open the workflow'} />
-      </Link>
     </div>
   );
 }
@@ -195,7 +187,7 @@ function RunLine({
           onOpen(run.dagRunId, event);
         }}
         style={{ gridTemplateColumns: columns.template }}
-        className="grid w-full items-center gap-x-3 gap-y-0.5 rounded-sm px-1 py-1 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="grid w-full cursor-pointer items-center gap-x-3 gap-y-0.5 rounded-sm px-1 py-1 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="truncate font-mono text-muted-foreground">
           {run.dagRunId}

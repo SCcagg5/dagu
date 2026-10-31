@@ -1549,10 +1549,6 @@ function DAGRuns() {
                 </Button>
               )}
             </>
-          ) : dagRuns.length > 0 ? (
-            <div className="text-sm text-muted-foreground">
-              <I18nText text={'All runs are displayed.'} />
-            </div>
           ) : null}
         </div>
       </div>

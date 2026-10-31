@@ -1244,10 +1244,6 @@ function DAGsContent() {
                   </Button>
                 )}
               </>
-            ) : dagFiles.length > 0 ? (
-              <div className="text-sm text-muted-foreground">
-                <I18nText text={'All workflows are displayed.'} />
-              </div>
             ) : null}
           </div>
         </>
