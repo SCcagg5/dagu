@@ -639,6 +639,8 @@ describe('VisualCanvas', () => {
     let saved: [PropertyDescriptor | undefined, PropertyDescriptor | undefined];
 
     beforeEach(() => {
+      sizes.width = 1000;
+      sizes.height = 400;
       saved = [
         Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth'),
         Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight'),

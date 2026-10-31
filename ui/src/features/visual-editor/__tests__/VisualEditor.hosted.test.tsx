@@ -252,6 +252,7 @@ const handlerDetails = {
 
 afterEach(() => {
   yamlBar.remove();
+  localStorage.clear();
   api.queries = [];
   api.post = () => undefined;
   view.revealStep.mockClear();
