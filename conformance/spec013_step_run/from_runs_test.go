@@ -17,16 +17,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fromRunsDAG makes the output of build differ in every run. A run started
-// with FAIL=1 fails at build.
+// fromRunsDAG makes the output of build differ in every run: it is the run
+// ID. A run started with FAIL=1 fails at build. The ID of build differs from
+// its name, so that a request can name the step either way.
 const fromRunsDAG = `params:
   - FAIL=0
 steps:
   - name: build
-    id: build
+    id: img
     run: |
       if [ "$FAIL" = "1" ]; then exit 1; fi
-      T=$(date +%s%N)
+      T="$DAG_RUN_ID"
       echo "built $T"
       printf "image_tag=%s\n" "$T" >> "$DAGU_OUTPUT_FILE"
     outputs:
@@ -34,7 +35,7 @@ steps:
   - name: consume
     id: consume
     depends: [build]
-    run: 'echo "tag=${steps.build.outputs.image_tag}"'
+    run: 'echo "tag=${steps.img.outputs.image_tag}"'
 `
 
 // builtTag reads the value that build printed in a run.
@@ -113,10 +114,13 @@ func TestOutputsFromRunsSeedsTheStep(t *testing.T) {
 	// A step given by its ID names the same step.
 	byID := startRun(t, server, path, map[string]any{
 		"steps":           []string{"consume"},
-		"outputsFromRuns": map[string]string{"build": second},
+		"outputsFromRuns": map[string]string{"img": second},
 	})
 	waitForStatus(t, server, name, byID, api.StatusSuccess)
 	assert.Contains(t, stepLog(t, server, name, byID, "consume"), "tag="+secondTag)
+	byIDInputs := *runDetails(t, server, name, byID).ReusedInputs
+	require.Len(t, byIDInputs, 1)
+	assert.Equal(t, "build", byIDInputs[0].Step)
 
 	// A test run can be the source while it exists, and a run that reused a step
 	// of another run records that run.
@@ -170,7 +174,8 @@ func TestOutputsFromRunsRejects(t *testing.T) {
 	assert.Contains(t, reject(map[string]string{"build": failed}),
 		fmt.Sprintf("step build cannot be reused from run %s: the step did not succeed there", failed))
 	assert.Contains(t, reject(map[string]string{"missing": good}), "unknown step")
-	assert.Contains(t, reject(map[string]string{"build": "bad/id"}), "run")
+	assert.Contains(t, reject(map[string]string{"build": "bad/id"}),
+		"dag-run ID must only contain alphanumeric characters, dashes, and underscores")
 
 	// A step that is selected to run cannot be a key.
 	body := server.Client().Post(path, map[string]any{
