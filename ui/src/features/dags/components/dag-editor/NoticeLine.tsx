@@ -51,6 +51,7 @@ export function NoticeLine({ notices, className }: NoticeLineProps) {
   const { ts } = useI18n();
   const [open, setOpen] = React.useState(false);
   const anchorRef = React.useRef<HTMLButtonElement>(null);
+  const lineRef = React.useRef<HTMLDivElement>(null);
   const panelId = React.useId();
   // Ids that the line hid itself. An id leaves the set when its notice
   // leaves the list, so that a later notice with the same id shows again.
@@ -71,10 +72,17 @@ export function NoticeLine({ notices, className }: NoticeLineProps) {
   const [top, ...rest] = shown;
 
   React.useEffect(() => {
-    if (rest.length === 0) {
-      setOpen(false);
+    if (rest.length > 0) return;
+    // The popover and its trigger leave with the last notice in it; the
+    // focus stays in the line instead of falling to the page.
+    const line = lineRef.current;
+    if (open && line && document.activeElement === document.body) {
+      const target = line.querySelector<HTMLElement>('button') ?? line;
+      if (target === line) line.tabIndex = -1;
+      target.focus();
     }
-  }, [rest.length]);
+    setOpen(false);
+  }, [open, rest.length]);
 
   const close = React.useCallback(() => setOpen(false), []);
   const dismiss = (notice: NoticeLineItem) => {
@@ -92,6 +100,7 @@ export function NoticeLine({ notices, className }: NoticeLineProps) {
 
   return (
     <div
+      ref={lineRef}
       className={cn('flex flex-shrink-0 items-stretch gap-1', className)}
       data-testid="notice-line"
     >
