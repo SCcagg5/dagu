@@ -224,9 +224,12 @@ steps:
         .getByRole('button', { name: `Pin workflow ${dagName}` })
         .click();
       await expect.poll(isPinned, { timeout: 15_000 }).toBe(true);
+      // The Pin column has no "Pinned" header: the button shows the state.
       await expect(
-        page.getByText('Pinned', { exact: true }).first()
-      ).toBeVisible();
+        dagDefinitionsEntry(page, dagName).getByRole('button', {
+          name: `Pin workflow ${dagName}`,
+        })
+      ).toHaveAttribute('aria-pressed', 'true');
 
       await page.goto(`/dags/${encodeURIComponent(fileName)}`);
       const headerPin = page.getByRole('button', {

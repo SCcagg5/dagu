@@ -21,8 +21,9 @@ async function openNewestRunFromLane(page: Page, dagName: string) {
   await lane.press('Enter');
 }
 
-// A row of a run list opens the run on its workflow page: no side panel.
-for (const view of ['list', 'grouped', 'activity'] as const) {
+// A row of the Runs mode of the Workflows page, or a lane of the Activity
+// view, opens the run on its workflow page: no side panel.
+for (const view of ['list', 'activity'] as const) {
   test(`opens a run on its workflow page from the ${view} view`, async ({
     page,
     request,
@@ -60,17 +61,7 @@ steps:
       await openNewestRunFromLane(page, dagName);
     } else {
       await page.goto(`/dag-runs?name=${dagName}`);
-      if (view === 'grouped') {
-        await page.getByRole('button', { name: 'Grouped view' }).click();
-        await page.getByText(dagName, { exact: true }).click();
-        await page.getByText(runId, { exact: true }).click();
-      } else {
-        await page
-          .getByRole('row')
-          .filter({ hasText: dagName })
-          .first()
-          .click();
-      }
+      await page.getByRole('row').filter({ hasText: dagName }).first().click();
     }
 
     await expect
