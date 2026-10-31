@@ -140,6 +140,8 @@ export function RunSourcePicker({
           return (
             <DropdownMenuItem
               key={option.id}
+              // A plain menu item has no checked state for aria-checked.
+              role="menuitemradio"
               disabled={reason !== null}
               data-testid={`run-source-option-${option.id}`}
               data-selected={option.id === selectedId ? 'true' : undefined}
