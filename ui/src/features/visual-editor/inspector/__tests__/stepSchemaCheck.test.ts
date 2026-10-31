@@ -77,6 +77,28 @@ describe('checkStepSchema', () => {
       ).toBe(true);
     }
   );
+
+  // A run step takes the shell settings in `with`, as the DAG schema says.
+  it.skipIf(!realSchema)(
+    'checks the with block of a run step',
+    { timeout: 30000 },
+    () => {
+      expect(
+        checkStepSchema(realSchema!, {
+          name: 'a',
+          run: 'echo hi',
+          with: { shell: 'bash' },
+        })
+      ).toEqual([]);
+      const messages = checkStepSchema(realSchema!, {
+        name: 'a',
+        run: 'echo hi',
+        with: { shell_args: 42, colour: 'red' },
+      });
+      expect(messages.some((m) => m.startsWith('/with/shell_args'))).toBe(true);
+      expect(messages.some((m) => m.includes('colour'))).toBe(true);
+    }
+  );
 });
 
 describe('checkStepSchemaErrors', () => {

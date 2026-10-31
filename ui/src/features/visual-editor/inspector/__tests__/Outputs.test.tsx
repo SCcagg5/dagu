@@ -44,6 +44,16 @@ describe('Outputs', () => {
     );
   });
 
+  // Enter of an input method confirms its text, not the new output.
+  it('appends nothing on Enter while an input method composes', () => {
+    const { onEdit } = renderPart(Outputs, runStep);
+    const field = screen.getByLabelText('New output name');
+    fireEvent.change(field, { target: { value: 'report' } });
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(field).toHaveValue('report');
+  });
+
   it('gives a step with no id its name as id with the first output', () => {
     const { onEdit } = renderPart(Outputs, {
       ...runStep,
