@@ -182,6 +182,21 @@ describe('StepRunTabs with a run', () => {
     );
   });
 
+  // The log of a foreach step in the node view lists its items.
+  it('opens a foreach step on its log', () => {
+    h.followed = {
+      details: run('r2', [
+        node('merge', NodeStatus.Success, {
+          step: { executorConfig: { type: 'foreach' } },
+        }),
+      ]),
+      active: false,
+      error: null,
+    };
+    setup('r2');
+    expect(screen.getByTestId('body-log')).toBeInTheDocument();
+  });
+
   it('keeps the tab that the user chose', () => {
     h.followed = {
       details: run('r2', [node('merge')]),

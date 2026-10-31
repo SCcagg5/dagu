@@ -115,6 +115,10 @@ vi.mock('@/features/dags/components/agent/TaskChecklistTab', async () => ({
 vi.mock('../../../step/StepRunView', async () => ({
   StepRunView: (await import('./leafStubs')).leaf('stepRun'),
 }));
+vi.mock('../../../step/StepForeach', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../step/StepForeach')>()),
+  StepForeach: (await import('./leafStubs')).leaf('foreach'),
+}));
 
 let server: FakeServer;
 const location = { search: '' };
@@ -826,6 +830,29 @@ describe('dock tab bodies', () => {
       await renderBody('log', `/dags/${FILE_NAME}?step=work`);
       fireEvent.click(screen.getByRole('button', { name: 'View items' }));
       expect(location.search).toContain('ndv=expanded');
+    });
+
+    // The node view is where the items of a foreach step are: its Log tab
+    // lists them over the raw log, and a body step log opens in the panel.
+    it('lists the items of a foreach step in a step view', async () => {
+      setLatest(
+        run('run-1', [
+          node('work', NodeStatus.Success, {
+            step: { executorConfig: { type: 'foreach' } },
+          }),
+        ])
+      );
+      await renderBody('log', `/dags/${FILE_NAME}`, 'work');
+      expect(screen.getByTestId('leaf-foreach')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'View items' })).toBeNull();
+
+      act(() =>
+        (propsOf('foreach').onOpenLogs as (t: unknown) => void)({
+          step: 'work',
+          foreach: { item: '1', bodyStep: 'fetch' },
+        })
+      );
+      expect(location.search).toContain('body=fetch');
     });
 
     it('adds the foreach item and the sub run of the URL', async () => {

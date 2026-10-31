@@ -52,7 +52,12 @@ const perms = vi.hoisted(() => ({
 }));
 const dock = vi.hoisted(() => ({ openStep: vi.fn() }));
 const editor = vi.hoisted(() => ({
-  handle: null as null | { getBuffer(): string; isDirty(): boolean },
+  handle: null as null | {
+    getBuffer(): string;
+    isDirty(): boolean;
+    /** The definition that the server built from the buffer. */
+    getDag(): unknown;
+  },
 }));
 const editorRun = vi.hoisted(() => ({
   args: null as null | Record<string, unknown>,
@@ -496,7 +501,11 @@ describe('useStepRunActions dialogs', () => {
   // A step with no upstream step runs alone, on no earlier output.
   // parity:run-single-step
   it('runs one step from the editor buffer after a confirmation', async () => {
-    editor.handle = { getBuffer: () => 'steps: [draft]', isDirty: () => true };
+    editor.handle = {
+      getBuffer: () => 'steps: [draft]',
+      isDirty: () => true,
+      getDag: () => undefined,
+    };
     dagSteps = [{ name: 'build' }];
     const run = runValue(details());
     renderActions(run, vi.fn(), '/dags/example.yaml');
@@ -1047,6 +1056,7 @@ describe('useStepRunActions run with references', () => {
     editor.handle = {
       getBuffer: () => 'steps: [live]',
       isDirty: () => false,
+      getDag: () => undefined,
     };
     await open();
     expect(reuse.calls[reuse.calls.length - 1]).toEqual({
@@ -1249,7 +1259,11 @@ describe('useStepRunActions run with references', () => {
     ];
     const buffer =
       'steps:\n  - id: a\n    run: echo 1\n  - name: b\n    run: echo ${steps.a.outputs.v}\n';
-    editor.handle = { getBuffer: () => buffer, isDirty: () => true };
+    editor.handle = {
+      getBuffer: () => buffer,
+      isDirty: () => true,
+      getDag: () => undefined,
+    };
     await open('b');
     expect(reuse.calls[reuse.calls.length - 1]).toMatchObject({
       reads: ['a'],
@@ -1263,6 +1277,48 @@ describe('useStepRunActions run with references', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(editorRun.runSteps).toHaveBeenCalledTimes(1));
     expect(editorRun.runSteps).toHaveBeenCalledWith(['a', 'b'], undefined);
+  });
+
+  // The run executes the draft: a dependency that only the draft has makes
+  // a previous step, and Run starts it before the step.
+  it('takes the previous steps from the unsaved draft', async () => {
+    dagSteps = [{ name: 'a' }, { name: 'b', run: 'echo 2' }];
+    editor.handle = {
+      getBuffer: () => 'steps: [draft]',
+      isDirty: () => true,
+      getDag: () => ({
+        name: 'example',
+        steps: [{ name: 'a' }, { name: 'b', depends: ['a'], run: 'echo 2' }],
+      }),
+    };
+    await open('b');
+    expect(reuse.calls[reuse.calls.length - 1]).toMatchObject({
+      previous: ['a'],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(editorRun.runSteps).toHaveBeenCalledTimes(1));
+    expect(editorRun.runSteps).toHaveBeenCalledWith(['a', 'b'], undefined);
+  });
+
+  it('runs the upstream steps of the unsaved draft', () => {
+    dagSteps = [{ name: 'a' }, { name: 'b' }];
+    editor.handle = {
+      getBuffer: () => 'steps: [draft]',
+      isDirty: () => true,
+      getDag: () => ({
+        name: 'example',
+        steps: [{ name: 'a' }, { name: 'b', depends: ['a'] }],
+      }),
+    };
+    renderActions(runValue(details()), vi.fn(), '/dags/example.yaml');
+
+    act(() => actions.runUpstream('b'));
+
+    expect(
+      screen.getByText(
+        'Run the 1 upstream steps of b now? Their commands run for real.'
+      )
+    ).toBeVisible();
   });
 
   it('keeps the request of the followed run for the steps that ran', async () => {
@@ -1552,7 +1608,11 @@ describe('useStepRunActions with the cache and the draft', () => {
       .filter((button) => button.hasAttribute('data-confirm'))
       .map((button) => button.textContent);
   const dirtyEditor = () => {
-    editor.handle = { getBuffer: () => 'draft: text', isDirty: () => true };
+    editor.handle = {
+      getBuffer: () => 'draft: text',
+      isDirty: () => true,
+      getDag: () => undefined,
+    };
   };
   const started = () => {
     editorRun.real = true;
