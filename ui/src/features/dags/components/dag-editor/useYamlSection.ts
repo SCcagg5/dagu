@@ -57,16 +57,21 @@ export function useYamlSection(host?: YamlSectionHost): YamlSection {
     [hasHost, onStateChange]
   );
 
-  // A link that says otherwise than what shows is set right. A pane that is
-  // not active (hidden) never writes the state of the host: it follows the
-  // state that another view of the page wrote.
+  // A link that says otherwise than what shows is set right, except a host
+  // that turns 'expanded': a link that opens a step shows the step. A pane
+  // that is not active (hidden) never writes the state of the host: it
+  // follows the state that another view of the page wrote.
   const hostState = host?.state ?? null;
   const hostActive = host?.active ?? true;
+  const lastStateRef = useRef(hostState);
   useEffect(() => {
+    const opensStep =
+      hostState === 'expanded' && lastStateRef.current !== 'expanded';
+    lastStateRef.current = hostState;
     if (hostState === null || !onStateChange) return;
     const wanted = yamlKind === 'file' ? 'docked' : 'expanded';
     if (hostState === wanted) return;
-    if (hostActive) onStateChange(wanted);
+    if (hostActive && !opensStep) onStateChange(wanted);
     else setYamlKind(hostState === 'docked' ? 'file' : 'step');
   }, [hostState, onStateChange, hostActive, yamlKind]);
 

@@ -40,7 +40,8 @@ export function readEnv(value: unknown): EnvModel {
   if (!Array.isArray(value)) {
     return { form: 'other', entries: {} };
   }
-  const entries: Record<string, string> = {};
+  // No prototype: an entry named `__proto__` stays a key of its own.
+  const entries: Record<string, string> = Object.create(null);
   if (value.every((item) => isRecord(item) && Object.keys(item).length === 1)) {
     for (const item of value as Record<string, unknown>[]) {
       const [key, v] = Object.entries(item)[0]!;

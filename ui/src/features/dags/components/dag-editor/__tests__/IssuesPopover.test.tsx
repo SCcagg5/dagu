@@ -73,7 +73,6 @@ describe('IssuesPopover', () => {
     expect(
       screen.queryByRole('button', { name: /Issues/ })
     ).not.toBeInTheDocument();
-    expect(screen.queryByTestId('issues-slot')).toBeNull();
     expect(screen.queryByText(/Issues \(/)).toBeNull();
   });
 
@@ -85,8 +84,7 @@ describe('IssuesPopover', () => {
         valueReferences={[unknownStep]}
       />
     );
-    const button = screen.getByTestId('issues-slot');
-    expect(button).toHaveAccessibleName('Issues (3)');
+    const button = screen.getByRole('button', { name: 'Issues (3)' });
     expect(button).toHaveTextContent(/^3$/);
     expect(button.querySelector('svg')).not.toBeNull();
   });
@@ -316,6 +314,50 @@ describe('IssuesPopover with the issues of the client', () => {
     expect(screen.queryByRole('dialog', { name: 'Issues' })).toBeNull();
   });
 
+  // A row is a button only when a callback of the host can show it.
+  it('keeps a row text when no callback can show it', () => {
+    const fileIssue: ValidationIssue = {
+      severity: ValidationIssueSeverity.error,
+      source: ValidationIssueSource.build,
+      message: 'The file has a tab.',
+      line: 2,
+    };
+    const { unmount } = render(
+      <IssuesPopover
+        warnings={[]}
+        errors={[]}
+        issues={[fileIssue]}
+        lineOf={lineOf}
+        onRevealStep={vi.fn()}
+      />
+    );
+    let panel = openPopover();
+    expect(within(panel).getByText('The file has a tab.')).toBeVisible();
+    expect(
+      within(panel).queryByRole('button', { name: /has a tab/ })
+    ).toBeNull();
+    unmount();
+
+    // A value reference names its step only: onRevealIssue cannot show it.
+    render(
+      <IssuesPopover
+        warnings={[]}
+        errors={['an error']}
+        valueReferences={[unknownStep]}
+        issues={issues}
+        onRevealIssue={vi.fn()}
+      />
+    );
+    panel = openPopover();
+    const group = within(panel).getByRole('region', {
+      name: 'Value references (1)',
+    });
+    expect(within(group).getByText(/fetch does not exist/)).toBeVisible();
+    expect(
+      within(group).queryByRole('button', { name: /fetch does not exist/ })
+    ).toBeNull();
+  });
+
   it('reveals the step of its own issue when two steps share a message', () => {
     const onRevealStep = vi.fn();
     const shared = (stepName: string, stepPath: string): ValidationIssue => ({
@@ -353,7 +395,6 @@ describe('IssuesPopover with the issues of the client', () => {
     expect(slot).not.toHaveClass('w-7');
     expect(slot).toHaveTextContent(/^3$/);
     expect(slot.querySelector('svg')).not.toBeNull();
-    expect(screen.getByTestId('issues-slot-count')).toHaveTextContent('3');
     expect(slot.querySelector('[class*="bg-destructive"]')).toBeNull();
     fireEvent.click(slot);
     expect(screen.getByRole('dialog', { name: 'Issues' })).toBeVisible();
@@ -416,7 +457,7 @@ describe('IssuesPopover quick fixes', () => {
 
   it('shows a Quick fix button only on the rows that have a fix', () => {
     renderFixable([a, other]);
-    const buttons = screen.getAllByTestId('issue-quick-fix');
+    const buttons = screen.getAllByRole('button', { name: /^Quick fix:/ });
     expect(buttons).toHaveLength(1);
     expect(buttons[0]).toHaveAccessibleName('Quick fix: Add id: show_title');
     expect(buttons[0]).toHaveAttribute('title', 'Add id: show_title');
@@ -424,25 +465,25 @@ describe('IssuesPopover quick fixes', () => {
 
   it('applies the fix of its row alone', () => {
     const onQuickFix = renderFixable([a, other]);
-    fireEvent.click(screen.getByTestId('issue-quick-fix'));
+    fireEvent.click(screen.getByRole('button', { name: /^Quick fix:/ }));
     expect(onQuickFix).toHaveBeenCalledTimes(1);
     expect(onQuickFix).toHaveBeenCalledWith([fixes.get(a)]);
   });
 
   it('shows no button without a fix, and no Fix all', () => {
     renderFixable([other]);
-    expect(screen.queryByTestId('issue-quick-fix')).toBeNull();
-    expect(screen.queryByTestId('issues-fix-all')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Quick fix:/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Fix all/ })).toBeNull();
   });
 
   it('shows no Fix all for one fix', () => {
     renderFixable([a, other]);
-    expect(screen.queryByTestId('issues-fix-all')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Fix all/ })).toBeNull();
   });
 
   it('shows Fix all above the groups for two fixes, and applies them in one call', () => {
     const onQuickFix = renderFixable([a, b, other]);
-    const all = screen.getByTestId('issues-fix-all');
+    const all = screen.getByRole('button', { name: /^Fix all/ });
     expect(all).toHaveTextContent('Fix all (2)');
     const panel = screen.getByRole('dialog', { name: 'Issues' });
     // It is the first thing of the panel.
@@ -473,7 +514,9 @@ describe('IssuesPopover quick fixes', () => {
       />
     );
     openPopover();
-    expect(screen.getAllByTestId('issue-quick-fix')).toHaveLength(2);
-    expect(screen.queryByTestId('issues-fix-all')).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^Quick fix:/ })).toHaveLength(
+      2
+    );
+    expect(screen.queryByRole('button', { name: /^Fix all/ })).toBeNull();
   });
 });
