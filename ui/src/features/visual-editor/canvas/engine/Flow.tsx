@@ -96,6 +96,7 @@ export interface FlowProps<N extends FlowNode, E extends FlowEdge> {
   /** The user pans or zooms. Fits and other commands do not call it. */
   onUserMove?(): void;
   onConnect?(connection: Connection): void;
+  /** A drag from a handle was dropped. A cancelled drag calls nothing. */
   onConnectEnd?(end: ConnectionEndState): void;
   isValidConnection?(
     connection: Pick<Connection, 'source' | 'target'>
@@ -391,7 +392,8 @@ function FlowView<N extends FlowNode, E extends FlowEdge>({
         return;
       }
       setConnection(null);
-      if (!g.moved) {
+      // A cancelled drag is no drop: it neither links nor reports an end.
+      if (!g.moved || event.type === 'pointercancel') {
         return;
       }
       const {
