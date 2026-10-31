@@ -540,7 +540,7 @@ function DAGRunTable({
                           dagRunId: dagRun.dagRunId,
                         })
                       }
-                      className="h-5 w-5 pointer-events-none"
+                      className="size-3.5 pointer-events-none"
                     />
                   </div>
                 </TableCell>
