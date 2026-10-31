@@ -62,11 +62,17 @@ export const test = base.extend<WorkspaceFixtures>({
       await waitForDAGAvailable(request, token, fileName);
       return { dagName, fileName };
     });
+    const leftBehind: string[] = [];
     for (const fileName of created) {
-      await request.delete(
+      const response = await request.delete(
         `/api/v1/dags/${encodeURIComponent(fileName)}?remoteNode=local`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      // 404: the test renamed or deleted the workflow itself.
+      if (![204, 404].includes(response.status())) {
+        leftBehind.push(`${fileName}: HTTP ${response.status()}`);
+      }
     }
+    expect(leftBehind, 'fixture DAGs not deleted').toEqual([]);
   },
 });

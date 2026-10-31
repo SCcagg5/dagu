@@ -136,10 +136,11 @@ test.describe('visual editor', () => {
     );
     const files = createdFiles.splice(0);
     for (const fileName of files) {
-      await request.delete(
+      const response = await request.delete(
         `/api/v1/dags/${encodeURIComponent(fileName)}?remoteNode=local`,
         { headers: apiHeaders(token) }
       );
+      expect(response.status(), `delete ${fileName}`).toBe(204);
     }
   });
 
