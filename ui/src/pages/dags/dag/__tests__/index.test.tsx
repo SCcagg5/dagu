@@ -189,6 +189,28 @@ describe('DAGDetails page', () => {
     });
   });
 
+  // A run link names the workflow by its DAG name. A DAG whose name is not
+  // the name of its file has no workflow under that name, and the run page
+  // finds the run by the DAG name.
+  it('sends a run link of a DAG named apart from its file to the run page', async () => {
+    useQueryMock.mockImplementation(
+      () =>
+        ({
+          data: undefined,
+          error: { code: 'not_found', message: 'DAG is not found' },
+          mutate: vi.fn(),
+        }) as never
+    );
+
+    renderPage('/dags/etl?remoteNode=local&run=r1');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/dag-runs/etl/r1?remoteNode=local'
+      );
+    });
+  });
+
   // A schedule runs unattended, which is when an alert matters.
   describe('monitoring offer', () => {
     function mockScheduled(suspended: boolean) {
