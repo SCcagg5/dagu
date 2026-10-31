@@ -32,6 +32,12 @@ describe('splitWithValue', () => {
       other: [],
     });
   });
+
+  it('keeps a __proto__ field as a key of its own', () => {
+    const value = JSON.parse('{"__proto__": {"a": 1}}');
+    const { formData } = splitWithValue(value, ['__proto__'], ['__proto__']);
+    expect(Object.keys(formData)).toEqual(['__proto__']);
+  });
 });
 
 describe('formSchemaOf', () => {

@@ -36,6 +36,25 @@ describe('TextField', () => {
     expect(onCommit).toHaveBeenCalledWith('load');
   });
 
+  // Enter and Escape of an input method confirm or cancel its text.
+  it('keeps the draft while an input method composes', () => {
+    const { onCommit, input } = setup();
+    fireEvent.change(input, { target: { value: 'load' } });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: true });
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(input).toHaveValue('load');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onCommit).toHaveBeenCalledWith('load');
+  });
+
+  it('keeps the draft of a text area while an input method composes', () => {
+    const { input } = setup({ multiline: true });
+    fireEvent.change(input, { target: { value: 'load' } });
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: true });
+    expect(input).toHaveValue('load');
+  });
+
   it('sends nothing when the text did not change', () => {
     const { onCommit, input } = setup();
     fireEvent.blur(input);

@@ -65,6 +65,23 @@ describe('ActionPicker', () => {
     expect(onPick).toHaveBeenCalledWith(catalogSample[1]);
   });
 
+  // The keys of an input method confirm or cancel its text.
+  it('ignores the keys of an input method while it composes', () => {
+    const onPick = setup();
+    open();
+    const search = screen.getByRole('combobox');
+    fireEvent.keyDown(search, { key: 'ArrowDown', isComposing: true });
+    fireEvent.keyDown(search, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(search, { key: 'Escape', isComposing: true });
+    expect(onPick).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('option')[0]).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith(catalogSample[0]);
+  });
+
   it('closes with Escape without a pick', () => {
     const onPick = setup();
     open();
