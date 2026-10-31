@@ -85,9 +85,12 @@ test.describe('workspace runtime profile', () => {
     ).toBeVisible();
 
     const tabs = page.getByTestId('ww-workflow-tabs');
-    await expect(
-      tabs.getByRole('tab').evaluateAll((all) => all.map((t) => t.textContent))
-    ).resolves.toEqual(['Overview', 'Wiki', 'Incidents', 'Notifications']);
+    // A narrow strip shows the tabs as icons: their names stay.
+    const names = ['Overview', 'Wiki', 'Incidents', 'Notifications'];
+    await expect(tabs.getByRole('tab')).toHaveCount(names.length);
+    for (const [index, name] of names.entries()) {
+      await expect(tabs.getByRole('tab').nth(index)).toHaveAccessibleName(name);
+    }
 
     // The old Profile tab link opens the Overview.
     await gotoWorkspace(

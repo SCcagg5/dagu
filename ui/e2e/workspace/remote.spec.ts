@@ -145,12 +145,18 @@ steps:
       const seen: SeenRequest[] = [];
       // Requests that do not name the DAG can be global (auth, remote nodes),
       // so they do not fail the test; the report lists those without a node.
+      // The runtime profiles of the Overview tab name no DAG but belong to
+      // the node.
       const unscoped = new Set<string>();
       page.on('request', (req) => {
         const entry = toSeen(req);
         if (!entry) return;
-        if (entry.text.includes(dagName)) seen.push(entry);
-        else if (entry.remoteNode !== nodeName) unscoped.add(entry.path);
+        if (
+          entry.text.includes(dagName) ||
+          entry.path.startsWith('/api/v1/profiles')
+        ) {
+          seen.push(entry);
+        } else if (entry.remoteNode !== nodeName) unscoped.add(entry.path);
       });
       /** Waits for a matching request at or after index `from` of seen. */
       const expectRequest = async (
