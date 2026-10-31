@@ -133,13 +133,22 @@ func TestRemoveEndedEphemeralRuns(t *testing.T) {
 	writeTestRun(t, repo, dag, "recent", ir.Succeeded, now.Add(-time.Minute), true)
 	writeTestRun(t, repo, dag, "running", ir.Running, time.Time{}, true)
 	writeTestRun(t, repo, dag, "history", ir.Succeeded, now.Add(-24*time.Hour), false)
+	// The agent writes NotStarted before the plan starts; the run was queued
+	// long enough ago to look ended by its creation time.
+	starting, err := repo.CreateAttempt(ctx, dag, now, "starting", persis.DAGRunCreateAttemptOptions{Ephemeral: true})
+	require.NoError(t, err)
+	require.NoError(t, starting.Open(ctx))
+	require.NoError(t, starting.Write(ctx, ir.NewStatusBuilder(dag).Create("starting", ir.NotStarted, 0, time.Time{},
+		ir.WithAttemptID(starting.ID()), ir.WithEphemeral(true),
+		ir.WithCreatedAt(now.Add(-persis.EphemeralRunTTL-time.Minute).UnixMilli()))))
+	require.NoError(t, starting.Close(ctx))
 
 	removed, err := repo.RemoveEndedEphemeralRuns(ctx, persis.EphemeralRunTTL)
 	require.NoError(t, err)
 	require.Equal(t, 1, removed)
 	_, err = repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, "old"))
 	require.ErrorIs(t, err, dagrun.ErrDAGRunIDNotFound)
-	for _, id := range []string{"recent", "running", "history"} {
+	for _, id := range []string{"recent", "running", "starting", "history"} {
 		_, err = repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, id))
 		require.NoError(t, err, id)
 	}
@@ -149,10 +158,10 @@ func TestRemoveEndedEphemeralRuns(t *testing.T) {
 	removed, err = repo.RemoveEndedEphemeralRuns(ctx, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, removed)
-	_, err = repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, "running"))
-	require.NoError(t, err)
-	_, err = repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, "history"))
-	require.NoError(t, err)
+	for _, id := range []string{"running", "starting", "history"} {
+		_, err = repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, id))
+		require.NoError(t, err, id)
+	}
 }
 
 // The history of a DAG lists ephemeral runs only on request, merged with the
@@ -194,4 +203,44 @@ func TestRecentStatusesWithEphemeralRuns(t *testing.T) {
 	require.Equal(t, []string{"n2", "n1"}, ids(10, false))
 	require.Equal(t, []string{"e2", "n2", "e1", "n1"}, ids(10, true))
 	require.Equal(t, []string{"e2", "n2", "e1"}, ids(3, true))
+	// A limit that is not positive takes the default, as without ephemeral runs.
+	require.Equal(t, []string{"e2", "n2", "e1", "n1"}, ids(0, true))
+	require.Equal(t, []string{"e2", "n2", "e1", "n1"}, ids(-1, true))
+}
+
+// A run ID names one run across the history and the ephemeral store.
+func TestRunIDIsUniqueAcrossStores(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	dag, err := spec.LoadYAML(ctx, []byte("name: eph\nsteps:\n  - run: echo hi\n"))
+	require.NoError(t, err)
+	repo := newEphemeralTestRepository(t, nil)
+
+	writeTestRun(t, repo, dag, "eph-run", ir.Succeeded, time.Now(), true)
+	writeTestRun(t, repo, dag, "history-run", ir.Succeeded, time.Now(), false)
+
+	_, err = repo.CreateAttempt(ctx, dag, time.Now(), "eph-run", persis.DAGRunCreateAttemptOptions{})
+	require.ErrorIs(t, err, dagrun.ErrDAGRunAlreadyExists)
+	_, err = repo.CreateAttempt(ctx, dag, time.Now(), "history-run", persis.DAGRunCreateAttemptOptions{Ephemeral: true})
+	require.ErrorIs(t, err, dagrun.ErrDAGRunAlreadyExists)
+}
+
+// An ephemeral run whose attempts are all hidden is still found in the
+// ephemeral store, as a run with no status data.
+func TestFindAttemptReportsHiddenEphemeralRun(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	dag, err := spec.LoadYAML(ctx, []byte("name: eph\nsteps:\n  - run: echo hi\n"))
+	require.NoError(t, err)
+	repo := newEphemeralTestRepository(t, nil)
+
+	writeTestRun(t, repo, dag, "hidden", ir.Queued, time.Time{}, true)
+	attempt, err := repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, "hidden"))
+	require.NoError(t, err)
+	require.NoError(t, attempt.Hide(ctx))
+
+	_, err = repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, "hidden"))
+	require.ErrorIs(t, err, dagrun.ErrNoStatusData)
 }
