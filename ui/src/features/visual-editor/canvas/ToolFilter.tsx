@@ -47,6 +47,9 @@ export function ToolFilter({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           event.stopPropagation();
+          if (event.nativeEvent.isComposing) {
+            return;
+          }
           if (event.key === 'Escape' && active) {
             onChange('');
           }
