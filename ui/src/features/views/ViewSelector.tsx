@@ -368,25 +368,6 @@ export function ViewSelector({
         </DropdownMenu>
         {onRenameView && canManageViews && (
           <div className="flex items-center gap-1">
-            {activeView && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9"
-                  title={ts('Rename view')}
-                  aria-label={ts('Rename view')}
-                  disabled={isMutating}
-                  onClick={() => {
-                    setRenameName(activeView.name);
-                    setRenameOpen(true);
-                  }}
-                >
-                  <PencilLine />
-                </Button>
-              </>
-            )}
             <Button
               type="button"
               variant="primary"
@@ -426,6 +407,28 @@ export function ViewSelector({
             >
               <Trash2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
             </Button>
+            {activeView && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="h-7 w-7 justify-center p-0"
+                  title={ts('Rename view')}
+                  aria-label={ts('Rename view')}
+                  disabled={isMutating}
+                  onClick={() => {
+                    setRenameName(activeView.name);
+                    setRenameOpen(true);
+                  }}
+                >
+                  <PencilLine
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 shrink-0"
+                  />
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
