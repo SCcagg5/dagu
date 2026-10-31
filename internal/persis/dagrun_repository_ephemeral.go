@@ -115,7 +115,12 @@ func (r *DAGRunRepository) RemoveEndedEphemeralRuns(ctx context.Context, ttl tim
 		if endedAt(status).After(cutoff) {
 			continue
 		}
-		err := r.RemoveDAGRun(ctx, status.DAGRun(), DAGRunRemoveOptions{RejectActive: true})
+		// A retry may have started since the listing; the store checks the
+		// attempt again under its lock.
+		err := r.RemoveDAGRun(ctx, status.DAGRun(), DAGRunRemoveOptions{
+			RejectActive:      true,
+			ExpectedAttemptID: status.AttemptID,
+		})
 		switch {
 		case err == nil:
 			removed++

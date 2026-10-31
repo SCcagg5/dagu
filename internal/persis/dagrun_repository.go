@@ -354,8 +354,9 @@ func (r *DAGRunRepository) RemoveDAGRun(ctx context.Context, ref ir.DAGRunRef, o
 	}
 	store, _ := r.storeHolding(ctx, ref)
 	err := store.RemoveDAGRun(ctx, DAGRunRemoveRequest{
-		DAGRun:       ref,
-		RejectActive: options.RejectActive,
+		DAGRun:            ref,
+		RejectActive:      options.RejectActive,
+		ExpectedAttemptID: options.ExpectedAttemptID,
 	})
 	if err != nil && !errors.Is(err, dagrun.ErrDAGRunIDNotFound) {
 		return err

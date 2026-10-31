@@ -13,6 +13,7 @@ import (
 	"github.com/dagucloud/dagu/v2/internal/dagrun"
 	"github.com/dagucloud/dagu/v2/internal/ir"
 	"github.com/dagucloud/dagu/v2/internal/persis"
+	filedagrun "github.com/dagucloud/dagu/v2/internal/persis/file/dagrun"
 	"github.com/dagucloud/dagu/v2/internal/spec"
 	"github.com/dagucloud/dagu/v2/internal/testutil"
 	"github.com/stretchr/testify/require"
@@ -196,6 +197,68 @@ func TestRemoveEndedEphemeralRuns(t *testing.T) {
 	for _, id := range []string{"running", "starting", "history"} {
 		_, err = repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, id))
 		require.NoError(t, err, id)
+	}
+}
+
+// listHookStore runs afterList once, after its first status query returns.
+type listHookStore struct {
+	persis.DAGRunStore
+	afterList func()
+}
+
+func (s *listHookStore) QueryStatuses(ctx context.Context, query persis.DAGRunStatusQuery) (persis.DAGRunStatusPage, error) {
+	page, err := s.DAGRunStore.QueryStatuses(ctx, query)
+	if hook := s.afterList; hook != nil {
+		s.afterList = nil
+		hook()
+	}
+	return page, err
+}
+
+// The cleanup keeps a run whose retry starts between the listing and the
+// removal. The retry attempt has no status yet, as before the runner opens
+// it, or a NotStarted one, as a dispatched attempt has.
+func TestRemoveEndedEphemeralRunsKeepsStartingRetry(t *testing.T) {
+	t.Parallel()
+
+	for name, start := range map[string]func(t *testing.T, dag *ir.DAG, retry dagrun.Attempt){
+		"no status": func(*testing.T, *ir.DAG, dagrun.Attempt) {},
+		"not started": func(t *testing.T, dag *ir.DAG, retry dagrun.Attempt) {
+			ctx := context.Background()
+			require.NoError(t, retry.Open(ctx))
+			require.NoError(t, retry.Write(ctx, ir.NewStatusBuilder(dag).Create("old", ir.NotStarted, 0, time.Time{},
+				ir.WithAttemptID(retry.ID()), ir.WithEphemeral(true))))
+			require.NoError(t, retry.Close(ctx))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			dag, err := spec.LoadYAML(ctx, []byte("name: eph\nsteps:\n  - run: echo hi\n"))
+			require.NoError(t, err)
+			now := time.Now()
+			root := t.TempDir()
+			base := filepath.Join(root, "dag-runs")
+			ephemeral := &listHookStore{DAGRunStore: filedagrun.NewStore(filepath.Join(root, "dag-runs-ephemeral"))}
+			repo := persis.NewDAGRunRepository(
+				filedagrun.NewStore(base),
+				filedagrun.NewWorkDirStore(filepath.Join(base, ".dag-run-work"), base),
+				persis.DAGRunRepositoryOptions{Now: func() time.Time { return now }, EphemeralStore: ephemeral},
+			)
+			writeTestRun(t, repo, dag, "old", ir.Failed, now.Add(-persis.EphemeralRunTTL-time.Minute), true)
+
+			ephemeral.afterList = func() {
+				retry, err := repo.CreateAttempt(ctx, dag, time.Now(), "old", persis.DAGRunCreateAttemptOptions{Retry: true})
+				require.NoError(t, err)
+				start(t, dag, retry)
+			}
+			removed, err := repo.RemoveEndedEphemeralRuns(ctx, persis.EphemeralRunTTL)
+			require.NoError(t, err)
+			require.Zero(t, removed)
+			_, err = repo.FindAttempt(ctx, ir.NewDAGRunRef(dag.Name, "old"))
+			require.NoError(t, err)
+		})
 	}
 }
 
