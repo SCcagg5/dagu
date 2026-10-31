@@ -173,14 +173,15 @@ function render(
 
 beforeEach(() => {
   h.get.mockReset();
-  // A request for a run answers with the run, or 404 when the server dropped it.
+  // A request for a run answers with its details, as the server does, or 404
+  // when the server dropped it.
   h.details = { r0: runOf('r0') };
   h.get.mockImplementation(
     async (path: string, init: { params: { path: { dagRunId: string } } }) => {
       if (path === '/dag-runs/{name}/{dagRunId}') {
         const found = h.details[init.params.path.dagRunId];
         return found
-          ? { data: found, response: { status: 200 } }
+          ? { data: { dagRunDetails: found }, response: { status: 200 } }
           : { data: undefined, response: { status: 404 } };
       }
       return {
@@ -205,10 +206,15 @@ beforeEach(() => {
 const SCOPE = { remoteNode: 'edge', fileName: 'example.yaml' };
 
 /** An entry of the cache, fresh for the step in the given text. */
-function cacheStep(step: string, text: string, values = { x: '1' }) {
+function cacheStep(
+  step: string,
+  text: string,
+  values = { x: '1' },
+  runId = 'r0'
+) {
   outputCache.put(SCOPE, step, {
     values,
-    runId: 'r0',
+    runId,
     capturedAt: 5000,
     stepHash: stepHashes(text).get(step) ?? '',
   });
@@ -447,6 +453,34 @@ describe('useReuseSource', () => {
       });
     });
 
+    // An answer must not drop the requests still in flight: each run is asked
+    // once, whatever the order of the answers.
+    it('asks for each run once when the answers arrive at different times', async () => {
+      h.history = [];
+      h.details = { r0: runOf('r0'), r1: runOf('r1') };
+      const answer = h.get.getMockImplementation()!;
+      h.get.mockImplementation(
+        async (
+          path: string,
+          init: { params: { path: { dagRunId: string } } }
+        ) => {
+          if (init.params.path.dagRunId === 'r1') {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+          return answer(path, init);
+        }
+      );
+      cacheStep('a', SPEC);
+      cacheStep('b', SPEC, { x: '1' }, 'r1');
+      const view = render({ liveText: SPEC });
+      await waitFor(() => expect(view.result.current.loading).toBe(false));
+      const asked = h.get.mock.calls
+        .filter((call) => call[0] === '/dag-runs/{name}/{dagRunId}')
+        .map((call) => call[1].params.path.dagRunId);
+      expect(asked).toEqual(['r0', 'r1']);
+      expect(view.result.current.cached).toEqual(['a', 'b']);
+    });
+
     it('does not ask for a run that the history lists', async () => {
       h.history = [runOf('r0')];
       h.details = {};
@@ -564,6 +598,17 @@ describe('the choice of the run', () => {
     await waitFor(() =>
       expect(view.result.current.source?.dagRunId).toBe('new')
     );
+  });
+
+  // A stored choice of the cache gives way once no fresh entry backs it, as
+  // a chosen run that is gone does.
+  it('falls back to the automatic choice when the chosen cache has no fresh entry', async () => {
+    sourceChoiceStore.set(SCOPE, { kind: 'cache' });
+    cacheStep('a', SPEC.replace('echo a', 'echo other'));
+    const view = render({ liveText: SPEC });
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    expect(view.result.current.source?.dagRunId).toBe('new');
+    expect(view.result.current.selectedOptionId).toBe('run:new');
   });
 
   it('can choose a test run that still exists, but never picks one by itself', async () => {
