@@ -15,7 +15,10 @@ steps:
   - id: middle
     name: middle
     depends: [slow]
-    run: echo "middle ${steps.slow.outputs.data}"
+    run: |
+      cat <<'EOF'
+      middle ${steps.slow.outputs.data}
+      EOF
     output:
       text:
         from: stdout
@@ -24,4 +27,7 @@ steps:
   - id: use
     name: use
     depends: [middle]
-    run: echo "use ${steps.middle.outputs.text}"
+    run: |
+      cat <<'EOF'
+      use ${steps.middle.outputs.text}
+      EOF

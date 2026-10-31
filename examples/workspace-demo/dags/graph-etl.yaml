@@ -25,7 +25,10 @@ steps:
   - id: merge
     name: merge
     depends: [extract_orders, extract_users]
-    run: echo "orders=${steps.extract_orders.outputs.orders} users=${steps.extract_users.outputs.users}"
+    run: |
+      cat <<'EOF'
+      orders=${steps.extract_orders.outputs.orders} users=${steps.extract_users.outputs.users}
+      EOF
     output:
       merged:
         from: stdout
@@ -34,4 +37,7 @@ steps:
   - id: load
     name: load
     depends: [merge]
-    run: echo "loaded ${steps.merge.outputs.merged}"
+    run: |
+      cat <<'EOF'
+      loaded ${steps.merge.outputs.merged}
+      EOF
