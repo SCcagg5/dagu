@@ -1865,9 +1865,9 @@ function DAGTable({
             </Button>
           )}
 
-          {/* Pagination: after the buttons of the views */}
+          {/* Pagination */}
           {pagination && (
-            <div className="order-2 flex-shrink-0">
+            <div className="flex-shrink-0">
               <DAGPagination
                 totalPages={pagination.totalPages}
                 page={pagination.page}

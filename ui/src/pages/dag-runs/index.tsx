@@ -5,7 +5,7 @@ import { Search } from 'lucide-react';
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import dayjs from '@/lib/dayjs';
-import { Status, ViewSpecType } from '../../api/v1/schema';
+import { Status } from '../../api/v1/schema';
 import { AutocompleteInput } from '@/components/ui/autocomplete-input';
 import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -18,7 +18,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { LabelCombobox } from '@/components/ui/label-combobox';
-import { ToggleButton, ToggleGroup } from '@/components/ui/toggle-group';
 import { AppBarContext } from '../../contexts/AppBarContext';
 import { useCanWriteForWorkspace } from '../../contexts/AuthContext';
 import { useConfig } from '../../contexts/ConfigContext';
@@ -39,7 +38,8 @@ import {
   viewMatchesScope,
   viewScopeForSelection,
 } from '../../features/views/viewScope';
-import { useViews, type View } from '../../hooks/useViews';
+import { type View } from '../../hooks/useViews';
+import { useSharedViews } from '../../hooks/useSharedViews';
 import { useQuery } from '../../hooks/api';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { legacyRunPageRedirectURL } from '../../features/dag-runs/lib/dagRunUrls';
@@ -195,7 +195,7 @@ function DAGRuns() {
     createView,
     updateView,
     deleteView,
-  } = useViews(ViewSpecType.run);
+  } = useSharedViews('run');
   const scopedRunViews = React.useMemo(
     () => sharedRunViews.filter((view) => viewMatchesScope(view, runViewScope)),
     [sharedRunViews, runViewScope]
@@ -1374,83 +1374,54 @@ function DAGRuns() {
                 className="h-9 min-w-[170px] max-w-[220px]"
               />
             </I18nProps>
-            <Button onClick={() => handleSearch()} className="px-4 font-medium">
-              <Search className="mr-1.5 h-4 w-4" />
-              <I18nText text={'Search'} />
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <I18nProps>
-              <ToggleGroup aria-label="Date range mode" className="h-9 p-0.5">
-                <I18nProps>
-                  <ToggleButton
-                    value="preset"
-                    groupValue={dateRangeMode}
-                    onClick={() => handleDateRangeModeChange('preset')}
-                    position="first"
-                    aria-label="Quick select"
-                    className="h-8 px-3"
-                  >
-                    <I18nText text={'Quick'} />
-                  </ToggleButton>
-                </I18nProps>
-                <I18nProps>
-                  <ToggleButton
-                    value="specific"
-                    groupValue={dateRangeMode}
-                    onClick={() => handleDateRangeModeChange('specific')}
-                    position="middle"
-                    aria-label="Specific date/month/year"
-                    className="h-8 px-3"
-                  >
-                    <I18nText text={'Specific'} />
-                  </ToggleButton>
-                </I18nProps>
-                <I18nProps>
-                  <ToggleButton
-                    value="custom"
-                    groupValue={dateRangeMode}
-                    onClick={() => handleDateRangeModeChange('custom')}
-                    position="last"
-                    aria-label="Custom range"
-                    className="h-8 px-3"
-                  >
-                    <I18nText text={'Custom'} />
-                  </ToggleButton>
-                </I18nProps>
-              </ToggleGroup>
-            </I18nProps>
-            {dateRangeMode === 'preset' ? (
-              <Select value={datePreset} onValueChange={handleDatePresetChange}>
-                <I18nProps>
-                  <SelectTrigger aria-label="Date preset" className="w-[180px]">
-                    <I18nProps>
-                      <SelectValue placeholder="Select period" />
-                    </I18nProps>
-                  </SelectTrigger>
-                </I18nProps>
-                <SelectContent>
-                  <SelectItem value="today">
-                    <I18nText text={'Today'} />
-                  </SelectItem>
-                  <SelectItem value="yesterday">
-                    <I18nText text={'Yesterday'} />
-                  </SelectItem>
-                  <SelectItem value="last7days">
-                    <I18nText text={'Last 7 days'} />
-                  </SelectItem>
-                  <SelectItem value="last30days">
-                    <I18nText text={'Last 30 days'} />
-                  </SelectItem>
-                  <SelectItem value="thisWeek">
-                    <I18nText text={'This week'} />
-                  </SelectItem>
-                  <SelectItem value="thisMonth">
-                    <I18nText text={'This month'} />
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            ) : dateRangeMode === 'specific' ? (
+            <Select
+              value={dateRangeMode === 'preset' ? datePreset : dateRangeMode}
+              onValueChange={(value) => {
+                if (value === 'specific' || value === 'custom') {
+                  handleDateRangeModeChange(value);
+                  return;
+                }
+                if (dateRangeMode !== 'preset') {
+                  handleDateRangeModeChange('preset');
+                }
+                handleDatePresetChange(value);
+              }}
+            >
+              <I18nProps>
+                <SelectTrigger aria-label="Period" className="w-[160px]">
+                  <I18nProps>
+                    <SelectValue placeholder="Select period" />
+                  </I18nProps>
+                </SelectTrigger>
+              </I18nProps>
+              <SelectContent>
+                <SelectItem value="today">
+                  <I18nText text={'Today'} />
+                </SelectItem>
+                <SelectItem value="yesterday">
+                  <I18nText text={'Yesterday'} />
+                </SelectItem>
+                <SelectItem value="last7days">
+                  <I18nText text={'Last 7 days'} />
+                </SelectItem>
+                <SelectItem value="last30days">
+                  <I18nText text={'Last 30 days'} />
+                </SelectItem>
+                <SelectItem value="thisWeek">
+                  <I18nText text={'This week'} />
+                </SelectItem>
+                <SelectItem value="thisMonth">
+                  <I18nText text={'This month'} />
+                </SelectItem>
+                <SelectItem value="specific">
+                  <I18nText text={'Specific date…'} />
+                </SelectItem>
+                <SelectItem value="custom">
+                  <I18nText text={'Custom range…'} />
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {dateRangeMode === 'specific' ? (
               <>
                 <Select
                   value={specificPeriod}
@@ -1508,7 +1479,7 @@ function DAGRuns() {
                   className="h-9 w-[160px]"
                 />
               </>
-            ) : (
+            ) : dateRangeMode === 'custom' ? (
               <DateRangePicker
                 fromDate={fromDate}
                 toDate={toDate}
@@ -1519,7 +1490,11 @@ function DAGRuns() {
                 toLabel={`To ${tzLabel}`}
                 className="w-full md:w-auto"
               />
-            )}
+            ) : null}
+            <Button onClick={() => handleSearch()} className="px-4 font-medium">
+              <Search className="mr-1.5 h-4 w-4" />
+              <I18nText text={'Search'} />
+            </Button>
             <DAGRunBatchActions
               inline
               selectedRuns={selectedRuns}

@@ -29,6 +29,7 @@ const DAGListHeader: React.FC<DAGListHeaderProps> = ({
         <Title>
           <I18nText text={'Workflows'} />
         </Title>
+        <WorkflowsModeToggle mode={mode} />
         {resultCount !== undefined && (
           <span
             data-testid="workflow-count"
@@ -48,7 +49,6 @@ const DAGListHeader: React.FC<DAGListHeaderProps> = ({
             )}
           </span>
         )}
-        <WorkflowsModeToggle mode={mode} />
       </div>
       <div className="flex gap-2">
         <CreateDAGButton />
