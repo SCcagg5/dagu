@@ -150,7 +150,7 @@ func (a *appender) write(b []byte) error {
 		if err := os.MkdirAll(filepath.Dir(a.path), 0o750); err != nil {
 			return err
 		}
-		f, err := os.OpenFile(a.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec
+		f, err := os.OpenFile(a.path, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec
 		if err != nil {
 			return err
 		}
