@@ -93,7 +93,14 @@ func Backfill(ctx context.Context, dir string, o BackfillOptions) (err error) {
 			return err
 		}
 	}
-	return b.ev.write(Event{Time: o.End.UTC(), Kind: EventStopped})
+	if err := b.finish(); err != nil {
+		return err
+	}
+	stopped := Event{Time: o.End.UTC(), Kind: EventStopped}
+	if trk.inOutage {
+		stopped.FailedCount = trk.failed
+	}
+	return b.ev.write(stopped)
 }
 
 type backfiller struct {
@@ -139,6 +146,24 @@ func (b *backfiller) endMinute(minute int64) error {
 	}
 	b.day.reset(0)
 	return nil
+}
+
+// finish writes the hour and the day that are open at the end, as a Recorder
+// does when it closes.
+func (b *backfiller) finish() error {
+	if b.hour.N > 0 {
+		if err := b.put(TierHour, &b.hour); err != nil {
+			return err
+		}
+		if b.day.N == 0 {
+			b.day.reset(floorTo(b.hour.T, 86400))
+		}
+		b.day.merge(&b.hour)
+	}
+	if b.day.N == 0 {
+		return nil
+	}
+	return b.put(TierDay, &b.day)
 }
 
 // put writes an aggregate, unless the retention removes its file.
