@@ -139,4 +139,17 @@ describe('continuousRunCount', () => {
       })
     ).toBeNull();
   });
+
+  // The running step is the one that makes the run healthy.
+  it('is the count of the running step when another one stopped', () => {
+    expect(
+      continuousRunCount({
+        status: Status.Running,
+        nodes: [
+          node(NodeStatus.Aborted, forever, 2),
+          node(NodeStatus.Running, forever, 7),
+        ],
+      })
+    ).toBe(7);
+  });
 });

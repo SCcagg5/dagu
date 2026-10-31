@@ -104,10 +104,13 @@ export function summaryDisplayStatus(
 
 /**
  * The repeat count of the continuous step of a healthy run, for the place of
- * the progress "0/1". null when the step has not finished a run yet.
+ * the progress "0/1": the running one when another has stopped. null when
+ * the step has not finished a run yet.
  */
 export function continuousRunCount(run: RunLike): number | null {
-  const node = (run.nodes ?? []).find((n) => isContinuousStep(n.step));
+  const continuous = (run.nodes ?? []).filter((n) => isContinuousStep(n.step));
+  const node =
+    continuous.find((n) => n.status === NodeStatus.Running) ?? continuous[0];
   const count = node?.doneCount ?? 0;
   return count > 0 ? count : null;
 }
