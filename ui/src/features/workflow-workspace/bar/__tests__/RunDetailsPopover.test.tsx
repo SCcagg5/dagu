@@ -292,6 +292,30 @@ describe('RunDetailsPopover', () => {
       expect(screen.getByText('second value')).toBeInTheDocument();
     });
 
+    // A source run that the history does not hold: the record of the reused
+    // inputs gives the case of its ID, not the lower-case label.
+    it('takes the case of the source run ID from the reused inputs', async () => {
+      renderButton(
+        details({
+          ...reused,
+          reusedInputs: reused.reusedInputs.map((input) => ({
+            ...input,
+            runId: 'AbC1',
+          })),
+          labels: ['dagu.outputs-from=abc1'],
+        }),
+        {},
+        withLinks([])
+      );
+      const dialog = await open();
+      const from = within(dialog).getByTestId('ww-run-inputs-from');
+      expect(from).toHaveTextContent('Inputs from run AbC1');
+      await userEvent.click(
+        within(from).getByRole('button', { name: 'Show run' })
+      );
+      expect(h.select).toHaveBeenCalledWith('AbC1');
+    });
+
     it('shows nothing of the reused block for a run that reused no step', async () => {
       renderButton(details());
       const dialog = await open();

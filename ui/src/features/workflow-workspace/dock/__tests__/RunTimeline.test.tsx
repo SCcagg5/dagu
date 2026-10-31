@@ -1183,17 +1183,7 @@ describe('RunTimelineView width', () => {
   type Callback = (entries: { contentRect: { width: number } }[]) => void;
   let callbacks: Callback[] = [];
 
-  function fakeResizeObserver(width: number) {
-    callbacks = [];
-    class FakeObserver {
-      constructor(callback: Callback) {
-        callbacks.push(callback);
-      }
-      observe() {}
-      disconnect() {}
-      unobserve() {}
-    }
-    vi.stubGlobal('ResizeObserver', FakeObserver);
+  function measure(width: number) {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       width,
       height: 90,
@@ -1206,8 +1196,24 @@ describe('RunTimelineView width', () => {
       toJSON: () => ({}),
     });
   }
+
+  function fakeResizeObserver(width: number) {
+    callbacks = [];
+    class FakeObserver {
+      constructor(callback: Callback) {
+        callbacks.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeObserver);
+    measure(width);
+  }
+  // The track reads its border box on each resize.
   const resize = (width: number) =>
     act(() => {
+      measure(width);
       for (const callback of callbacks) {
         callback([{ contentRect: { width } }]);
       }
