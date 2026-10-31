@@ -10,8 +10,7 @@ import { WorkspaceLoading } from '../WorkspaceLoading';
 describe('WorkspaceLoading', () => {
   it('shows the name in a bar of the height of the real bar, and the loader below', () => {
     render(<WorkspaceLoading fileName="graph-etl" />);
-    const frame = screen.getByTestId('ww-loading');
-    expect(frame).toHaveAttribute('role', 'status');
+    const frame = screen.getByRole('status', { name: 'Loading...' });
     const name = screen.getByRole('heading', { name: 'graph-etl' });
     expect(name).toHaveClass('text-base', 'font-semibold');
     expect(name.parentElement).toHaveClass('h-10', 'border-b', 'px-3');
@@ -22,7 +21,8 @@ describe('WorkspaceLoading', () => {
 
   it('fills its area, with no padding of its own', () => {
     render(<WorkspaceLoading fileName="etl" />);
-    expect(screen.getByTestId('ww-loading')).toHaveClass('h-full', 'w-full');
-    expect(screen.getByTestId('ww-loading')).not.toHaveClass('p-4');
+    const frame = screen.getByRole('status', { name: 'Loading...' });
+    expect(frame).toHaveClass('h-full', 'w-full');
+    expect(frame).not.toHaveClass('p-4');
   });
 });
