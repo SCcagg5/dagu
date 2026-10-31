@@ -34,6 +34,7 @@ import HarnessStepSummary from '@/features/dags/components/dag-details/HarnessSt
 import { LogStepMessage } from '@/features/dags/components/dag-details/LogStepMessage';
 import { isSubDAGRun } from '@/features/dags/hooks/useStepLogQuery';
 import { useStepOutputs } from '@/features/visual-editor/api/useStepOutputs';
+import { runInputProvenance } from '@/features/visual-editor/run/inputProvenance';
 import { stepParticipation } from '@/features/visual-editor/run/stepRunInfo';
 import { useCaptureStepOutputs } from '@/features/visual-editor/run/useCaptureStepOutputs';
 import { useQuery } from '@/hooks/api';
@@ -417,10 +418,18 @@ function OutputsSection({
 }) {
   const { ts } = useI18n();
   const { fileName } = useWorkspaceData('StepFacts');
-  const state = stepParticipation(node);
+  const state = stepParticipation(
+    node,
+    runInputProvenance(holder).has(node.step.name)
+  );
   const ran = state === 'ran' || state === 'reused';
-  // Outputs have a route for steps of a root run only.
-  const readable = ran && !isSubDAGRun(holder);
+  // Outputs have a route for steps of a root run only. A running or waiting
+  // step has none yet, and the request key does not change when it finishes.
+  const readable =
+    ran &&
+    !isActiveNodeStatus(node.status) &&
+    node.status !== NodeStatus.Waiting &&
+    !isSubDAGRun(holder);
   const { data, error } = useStepOutputs(
     holder.name,
     readable ? holder.dagRunId : null,
