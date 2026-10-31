@@ -186,13 +186,14 @@ function RetryCountBadge({ count }: { count: number }) {
  */
 const calculateDuration = (
   startTime: string | undefined,
-  endTime: string | undefined
+  endTime: string | undefined,
+  now: number
 ) => {
   if (!startTime) return '-';
 
   try {
     const start = new Date(startTime).getTime();
-    const end = endTime ? new Date(endTime).getTime() : new Date().getTime();
+    const end = endTime ? new Date(endTime).getTime() : now;
 
     if (isNaN(start) || isNaN(end)) return '-';
 
@@ -445,9 +446,15 @@ function NodeStatusTableRow({
         : logMessage;
 
   // Active tasks read the shared one-second clock; the others never tick.
+  // The time is cut to the second, so each read within a tick is the same.
   const currentDuration = useClock(
     isActiveNode && node.startedAt ? 1000 : null,
-    () => calculateDuration(node.startedAt, node.finishedAt)
+    (now) =>
+      calculateDuration(
+        node.startedAt,
+        node.finishedAt,
+        Math.floor(now / 1000) * 1000
+      )
   );
 
   const url = buildDAGPageURL({
