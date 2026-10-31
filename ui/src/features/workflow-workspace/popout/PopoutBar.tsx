@@ -109,6 +109,7 @@ export function PopoutBar({
       : buildDAGRunPageURL({
           rootDAGRunName: run.name,
           rootDAGRunId: run.dagRunId,
+          fileName,
           remoteNode,
         })
     : undefined;

@@ -394,6 +394,29 @@ describe('RunActionsCluster', () => {
     );
   });
 
+  // A name override makes a run of another DAG, which this workflow does not
+  // list: the page stays on the run that it shows.
+  it('stays on the run after a reschedule under another DAG name', async () => {
+    h.client.POST.mockResolvedValue({ data: { dagRunId: 'run-9' } });
+    setup(details('failed'));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(
+      within(dialog).getByRole('checkbox', { name: 'Reschedule as a new run' })
+    );
+    fireEvent.change(
+      within(dialog).getByLabelText('DAG Name Override (optional)'),
+      { target: { value: 'etl-copy' } }
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reschedule' }));
+    await waitFor(() =>
+      expect(h.showToast).toHaveBeenCalledWith(expect.stringContaining('run-9'))
+    );
+    expect(screen.getByTestId('where')).toHaveTextContent(
+      '/dags/etl.yaml?run=run-1'
+    );
+  });
+
   it('dequeues only a queued run', async () => {
     const run = setup(details('queued'));
 

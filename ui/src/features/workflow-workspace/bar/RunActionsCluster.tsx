@@ -59,8 +59,11 @@ export function RunActionsCluster({ fileName, dag }: BarSlotProps) {
             stopAll={stopAll}
             markActions
             // Like Start and Run step, a new run is shown at once; a removed
-            // run must not stay in the URL as a broken link.
-            onRescheduled={showRun}
+            // run must not stay in the URL as a broken link. A run under
+            // another DAG name is not a run of this workflow.
+            onRescheduled={(runId, runName) => {
+              if (runName === dag.name) showRun(runId);
+            }}
             onDequeued={() => run.select('latest', { replace: true })}
           />
         </span>

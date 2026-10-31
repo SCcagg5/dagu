@@ -307,14 +307,21 @@ function StepLogContent({
       : data === undefined
         ? undefined
         : cachedData || data;
-  const latestData = sseLogData || restData || (error ? undefined : cachedData);
+  // The content of the shown stream and page. The cache can still hold the
+  // previous stream while the new one loads.
+  const loadedData = sseLogData || restData;
+  const latestData = loadedData || (error ? undefined : cachedData);
   const logData = pausedData || latestData;
   const hasNewOutput =
     !!pausedData && latestData?.content !== pausedData.content;
+  // A pause freezes loaded content only: a pause while the cache stands in
+  // freezes the new stream once it comes.
+  const freezeWhenLoaded = useRef(false);
 
   function pauseFollowing(freeze = true): void {
-    if (freeze && !pausedData && logData) {
-      setPausedData(logData);
+    if (freeze && !pausedData) {
+      if (loadedData) setPausedData(loadedData);
+      else freezeWhenLoaded.current = true;
     }
     setLocalFollowing(false);
     onFollowTailChange?.(false);
@@ -334,12 +341,13 @@ function StepLogContent({
     if (
       viewMode === 'tail' &&
       !following &&
-      wasFollowing.current &&
-      !pausedData &&
-      latestData
+      (wasFollowing.current || freezeWhenLoaded.current) &&
+      !pausedData
     ) {
-      setPausedData(latestData);
+      if (loadedData) setPausedData(loadedData);
+      freezeWhenLoaded.current = !loadedData;
     }
+    if (following) freezeWhenLoaded.current = false;
     if (following && !wasFollowing.current) {
       setPausedData(null);
       setSearchTerm('');
@@ -347,7 +355,7 @@ function StepLogContent({
       setCurrentPage(1);
     }
     wasFollowing.current = following;
-  }, [following, pausedData, latestData, viewMode]);
+  }, [following, pausedData, loadedData, viewMode]);
 
   // The live end of the log: the bottom when the oldest line is at the top,
   // the top when the newest line is.

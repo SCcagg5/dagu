@@ -251,11 +251,24 @@ describe('LogPopoutPage', () => {
       );
       expect(screen.getByTestId('run-meta')).toHaveAttribute(
         'data-href',
-        '/dags/release?remoteNode=local&run=run-7'
+        '/dags/release.yaml?remoteNode=local&run=run-7'
       );
 
       fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
       await waitFor(() => expect(refresh).toHaveBeenCalled());
+    });
+
+    // The run ID opens the file of the workflow, whose name can differ from
+    // the DAG name.
+    it('links the run ID to the workflow file', () => {
+      renderPopout('/dags/nightly/log?dagRunId=run-7&step=deploy', {
+        fileName: 'nightly',
+        dagRun: pinnedRun,
+      });
+      expect(screen.getByTestId('run-meta')).toHaveAttribute(
+        'data-href',
+        '/dags/nightly?remoteNode=local&run=run-7'
+      );
     });
 
     it('opens the run log of the run in the workflow without a step', () => {

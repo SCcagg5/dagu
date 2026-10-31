@@ -142,6 +142,24 @@ describe('StepLog stream switch', () => {
     expect(screen.getByText('No output recorded.')).toBeInTheDocument();
   });
 
+  // A pause while the new stream loads freezes the new stream once it comes,
+  // never the content of the previous one that stands in for it.
+  it('shows the new stream after a pause while it loads', () => {
+    delete api.logs.stderr;
+    const view = renderLog();
+    switchTo('stderr');
+    fireEvent.focus(screen.getByPlaceholderText('Search in loaded lines...'));
+
+    api.logs.stderr = log('err');
+    view.rerender(<StepLog {...props} />);
+    expect(screen.getByText('err line 1')).toBeInTheDocument();
+    expect(screen.queryByText('out line 1')).toBeNull();
+
+    api.logs.stderr = log('later');
+    view.rerender(<StepLog {...props} />);
+    expect(screen.getByText('err line 1')).toBeInTheDocument();
+  });
+
   it('ends the search of the previous stream', () => {
     renderLog();
     const search = screen.getByPlaceholderText('Search in loaded lines...');

@@ -69,8 +69,11 @@ type Props = {
    * that the command palette of the workspace can find them.
    */
   markActions?: boolean;
-  /** Called with the new run ID after 'Reschedule as a new run' succeeds. */
-  onRescheduled?: (dagRunId: string) => void;
+  /**
+   * Called with the new run ID and its DAG name after 'Reschedule as a new
+   * run' succeeds.
+   */
+  onRescheduled?: (dagRunId: string, dagName: string) => void;
   /** Called after the run was removed from the queue, before refresh. */
   onDequeued?: () => void;
 };
@@ -501,7 +504,10 @@ function DAGRunActions({
                 // Show success message with new run ID
                 if (data?.dagRunId) {
                   showToast(`New DAG run created: ${data.dagRunId}`);
-                  onRescheduled?.(data.dagRunId);
+                  onRescheduled?.(
+                    data.dagRunId,
+                    dagNameOverride.trim() || name
+                  );
                 }
                 resetRetryModalState();
               } else {
