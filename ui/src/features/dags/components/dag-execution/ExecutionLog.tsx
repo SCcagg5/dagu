@@ -717,7 +717,8 @@ function ExecutionLog({
           </div>
         )}
 
-        {showNavigation && (
+        {/* A jump opens a page: a tail-only log has none. */}
+        {showNavigation && pageView && (
           <div className="flex items-center gap-2 mt-2">
             <span className="text-xs text-muted-foreground">
               <I18nText text={'Jump to line:'} />

@@ -177,6 +177,32 @@ describe('ActivityLine', () => {
     expect(screen.queryByText('exit status 0')).toBeNull();
   });
 
+  // A selection ends a mouse click on the line, not a press of the chevron:
+  // Tab keeps the selection, and Enter on the chevron is a click.
+  it('opens the details from the chevron while text is selected', () => {
+    render(
+      <ActivityLine
+        line={{
+          timestamp: '2026-08-06T12:00:00Z',
+          level: 'INFO',
+          message: 'step finished',
+          details: 'exit status 0',
+          structured: true,
+        }}
+        lineNumber={1}
+      />
+    );
+    window.getSelection()?.selectAllChildren(screen.getByText('step finished'));
+    const toggle = screen.getByRole('button', { name: 'Details' });
+    try {
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('exit status 0')).toBeVisible();
+    } finally {
+      window.getSelection()?.removeAllRanges();
+    }
+  });
+
   it('has no chevron for a line without details', () => {
     render(
       <ActivityLine
@@ -810,6 +836,32 @@ describe('log pagination controls', () => {
       vi.useRealTimers();
     }
   });
+
+  // Without the Page View switch only the tail shows: no jump opens a page
+  // that the reader cannot leave.
+  it.each(['run', 'step'])(
+    'offers no jump in a %s log without Page View',
+    (log) => {
+      logs.data = { ...pagedData };
+      render(
+        log === 'run' ? (
+          <ExecutionLog name="example" dagRunId="run" pageView={false} />
+        ) : (
+          <StepLog
+            dagName="example"
+            dagRunId="run"
+            stepName="build"
+            pageView={false}
+          />
+        ),
+        { wrapper: UserPreferencesProvider }
+      );
+      expect(screen.getByLabelText('Lines per page')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Page View' })).toBeNull();
+      expect(screen.queryByText('Jump to line:')).toBeNull();
+      expect(screen.queryByRole('spinbutton')).toBeNull();
+    }
+  );
 
   it('requests a custom page size for the step log', () => {
     logs.data = { ...pagedData };

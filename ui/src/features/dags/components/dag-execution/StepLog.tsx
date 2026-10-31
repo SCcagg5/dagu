@@ -751,8 +751,9 @@ function StepLogContent({
             )}
           </div>
 
-          {/* Jump to line controls */}
-          {showNavigation && (
+          {/* Jump to line controls. A jump opens a page: a tail-only log
+              has none. */}
+          {showNavigation && pageView && (
             <div className="flex items-center gap-1">
               <span className="hidden whitespace-nowrap text-xs text-muted-foreground xl:inline">
                 <I18nText text={'Jump to line:'} />

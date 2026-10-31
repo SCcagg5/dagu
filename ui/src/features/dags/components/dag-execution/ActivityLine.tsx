@@ -92,6 +92,11 @@ export function ActivityLine({
               aria-expanded={open}
               aria-label={ts('Details')}
               title={ts('Details')}
+              // A press of the chevron toggles even with text selected.
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen((value) => !value);
+              }}
               className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <ChevronDown
