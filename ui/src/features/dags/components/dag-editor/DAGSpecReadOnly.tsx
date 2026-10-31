@@ -424,7 +424,9 @@ function DAGSpecReadOnly({
       const currentSourceSpec = sourceData?.spec ?? '';
       setSourceDAGSpec(currentSourceSpec);
       if (currentSourceSpec === editorSpec) {
-        showToast('Source DAG already matches the edited spec');
+        showToast('Source DAG already matches the edited spec', {
+          variant: 'info',
+        });
         return;
       }
       setSourceDiffVisible(true);
