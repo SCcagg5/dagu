@@ -19,7 +19,7 @@ import {
   Webhook,
   WebhookOff,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   components,
   WebhookAuthMode as WebhookAuthModeValue,
@@ -72,6 +72,8 @@ interface WebhookTabProps {
   fileName: string;
   // dagName names the DAG's runs, which may differ from its file name.
   dagName?: string;
+  /** Called when a one-time secret (token, HMAC, sender or profile token) shows or goes, and once on mount. */
+  onSecretVisibleChange?: (visible: boolean) => void;
 }
 
 interface CopyButtonProps {
@@ -118,7 +120,11 @@ function toHMACAuthMode(mode: WebhookAuthMode): WebhookHMACAuthMode {
   }
 }
 
-function WebhookTab({ fileName, dagName = fileName }: WebhookTabProps) {
+function WebhookTab({
+  fileName,
+  dagName = fileName,
+  onSecretVisibleChange,
+}: WebhookTabProps) {
   const { ts } = useI18n();
   const config = useConfig();
   const remoteNode = useRemoteNode();
@@ -143,6 +149,17 @@ function WebhookTab({ fileName, dagName = fileName }: WebhookTabProps) {
     null
   );
   const [activeProfileNames, setActiveProfileNames] = useState<string[]>([]);
+  const secretVisible = secretReveal !== null;
+  const onSecretVisibleChangeRef = useRef(onSecretVisibleChange);
+  onSecretVisibleChangeRef.current = onSecretVisibleChange;
+  useEffect(() => {
+    const notify = onSecretVisibleChangeRef.current;
+    notify?.(secretVisible);
+    // A secret that shows goes away with the tab.
+    return () => {
+      if (secretVisible) notify?.(false);
+    };
+  }, [secretVisible]);
 
   // Copy states
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -1185,7 +1202,9 @@ function WebhookTab({ fileName, dagName = fileName }: WebhookTabProps) {
                 : 'Disable HMAC'
           }
           buttonText={
-            pendingCredentialAction === 'hmac-disable' ? 'Disable' : 'Regenerate'
+            pendingCredentialAction === 'hmac-disable'
+              ? 'Disable'
+              : 'Regenerate'
           }
           visible={pendingCredentialAction !== null}
           dismissModal={() => setPendingCredentialAction(null)}
