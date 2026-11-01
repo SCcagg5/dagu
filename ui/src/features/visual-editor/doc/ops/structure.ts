@@ -281,7 +281,11 @@ export function usesBlankLines(steps: YAMLSeq | YAMLMap): boolean {
   return nodes.slice(1).some((n) => isNode(n) && n.spaceBefore === true);
 }
 
-/** Replaces the references to `old` in the depends of `step` by `name`. */
+/**
+ * Replaces the references to `old` in the depends of `step` by `name`. A step
+ * that lists none of them, as one that only reads the outputs of `old`, gets
+ * `name` added.
+ */
 function rewireDepends(
   doc: Document,
   step: IndexedStep,
@@ -291,7 +295,10 @@ function rewireDepends(
   const entry = step.node;
   if (!isMap(entry)) return;
   const current = readDepends(entry.get('depends', true));
-  if (!current.some((d) => old.has(d))) return;
+  if (!current.some((d) => old.has(d))) {
+    writeDepends(doc, entry, [...current, name], detectDependsStyle(doc));
+    return;
+  }
   const next: string[] = [];
   for (const d of current) {
     const value = old.has(d) ? name : d;
@@ -304,7 +311,8 @@ function rewireDepends(
  * Adds a step at the end of the steps, or after the entry of `after`. The new
  * name is `step.name` when it is valid and free, else a generated one. With
  * `insertBetween`, the step goes after `from`, depends on it, and replaces it
- * in the depends of `to`. The result selects the new step.
+ * in the depends of `to`, or joins them when `to` only reads the outputs of
+ * `from`. The result selects the new step.
  */
 export function opAddStep(
   text: string,
@@ -372,14 +380,10 @@ export function opAddStep(
     const writesDepends = getDagType(doc) !== 'chain';
     if (between && writesDepends) upstream.unshift(between.from);
     if (between && writesDepends) {
-      const old = referencesOf(between.from, options);
-      const listed = readDepends(
-        isMap(between.to.node) ? between.to.node.get('depends', true) : null
-      ).some((d) => old.has(d));
-      // The new step becomes a parent of `to` only when `to` lists `from`.
+      // The new step becomes a parent of `to`.
       const graph = downstreamGraph(doc, options);
       const loop = upstream.find((s) => reaches(graph, between.to.key, s.key));
-      if (listed && loop) return cycleError(between.to.key, loop.key);
+      if (loop) return cycleError(between.to.key, loop.key);
     }
     const depends: string[] = [];
     for (const step of upstream) {
