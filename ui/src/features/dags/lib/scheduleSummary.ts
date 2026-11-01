@@ -39,7 +39,11 @@ export interface ScheduleSummary {
 
 export interface ScheduleSummaryOptions {
   suspended?: boolean;
-  /** The scheduler's own next run: it wins over the computed time. */
+  /**
+   * The scheduler's own next run: it wins over the computed time. null says
+   * that the scheduler plans none, as while it is paused; absent, the next
+   * run comes from the expressions.
+   */
   serverNextRun?: Date | null;
   /** IANA zone of the server for the expressions without a zone. */
   timeZone?: string;
@@ -252,7 +256,7 @@ export function summarizeSchedules(
       nextRun = server;
     } else if (entries[0]?.next) {
       lead = entries[0];
-      nextRun = server ?? lead.next;
+      nextRun = server ?? (options.serverNextRun === null ? null : lead.next);
     } else if (server) {
       nextRun = server;
     }

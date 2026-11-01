@@ -3,6 +3,7 @@
 
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { DialogLayerProvider } from '@/components/ui/dialog';
 import { useBoundedDAGRunDetails } from '@/features/dag-runs/hooks/useBoundedDAGRunDetails';
 import { dispatchHandledEscape } from '@/test/keyboard';
 import { SubRunStackModal } from '../SubRunStackModal';
@@ -94,5 +95,31 @@ describe('SubRunStackModal', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onChange).toHaveBeenCalledWith(stack.slice(0, 1));
+  });
+
+  // The drawer must paint above the workspace node view (z-[60]).
+  it('sits above the node view in a raised layer', () => {
+    vi.mocked(useBoundedDAGRunDetails).mockReturnValue({
+      data: undefined,
+      isValidating: false,
+      refresh: vi.fn(),
+    } as unknown as ReturnType<typeof useBoundedDAGRunDetails>);
+    const props = {
+      rootName: 'root',
+      rootDAGRunId: 'root-run',
+      rootLabel: 'root',
+      stack: [{ name: 'child', dagRunId: 'child-run' }],
+      onChange: vi.fn(),
+    };
+    const plain = render(<SubRunStackModal {...props} />);
+    expect(plain.container.querySelector('.z-50')).not.toBeNull();
+    plain.unmount();
+    const raised = render(
+      <DialogLayerProvider value="raised">
+        <SubRunStackModal {...props} />
+      </DialogLayerProvider>
+    );
+    expect(raised.container.querySelector('.z-50')).toBeNull();
+    expect(raised.container.querySelector('.z-\\[68\\]')).not.toBeNull();
   });
 });
