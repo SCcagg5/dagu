@@ -1,8 +1,14 @@
 // Copyright (C) 2026 Yota Hamada
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Status, StatusLabel } from '@/api/v1/schema';
 import DAGRunActions from '../DAGRunActions';
 import {
@@ -19,24 +25,49 @@ vi.mock('../../../../../contexts/ConfigContext', () => ({
   }),
 }));
 
+const h = vi.hoisted(() => ({
+  client: { POST: vi.fn(), GET: vi.fn() },
+  showError: vi.fn(),
+  showToast: vi.fn(),
+}));
+
 vi.mock('../../../../../hooks/api', () => ({
-  useClient: () => ({
-    POST: vi.fn(),
-    GET: vi.fn(),
-  }),
+  useClient: () => h.client,
 }));
 
 vi.mock('@/components/ui/error-modal', () => ({
   useErrorModal: () => ({
-    showError: vi.fn(),
+    showError: h.showError,
   }),
 }));
 
 vi.mock('@/components/ui/simple-toast', () => ({
   useSimpleToast: () => ({
-    showToast: vi.fn(),
+    showToast: h.showToast,
   }),
 }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  h.client.POST.mockResolvedValue({ data: {} });
+  h.client.GET.mockResolvedValue({ data: {} });
+});
+
+const runningRun = {
+  name: 'etl',
+  dagRunId: 'run-7',
+  status: Status.Running,
+  statusLabel: StatusLabel.running,
+  artifactsAvailable: false,
+  autoRetryCount: 0,
+  startedAt: '',
+  finishedAt: '',
+};
+
+function openStopDialog() {
+  fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+  return screen.getByRole('dialog');
+}
 
 describe('DAGRunActions', () => {
   it('treats running runs as stoppable', () => {
@@ -181,6 +212,21 @@ describe('DAGRunActions', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled();
+  });
+
+  // The run can still show as running after the request, and a success
+  // toast shows nothing, so the stop is confirmed with a note.
+  it('confirms a sent stop with a note', async () => {
+    render(<DAGRunActions dagRun={runningRun} name="etl" displayMode="full" />);
+
+    const dialog = openStopDialog();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
+
+    await waitFor(() =>
+      expect(h.showToast).toHaveBeenCalledWith('Stop signal sent', {
+        variant: 'info',
+      })
+    );
   });
 
   it('hides actions that do not apply when asked', () => {
