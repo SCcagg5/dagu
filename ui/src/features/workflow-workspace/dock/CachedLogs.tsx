@@ -124,6 +124,7 @@ function CachedLine({
             : undefined
         }
       >
+        {/* i18n-ignore: a stream tag, written as in English like stderr */}
         {stderr ? 'ERR' : null}
       </span>
       <span

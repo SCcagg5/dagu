@@ -52,9 +52,10 @@ function isTextAttribute(name: string): name is TextAttribute {
 }
 
 /**
- * The string literals that an attribute expression can give as its value:
- * a literal, the static parts of a template, and the branches of ?:, ??,
- * || and &&. A call such as ts('...') is translated, so it is not entered.
+ * The string literals that a JSX expression can give as its value: a
+ * literal, the static parts of a template, the branches of ?:, ??, || and
+ * &&, and the operands of +. A call such as ts('...') is translated, so it
+ * is not entered.
  */
 function literalLeaves(expression: ts.Expression): ts.Node[] {
   if (
@@ -82,7 +83,8 @@ function literalLeaves(expression: ts.Expression): ts.Node[] {
     }
     if (
       op === ts.SyntaxKind.BarBarToken ||
-      op === ts.SyntaxKind.QuestionQuestionToken
+      op === ts.SyntaxKind.QuestionQuestionToken ||
+      op === ts.SyntaxKind.PlusToken
     ) {
       return [
         ...literalLeaves(expression.left),
@@ -139,6 +141,14 @@ function scanFile(file: string, id: string): JsxLiteralHit[] {
   const visit = (node: ts.Node) => {
     if (ts.isJsxText(node)) {
       report(node, 'text');
+    } else if (
+      ts.isJsxExpression(node) &&
+      node.expression &&
+      !ts.isJsxAttribute(node.parent)
+    ) {
+      for (const leaf of literalLeaves(node.expression)) {
+        report(leaf, 'text');
+      }
     } else if (ts.isJsxAttribute(node)) {
       const name = node.name.getText(source);
       const init = node.initializer;
@@ -161,7 +171,8 @@ function scanFile(file: string, id: string): JsxLiteralHit[] {
 /**
  * Finds the untranslated literals of JSX files.
  *
- * Reports JSX text that has a letter, and string literals in the
+ * Reports JSX text that has a letter, string literals in JSX child
+ * expressions such as `{on ? 'On' : 'Off'}`, and string literals in the
  * aria-label, title, placeholder and alt attributes. Text with only white
  * space, digits, punctuation or character references (`&gt;`) is not
  * reported. A hit on a line that has
