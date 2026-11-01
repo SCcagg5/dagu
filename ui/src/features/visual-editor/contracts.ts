@@ -326,6 +326,11 @@ export interface VisualCanvasProps {
   direction: CanvasDirection;
   selected: StepKey | null;
   frozen: boolean; // text does not parse: show last graph + banner, no edits
+  /**
+   * Set while no text has parsed and the graph holds the steps that the
+   * server read: the line of the first YAML error, which the banner names.
+   */
+  unparsedLine?: number;
   readOnly: boolean;
   /** The host shows its own read-only marker, so the toolbar has no chip. */
   hideReadOnlyChip?: boolean;
@@ -467,6 +472,8 @@ export interface EditorNotice {
 }
 export interface VisualEditorState {
   frozen: boolean;
+  /** As VisualCanvasProps.unparsedLine: the canvas shows the steps that the server read. */
+  unparsedLine?: number;
   canUndo: boolean;
   canRedo: boolean;
   selectedStepName: string | null; // server name

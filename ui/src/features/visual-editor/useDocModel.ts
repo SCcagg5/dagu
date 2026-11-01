@@ -12,7 +12,10 @@ export const DOC_MODEL_DELAY_MS = 250;
 export const FROZEN_MODEL_DELAY_MS = 40;
 
 export interface DocModelState {
-  /** Model of the last text that parsed; the current one when it parses. */
+  /**
+   * Model of the last text that parsed; the current one when it parses or
+   * when no text has parsed yet.
+   */
   model: DagDocModel;
   /** True while the parsed text has YAML syntax errors. */
   frozen: boolean;
@@ -25,7 +28,8 @@ export interface DocModelState {
  * short delay; `sync` skips the delay. Entries of `steps` that have a YAML
  * error of their own are placeholders and the other steps stay. While the
  * rest of the text does not parse, the model of the last text that parsed
- * stays, and `frozen` is true.
+ * stays, and `frozen` is true. Until a text parses, the model is the current
+ * one, with `ok` false.
  */
 export function useDocModel(
   text: string,
@@ -53,7 +57,7 @@ export function useDocModel(
   const sync = useCallback((next: string) => setParsedText(next), []);
 
   return {
-    model: parsed.ok ? parsed : lastGood,
+    model: parsed.ok || !lastGood.ok ? parsed : lastGood,
     frozen: !parsed.ok,
     sync,
   };
