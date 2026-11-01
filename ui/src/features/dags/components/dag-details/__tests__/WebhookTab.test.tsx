@@ -9,7 +9,11 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { Client } from 'openapi-fetch';
+import { SWRConfig } from 'swr';
+import { createQueryHook } from 'swr-openapi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { paths } from '../../../../../api/v1/schema';
 import WebhookTab from '../WebhookTab';
 
 const clientPost = vi.hoisted(() => vi.fn());
@@ -79,7 +83,30 @@ function json(body: unknown, status = 200): Promise<Response> {
   return Promise.resolve(new Response(JSON.stringify(body), { status }));
 }
 
-let current: unknown;
+let current: typeof webhook | null;
+
+// Reads the webhook through SWR, as the chip of the workflow bar does.
+const useWebhookQuery = createQueryHook(
+  {
+    GET: async () =>
+      current ? { data: current } : { error: { code: 'not_found' } },
+  } as unknown as Client<paths>,
+  '/'
+);
+
+function SharedWebhook() {
+  const { data, error } = useWebhookQuery('/dags/{fileName}/webhook', {
+    params: { path: { fileName: 'deploy' }, query: { remoteNode: 'local' } },
+  });
+  const state = error
+    ? 'none'
+    : data
+      ? data.enabled
+        ? 'enabled'
+        : 'disabled'
+      : 'loading';
+  return <output data-testid="shared-webhook">{state}</output>;
+}
 
 function calls(method: string, url: string) {
   return fetchMock.mock.calls.filter(
@@ -123,7 +150,8 @@ describe('WebhookTab', () => {
         return json({ webhook, token: 'new-token' });
       }
       if (url === `${BASE}/toggle?remoteNode=local`) {
-        return json({ ...webhook, enabled: false });
+        current = { ...webhook, enabled: false };
+        return json(current);
       }
       return json({}, 404);
     });
@@ -254,6 +282,28 @@ describe('WebhookTab', () => {
       )
     ).toEqual({ enabled: false });
     expect(await screen.findByText('Disabled')).toBeVisible();
+  });
+
+  // Other views read the webhook through SWR; a change here reaches them.
+  it('refreshes the shared webhook query after a toggle and a delete', async () => {
+    render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <SharedWebhook />
+        <WebhookTab fileName="deploy" />
+      </SWRConfig>
+    );
+    const shared = screen.getByTestId('shared-webhook');
+    await waitFor(() => expect(shared).toHaveTextContent('enabled'));
+
+    fireEvent.click(await screen.findByRole('switch'));
+    const toggle = await screen.findByRole('dialog');
+    fireEvent.click(within(toggle).getByRole('button', { name: 'Disable' }));
+    await waitFor(() => expect(shared).toHaveTextContent('disabled'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const remove = await screen.findByRole('dialog');
+    fireEvent.click(within(remove).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(shared).toHaveTextContent('none'));
   });
 
   // parity:webhook-delete

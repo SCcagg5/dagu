@@ -139,3 +139,8 @@ export function useRunHistory({
 
 // A mutator that does nothing, for a query that the SSE feed cannot fill.
 const noSync = () => Promise.resolve(undefined);
+
+/** Forgets the test runs that this tab started (for tests). */
+export function resetTestRunsStarted(): void {
+  startedTestRuns.clear();
+}
